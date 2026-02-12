@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 
 interface ErrorBoundaryProps {
-  // Make children optional to handle strict type checking where implicit children passing might be flagged
   children?: ReactNode;
 }
 
@@ -12,34 +11,25 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Error Boundary Component to catch runtime errors
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
-
-  // Explicitly declare props to fix TS error where it thinks props does not exist on the class
-  public props: ErrorBoundaryProps;
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
+    this.state = {
+      hasError: false,
+      error: null
+    };
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render will show the fallback UI.
     return { hasError: true, error: error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // You can log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
   }
 
   public render() {
     if (this.state.hasError) {
-      // Custom fallback UI
       return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
           <div className="bg-white p-8 rounded-lg shadow-lg max-w-2xl w-full text-left">
