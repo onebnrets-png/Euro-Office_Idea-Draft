@@ -9,7 +9,8 @@ import ConfirmationModal from './components/ConfirmationModal.tsx';
 import AuthScreen from './components/AuthScreen.tsx';
 import SettingsModal from './components/SettingsModal.tsx';
 import ProjectListModal from './components/ProjectListModal.tsx';
-import { generateSectionContent, generateFieldContent, translateProjectContent, detectProjectLanguage, generateProjectSummary, hasValidApiKey, validateApiKey } from './services/geminiService.ts';
+import { generateSectionContent, generateFieldContent, detectProjectLanguage, generateProjectSummary, hasValidApiKey, validateApiKey } from './services/geminiService.ts';
+import { smartTranslateProject } from './services/translationDiffService.ts';
 import { generateDocx, generateSummaryDocx } from './services/docxGenerator.ts';
 import { set, isSubStepCompleted, createEmptyProjectData, isStepCompleted, downloadBlob, recalculateProjectSchedule, safeMerge } from './utils.ts';
 import { ICONS, getSteps, getSubSteps, BRAND_ASSETS } from './constants.tsx';
@@ -43,7 +44,7 @@ const ApiWarningBanner = ({ onDismiss, onOpenSettings, language }) => {
 
 const App = () => {
   // ═══════════════════════════════════════════════════════════════
-  // STATE – currentUser starts as null, restored via Supabase session
+  // STATE
   // ═══════════════════════════════════════════════════════════════
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [projectData, setProjectData] = useState(createEmptyProjectData());
@@ -52,7 +53,6 @@ const App = () => {
       si: null
   });
 
-  // Project Management State
   const [currentProjectId, setCurrentProjectId] = useState(storageService.getCurrentProjectId());
   const [userProjects, setUserProjects] = useState([]);
   const [isProjectListOpen, setIsProjectListOpen] = useState(false);
@@ -69,7 +69,6 @@ const App = () => {
   const [isWarningDismissed, setIsWarningDismissed] = useState(false);
   const importInputRef = useRef(null);
 
-  // Custom Logo State
   const [appLogo, setAppLogo] = useState(BRAND_ASSETS.logoText);
 
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
@@ -114,7 +113,7 @@ const App = () => {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════
-  // Load Projects on Login (async)
+  // Load Projects on Login
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
       if (currentUser) {
@@ -162,7 +161,6 @@ const App = () => {
       setCurrentProjectId(activeId);
   };
 
-  // Sync versions state when active project changes content
   useEffect(() => {
       setProjectVersions(prev => ({
           en: language === 'en' ? projectData : prev.en,
@@ -171,7 +169,7 @@ const App = () => {
   }, [projectData, language]);
 
   // ═══════════════════════════════════════════════════════════════
-  // FIX #2: checkApiKey now reloads settings from Supabase first
+  // API Key Check
   // ═══════════════════════════════════════════════════════════════
   const checkApiKey = useCallback(async () => {
       await storageService.loadSettings();
@@ -188,7 +186,9 @@ const App = () => {
       }
   }, [currentUser, checkApiKey]);
 
-  // --- Handlers ---
+  // ═══════════════════════════════════════════════════════════════
+  // HANDLERS
+  // ═══════════════════════════════════════════════════════════════
 
   const handleLoginSuccess = (username) => {
       setCurrentUser(username);
@@ -202,8 +202,6 @@ const App = () => {
       setIsWarningDismissed(false);
       setAppLogo(BRAND_ASSETS.logoText);
   };
-
-  // --- Project Management Handlers ---
 
   const handleSwitchProject = async (projectId) => {
       if (projectId === currentProjectId) {
@@ -246,8 +244,6 @@ const App = () => {
           setCurrentStepId(null);
       }
   };
-
-  // --- File Logic ---
 
   const generateFilename = (extension: string): string => {
     const acronym = projectData.projectIdea.projectAcronym?.trim();
@@ -315,27 +311,55 @@ const App = () => {
     return (data.problemAnalysis?.coreProblem?.title || '') !== '' || (data.projectIdea?.projectTitle || '') !== '';
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // SMART DIFF-BASED TRANSLATION (replaces old performTranslation)
+  // ═══════════════════════════════════════════════════════════════
   const performTranslation = async (targetLang, sourceData) => {
       if (!ensureApiKey()) return;
 
       const tTarget = TEXT[targetLang] || TEXT['en'];
-      setIsLoading(`${tTarget.generating} (Translation)...`);
+      setIsLoading(`${tTarget.generating} (Smart Translation)...`);
       try {
-          const translatedData = await translateProjectContent(sourceData, targetLang);
+          // Load existing target language data from Supabase
+          const existingTargetData = await storageService.loadProject(targetLang, currentProjectId);
+
+          // Smart diff-based translate: only fields that actually changed
+          const { translatedData, stats } = await smartTranslateProject(
+              sourceData,
+              targetLang,
+              existingTargetData,
+              currentProjectId
+          );
+
           setProjectData(translatedData);
           setLanguage(targetLang);
           setHasUnsavedTranslationChanges(false);
           await storageService.saveProject(translatedData, targetLang, currentProjectId);
+
+          // Update versions cache
+          setProjectVersions(prev => ({
+              ...prev,
+              [targetLang]: translatedData
+          }));
+
+          // Show stats if partially translated
+          if (stats.failed > 0) {
+              setError(targetLang === 'si'
+                  ? `Prevod delno uspel: ${stats.translated}/${stats.changed} polj prevedenih, ${stats.failed} neuspelih.`
+                  : `Translation partially done: ${stats.translated}/${stats.changed} fields translated, ${stats.failed} failed.`);
+          } else if (stats.changed === 0) {
+              console.log('[Translation] No changes detected – all fields up to date.');
+          }
+
       } catch (e) {
-         if (e.message === 'MISSING_API_KEY') {
-             setIsSettingsOpen(true);
-         } else {
-             console.error("Translation failed", e);
-             let userMessage = targetLang === 'si'
-                  ? "Napaka pri prevajanju. Preverite kvoto ali ključ."
-                  : "Translation failed. Check quota or key.";
-             setError(userMessage);
-         }
+          if (e.message === 'MISSING_API_KEY') {
+              setIsSettingsOpen(true);
+          } else {
+              console.error("Translation failed", e);
+              setError(targetLang === 'si'
+                  ? "Napaka pri prevajanju. Preverite konzolo (F12)."
+                  : "Translation failed. Check console (F12) for details.");
+          }
       } finally {
           setIsLoading(false);
       }
@@ -434,7 +458,7 @@ const App = () => {
     setHasUnsavedTranslationChanges(true);
   }, []);
 
-  // Auto-save on significant updates (async debounce)
+  // Auto-save
   useEffect(() => {
      const timer = setTimeout(async () => {
          if (currentUser && hasContent(projectData)) {
@@ -481,9 +505,6 @@ const App = () => {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // FIX #3: handleImportProject with null-check for newProj
-  // ═══════════════════════════════════════════════════════════════
   const handleImportProject = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -579,7 +600,7 @@ const App = () => {
     if (!ensureApiKey()) return;
 
     const sections = ['outputs', 'outcomes', 'impacts', 'kers'];
-    const hasContent = sections.some(s => checkSectionHasContent(s));
+    const hasContentInSections = sections.some(s => checkSectionHasContent(s));
 
     const runComposite = async (mode) => {
         closeModal();
@@ -603,7 +624,7 @@ const App = () => {
         }
     };
 
-    if (hasContent) {
+    if (hasContentInSections) {
         setModalConfig({
             isOpen: true,
             title: t.modals.generationChoiceTitle,
@@ -638,7 +659,7 @@ const App = () => {
 
   const getNestedValue = (obj, path) => {
     return path.reduce((acc, key) => (acc && acc[key] !== undefined) ? acc[key] : undefined, obj);
-  }
+  };
 
   const handleAddItem = (path, newItem) => {
     setProjectData(prev => {
@@ -722,7 +743,14 @@ const App = () => {
     const ganttEl = document.getElementById('gantt-chart-export');
     if (ganttEl) {
         try {
-             const canvas = await html2canvas(ganttEl as HTMLElement, exportOptions);
+             const ganttExportOptions = {
+                 ...exportOptions,
+                 width: ganttEl.scrollWidth,
+                 height: ganttEl.scrollHeight,
+                 windowWidth: ganttEl.scrollWidth,
+                 windowHeight: ganttEl.scrollHeight,
+             };
+             const canvas = await html2canvas(ganttEl as HTMLElement, ganttExportOptions);
              ganttData = {
                  dataUrl: canvas.toDataURL('image/png'),
                  width: canvas.width,
@@ -785,7 +813,6 @@ const App = () => {
     window.print();
   };
 
-  // Determine if banner should be displayed
   const shouldShowBanner = showAiWarning && !isWarningDismissed;
 
   const currentProjectMeta = userProjects.find(p => p.id === currentProjectId);
@@ -814,7 +841,6 @@ const App = () => {
   // ═══════════════════════════════════════════════════════════════
   return (
     <>
-      {/* FIX #2: SettingsModal onClose is now async, reloads settings */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={async () => {
@@ -927,7 +953,6 @@ const App = () => {
                         </div>
                     </div>
 
-                    {/* PROJECT SWITCHER WIDGET */}
                     <div className="mb-4 bg-slate-50 rounded-lg p-3 border border-slate-200">
                         <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{t.projects.currentProject}</p>
                         <div className="flex items-center justify-between">
@@ -965,22 +990,19 @@ const App = () => {
 
                         {currentStepId === step.id && SUB_STEPS[step.key] && SUB_STEPS[step.key].length > 0 && (
                             <div className="pl-4 mt-1 space-y-1 border-l-2 border-sky-200 ml-4 mb-2">
-                            {SUB_STEPS[step.key].map(subStep => {
-                                const isSubDone = isSubStepCompleted(projectData, step.key, subStep.id);
-                                return (
+                            {SUB_STEPS[step.key].map(subStep => (
                                 <button
                                     key={subStep.id}
                                     onClick={() => handleSubStepClick(subStep.id)}
-                                    className="w-full text-left px-2 py-1.5 rounded-md text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-between"
+                                    className="w-full text-left px-3 py-1.5 rounded text-xs text-slate-500 hover:text-sky-700 hover:bg-sky-50 flex items-center gap-2"
                                 >
-                                    <span>{subStep.title}</span>
-                                    {isSubDone
-                                        ? <ICONS.CIRCLE_CHECK className="h-4 w-4 text-green-500 flex-shrink-0" />
-                                        : <ICONS.CIRCLE_X className="h-4 w-4 text-red-400 flex-shrink-0 opacity-60" />
+                                    {isSubStepCompleted(projectData, step.key, subStep.id)
+                                        ? <ICONS.CHECK className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                        : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 flex-shrink-0"></div>
                                     }
+                                    <span>{subStep.title}</span>
                                 </button>
-                                );
-                            })}
+                            ))}
                             </div>
                         )}
                         </div>
@@ -988,77 +1010,79 @@ const App = () => {
                     })}
                 </nav>
 
-                <div className="mt-auto pt-4 border-t border-slate-200 flex-shrink-0 bg-white z-10 pb-4 lg:pb-0">
-                    <h3 className="px-4 text-xs font-semibold uppercase text-slate-400 tracking-wider">{t.projectActions}</h3>
-                    <div className="mt-2 space-y-1">
-                    <button onClick={handleSaveToStorage} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.SAVE className="h-4 w-4 text-green-600" />{t.saveProject}
-                    </button>
-                    <label className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.IMPORT className="h-4 w-4 text-purple-600" />{t.importProject}
-                        <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImportProject}/>
-                    </label>
-                    <button onClick={handleExportDocx} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.DOCX className="h-4 w-4 text-blue-600" />{t.exportDocx}
-                    </button>
-                    <button onClick={handleExportSummary} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.SUMMARY className="h-4 w-4 text-teal-600" />{t.exportSummary}
-                    </button>
-                    <button onClick={handlePrint} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.PRINT className="h-4 w-4 text-slate-600" />{t.print}
-                    </button>
-                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 rounded-md text-red-500 hover:bg-red-50 flex items-center gap-3 cursor-pointer mt-2">
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                <div className="mt-4 pt-4 border-t border-slate-200 flex-shrink-0">
+                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 rounded-md text-sm text-slate-500 hover:bg-red-50 hover:text-red-600">
                         {t.auth.logout}
                     </button>
-                    </div>
                 </div>
             </aside>
 
-            <main id="main-scroll-container" className="flex-1 overflow-y-auto p-4 md:p-8">
-                <div className="lg:hidden mb-4">
-                    <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
+            {/* MAIN CONTENT */}
+            <main className="flex-1 flex flex-col overflow-hidden">
+                {/* TOOLBAR */}
+                <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                        <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
+                        {error && <p className="text-red-500 text-xs font-medium truncate max-w-xs">{error}</p>}
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <button onClick={handleSaveToStorage} className="p-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-sky-600" title={t.toolbar.save}>
+                            <ICONS.SAVE className="h-5 w-5" />
+                        </button>
+                        <label className="p-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-sky-600 cursor-pointer" title={t.toolbar.import}>
+                            <ICONS.IMPORT className="h-5 w-5" />
+                            <input ref={importInputRef} type="file" accept=".json" onChange={handleImportProject} className="hidden" />
+                        </label>
+                        <button onClick={handleExportDocx} className="p-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-sky-600" title={t.toolbar.exportDocx}>
+                            <ICONS.DOCX className="h-5 w-5" />
+                        </button>
+                        <button onClick={handleExportSummary} className={`p-2 rounded-md hover:bg-slate-100 ${showAiWarning ? 'text-amber-400 cursor-not-allowed' : 'text-slate-500 hover:text-sky-600'}`} title={t.toolbar.summary} disabled={showAiWarning}>
+                            <ICONS.SUMMARY className="h-5 w-5" />
+                        </button>
+                        <button onClick={handlePrint} className="p-2 rounded-md text-slate-500 hover:bg-slate-100 hover:text-sky-600" title={t.toolbar.print}>
+                            <ICONS.PRINT className="h-5 w-5" />
+                        </button>
+                    </div>
                 </div>
 
-                {error && (
-                    <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-md mb-4 flex justify-between items-center">
-                        <span>{error}</span>
-                        <button onClick={() => setError(null)} className="text-red-700 font-bold">&times;</button>
-                    </div>
-                )}
-
-                <ProjectDisplay
-                    activeStepId={currentStepId}
-                    projectData={projectData}
-                    onUpdateData={handleUpdateData}
-                    onAddItem={handleAddItem}
-                    onRemoveItem={handleRemoveItem}
-                    onGenerateSection={handleGenerateSection}
-                    onGenerateCompositeSection={handleGenerateCompositeSection}
-                    onGenerateField={handleGenerateField}
-                    language={language}
-                    missingApiKey={showAiWarning}
-                />
+                {/* SCROLLABLE CONTENT */}
+                <div id="main-scroll-container" className="flex-1 overflow-y-auto p-4 md:p-8">
+                    <ProjectDisplay
+                        projectData={projectData}
+                        currentStepId={currentStepId}
+                        language={language}
+                        onUpdateData={handleUpdateData}
+                        onGenerateSection={handleGenerateSection}
+                        onGenerateCompositeSection={handleGenerateCompositeSection}
+                        onGenerateField={handleGenerateField}
+                        onAddItem={handleAddItem}
+                        onRemoveItem={handleRemoveItem}
+                        isLoading={isLoading}
+                        showAiWarning={showAiWarning}
+                    />
+                </div>
             </main>
         </div>
       </div>
       )}
+
       {/* PRINT LAYOUT – hidden on screen, visible only when printing */}
-<div className="hidden print:block">
-    <PrintLayout projectData={projectData} language={language} logo={appLogo} />
-</div>
-{/* EXPORT-ONLY CHART CONTAINERS (hidden, used by html2canvas) */}
-<div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
-    <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
-        <GanttChart activities={projectData.activities} language={language} forceViewMode="project" containerWidth={2400} printMode={true} id="gantt-export" />
-    </div>
-    <div id="pert-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
-        <PERTChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
-    </div>
-    <div id="organigram-export" style={{ width: '1000px', background: 'white', padding: '20px' }}>
-        <Organigram projectManagement={projectData.projectManagement} activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1000} printMode={true} />
-    </div>
-</div>
+      <div className="hidden print:block">
+        <PrintLayout projectData={projectData} language={language} logo={appLogo} />
+      </div>
+
+      {/* EXPORT-ONLY CHART CONTAINERS (hidden, used by html2canvas) */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
+        <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
+          <GanttChart activities={projectData.activities} language={language} forceViewMode="project" containerWidth={2400} printMode={true} id="gantt-export" />
+        </div>
+        <div id="pert-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
+          <PERTChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
+        </div>
+        <div id="organigram-export" style={{ width: '1000px', background: 'white', padding: '20px' }}>
+          <Organigram projectManagement={projectData.projectManagement} activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1000} printMode={true} />
+        </div>
+      </div>
     </>
   );
 };
