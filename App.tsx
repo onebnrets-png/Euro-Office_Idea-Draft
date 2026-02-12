@@ -464,7 +464,11 @@ const App = () => {
       }
       
       if (sectionKey === 'activities') {
-          newData = recalculateProjectSchedule(newData);
+          const schedResult = recalculateProjectSchedule(newData);
+          newData = schedResult.projectData;
+          if (schedResult.warnings.length > 0) {
+              console.warn('Schedule warnings:', schedResult.warnings);
+          }
           setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
           try {
              const risksContent = await generateSectionContent('risks', newData, language, mode);
