@@ -8,14 +8,53 @@
 /* ─── PRINT: show print layout, hide app UI ─── */
 @media print {
   .print\:hidden,
-  .no-print {
+  .no-print,
+  .print\:hidden * {
     display: none !important;
   }
+
   .print\:block {
     display: block !important;
   }
-  body {
+
+  /* CRITICAL: Remove all overflow/height constraints for printing */
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: white !important;
+  }
+
+  #root {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Ensure print layout flows naturally across pages */
+  .print\:block,
+  .print\:block > * {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Page break hints */
+  section {
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  table {
+    page-break-inside: avoid;
+  }
+
+  /* Hide scrollbars in print */
+  *::-webkit-scrollbar {
+    display: none !important;
   }
 }
 
@@ -31,15 +70,17 @@
   border-radius: 20px;
 }
 
-/* ─── Prevent double scrollbar ─── */
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  height: 100%;
-}
+/* ─── SCREEN ONLY: Prevent double scrollbar ─── */
+@media screen {
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+  }
 
-#root {
-  height: 100%;
-  overflow: hidden;
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
 }
