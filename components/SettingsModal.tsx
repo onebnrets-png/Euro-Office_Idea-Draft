@@ -1,28 +1,29 @@
-
 import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/storageService.ts';
-import { validateApiKey } from '../services/geminiService.ts';
-import { getAppInstructions, saveAppInstructions, resetAppInstructions } from '../services/Instructions.ts';
+import { validateProviderApiKey, OPENROUTER_MODELS, type AIProviderType } from '../services/aiProvider.ts';
+import { getAppInstructions, getFullInstructions, saveAppInstructions, resetAppInstructions } from '../services/Instructions.ts';
 import { TEXT } from '../locales.ts';
 
 const SettingsModal = ({ isOpen, onClose, language }) => {
-    const [activeTab, setActiveTab] = useState('general'); // 'general' | 'profile' | 'security' | 'instructions'
+    const [activeTab, setActiveTab] = useState('general');
     const [isAdmin, setIsAdmin] = useState(false);
-    
+
     // General State
-    const [apiKey, setApiKey] = useState('');
+    const [aiProvider, setAiProvider] = useState<AIProviderType>('gemini');
+    const [geminiKey, setGeminiKey] = useState('');
+    const [openRouterKey, setOpenRouterKey] = useState('');
     const [modelName, setModelName] = useState('');
-    
+
     // Profile State (Logo)
-    const [customLogo, setCustomLogo] = useState(null); 
-    
+    const [customLogo, setCustomLogo] = useState<string | null>(null);
+
     // Security State
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
     // Instructions State
-    const [instructions, setInstructions] = useState(null);
+    const [instructions, setInstructions] = useState<any>(null);
 
     const [message, setMessage] = useState('');
     const [isError, setIsError] = useState(false);
@@ -34,21 +35,27 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
             const role = storageService.getUserRole();
             setIsAdmin(role === 'admin');
 
-            // Load General Settings
-            const key = storageService.getApiKey();
-            if (key) setApiKey(key);
-            
+            // Load AI Provider settings
+            const provider = storageService.getAIProvider() || 'gemini';
+            setAiProvider(provider);
+
+            const gKey = storageService.getApiKey();
+            if (gKey) setGeminiKey(gKey);
+
+            const orKey = storageService.getOpenRouterKey();
+            if (orKey) setOpenRouterKey(orKey);
+
             const model = storageService.getCustomModel();
             if (model) setModelName(model);
 
-            // Load Profile Settings
+            // Load Profile
             const logo = storageService.getCustomLogo();
             setCustomLogo(logo);
-            
-            // Load Instructions
-            setInstructions(getAppInstructions());
 
-            // Reset
+            // Load Instructions
+            setInstructions(getFullInstructions());
+
+            // Reset security fields
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
@@ -58,38 +65,45 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
         }
     }, [isOpen]);
 
+    // When provider changes, auto-set default model
+    const handleProviderChange = (provider: AIProviderType) => {
+        setAiProvider(provider);
+        if (provider === 'gemini' && !modelName.startsWith('gemini')) {
+            setModelName('gemini-3-pro-preview');
+        } else if (provider === 'openrouter' && modelName.startsWith('gemini')) {
+            setModelName('openai/gpt-4o');
+        }
+    };
+
     const handleGeneralSave = async () => {
         setIsValidating(true);
         setMessage(t.validating || "Validating...");
         setIsError(false);
 
-        const cleanKey = apiKey.trim();
-        const cleanModel = modelName.trim();
+        // Save provider choice
+        storageService.setAIProvider(aiProvider);
+        storageService.setCustomModel(modelName.trim());
 
-        storageService.setCustomModel(cleanModel);
+        // Get the relevant API key
+        const activeKey = aiProvider === 'gemini' ? geminiKey.trim() : openRouterKey.trim();
 
-        if (cleanKey === '') {
-            storageService.setApiKey('');
-            setMessage(t.apiKeySaved);
+        // Save both keys regardless (user might switch later)
+        storageService.setApiKey(geminiKey.trim());
+        storageService.setOpenRouterKey(openRouterKey.trim());
+
+        if (activeKey === '') {
+            setMessage(language === 'si' ? 'API ključ shranjen.' : 'API Key saved.');
             setIsValidating(false);
             setTimeout(() => { onClose(); }, 1000);
             return;
         }
 
-        const isValidFormat = cleanKey.startsWith('AIza') && cleanKey.length >= 35;
-        if (!isValidFormat) {
-            setIsError(true);
-            setMessage(t.invalidKey || "Invalid API Key format");
-            setIsValidating(false);
-            return;
-        }
-
-        const isValid = await validateApiKey(cleanKey);
+        // Validate the active key
+        const isValid = await validateProviderApiKey(aiProvider, activeKey);
         setIsValidating(false);
 
         if (isValid) {
-            storageService.setApiKey(cleanKey);
-            setMessage(t.apiKeySaved);
+            setMessage(language === 'si' ? 'API ključ potrjen in shranjen!' : 'API Key validated and saved!');
             setTimeout(() => { onClose(); }, 1000);
         } else {
             setIsError(true);
@@ -103,7 +117,7 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
 
         if (!currentPassword || !newPassword || !confirmPassword) {
             setIsError(true);
-            setMessage("Please fill all password fields.");
+            setMessage(language === 'si' ? "Prosim izpolnite vsa polja za geslo." : "Please fill all password fields.");
             return;
         }
 
@@ -125,12 +139,12 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
         }
     };
 
-    const handleLogoUpload = (e) => {
-        const file = e.target.files[0];
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                const base64String = reader.result;
+                const base64String = reader.result as string;
                 setCustomLogo(base64String);
                 storageService.saveCustomLogo(base64String);
                 setMessage(t.logoUpdated || "Logo updated!");
@@ -142,15 +156,13 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
     const handleRemoveLogo = () => {
         setCustomLogo(null);
         storageService.saveCustomLogo(null);
-        setMessage("Logo removed.");
+        setMessage(language === 'si' ? "Logo odstranjen." : "Logo removed.");
     };
 
     // Instructions Handlers
-    const handleInstructionsChange = (chapterKey, value) => {
-        // Parse text back to array by new lines
+    const handleInstructionsChange = (chapterKey: string, value: string) => {
         const lines = value.split('\n').filter(line => line.trim() !== '');
-        
-        setInstructions(prev => ({
+        setInstructions((prev: any) => ({
             ...prev,
             CHAPTERS: {
                 ...prev.CHAPTERS,
@@ -162,9 +174,9 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
         }));
     };
 
-    const handleGlobalRulesChange = (value) => {
+    const handleGlobalRulesChange = (value: string) => {
         const lines = value.split('\n').filter(line => line.trim() !== '');
-        setInstructions(prev => ({
+        setInstructions((prev: any) => ({
             ...prev,
             GLOBAL_RULES: lines
         }));
@@ -172,30 +184,32 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
 
     const handleSaveInstructions = () => {
         saveAppInstructions(instructions);
-        setMessage("Instructions updated successfully!");
+        setMessage(language === 'si' ? "Navodila posodobljena!" : "Instructions updated successfully!");
     };
 
     const handleResetInstructions = () => {
-        if(confirm("Are you sure? This will revert all instructions to system defaults.")) {
+        const msg = language === 'si'
+            ? "Ali ste prepričani? To bo povrnilo vsa navodila na sistemske privzete vrednosti."
+            : "Are you sure? This will revert all instructions to system defaults.";
+        if (confirm(msg)) {
             resetAppInstructions();
-            setInstructions(getAppInstructions());
-            setMessage("Instructions reverted to default.");
+            setInstructions(getFullInstructions());
+            setMessage(language === 'si' ? "Navodila povrnjena na privzeto." : "Instructions reverted to default.");
         }
     };
 
-    // Main Save Controller
     const handleSave = () => {
         if (activeTab === 'general') handleGeneralSave();
         else if (activeTab === 'security') handlePasswordChange();
         else if (activeTab === 'instructions') handleSaveInstructions();
-        else if (activeTab === 'profile') onClose(); 
+        else if (activeTab === 'profile') onClose();
     };
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="text-xl font-bold text-slate-800">{t.settings}</h3>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
@@ -206,21 +220,144 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
                     <button className={`flex-1 py-3 px-4 text-sm font-semibold whitespace-nowrap ${activeTab === 'profile' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => { setActiveTab('profile'); setMessage(''); }}>{t.tabProfile || "Profile"}</button>
                     <button className={`flex-1 py-3 px-4 text-sm font-semibold whitespace-nowrap ${activeTab === 'security' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => { setActiveTab('security'); setMessage(''); }}>{t.tabSecurity || "Security"}</button>
                     {isAdmin && (
-                        <button className={`flex-1 py-3 px-4 text-sm font-semibold whitespace-nowrap ${activeTab === 'instructions' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => { setActiveTab('instructions'); setMessage(''); }}>Instructions (Admin)</button>
+                        <button className={`flex-1 py-3 px-4 text-sm font-semibold whitespace-nowrap ${activeTab === 'instructions' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => { setActiveTab('instructions'); setMessage(''); }}>
+                            {language === 'si' ? 'Navodila (Admin)' : 'Instructions (Admin)'}
+                        </button>
                     )}
                 </div>
-                
+
                 <div className="p-6 overflow-y-auto">
                     {activeTab === 'general' && (
                         <>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-slate-700 mb-1">{t.apiKeyLabel}</label>
-                                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={t.apiKeyPlaceholder} className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-sm" />
+                            {/* AI PROVIDER SELECTOR */}
+                            <div className="mb-5">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    {language === 'si' ? 'AI ponudnik' : 'AI Provider'}
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleProviderChange('gemini')}
+                                        className={`p-3 rounded-lg border-2 text-left transition-all ${aiProvider === 'gemini'
+                                            ? 'border-sky-500 bg-sky-50 ring-1 ring-sky-500'
+                                            : 'border-slate-200 hover:border-slate-300 bg-white'}`}
+                                    >
+                                        <div className="font-semibold text-sm text-slate-800">Google Gemini</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">
+                                            {language === 'si' ? 'Direktna povezava' : 'Direct connection'}
+                                        </div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleProviderChange('openrouter')}
+                                        className={`p-3 rounded-lg border-2 text-left transition-all ${aiProvider === 'openrouter'
+                                            ? 'border-sky-500 bg-sky-50 ring-1 ring-sky-500'
+                                            : 'border-slate-200 hover:border-slate-300 bg-white'}`}
+                                    >
+                                        <div className="font-semibold text-sm text-slate-800">OpenRouter</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">
+                                            GPT-4o, Claude, Mistral...
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
-                            <div className="mb-6 pt-4 border-t border-slate-100">
-                                <label className="block text-sm font-medium text-slate-700 mb-1">{t.modelLabel || "AI Model Name"}</label>
-                                <input type="text" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={t.modelPlaceholder} className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-sm" />
+
+                            {/* GEMINI API KEY */}
+                            {aiProvider === 'gemini' && (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        {language === 'si' ? 'Google Gemini API ključ' : 'Google Gemini API Key'}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={geminiKey}
+                                        onChange={(e) => setGeminiKey(e.target.value)}
+                                        placeholder="AIza..."
+                                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-sm"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {language === 'si'
+                                            ? 'Pridobite ključ na aistudio.google.com'
+                                            : 'Get your key at aistudio.google.com'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* OPENROUTER API KEY */}
+                            {aiProvider === 'openrouter' && (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        OpenRouter API Key
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={openRouterKey}
+                                        onChange={(e) => setOpenRouterKey(e.target.value)}
+                                        placeholder="sk-or-..."
+                                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-sm"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {language === 'si'
+                                            ? 'Pridobite ključ na openrouter.ai/keys'
+                                            : 'Get your key at openrouter.ai/keys'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* MODEL SELECTOR */}
+                            <div className="mb-4 pt-4 border-t border-slate-100">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    {language === 'si' ? 'AI model' : 'AI Model'}
+                                </label>
+
+                                {aiProvider === 'openrouter' ? (
+                                    <>
+                                        <select
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                            className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 text-sm"
+                                        >
+                                            {OPENROUTER_MODELS.map(m => (
+                                                <option key={m.id} value={m.id}>
+                                                    {m.name} – {m.description}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="mt-2">
+                                            <label className="block text-xs text-slate-500 mb-1">
+                                                {language === 'si' ? 'Ali vnesite ID modela ročno:' : 'Or enter model ID manually:'}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={modelName}
+                                                onChange={(e) => setModelName(e.target.value)}
+                                                placeholder="e.g. openai/gpt-4o"
+                                                className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-xs"
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={modelName}
+                                        onChange={(e) => setModelName(e.target.value)}
+                                        placeholder={t.modelPlaceholder || "gemini-3-pro-preview"}
+                                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 font-mono text-sm"
+                                    />
+                                )}
                             </div>
+
+                            {/* INFO BOX */}
+                            {aiProvider === 'openrouter' && (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800">
+                                    <strong>OpenRouter</strong>
+                                    {language === 'si'
+                                        ? ' omogoča dostop do 100+ AI modelov (GPT-4o, Claude, Mistral, Llama...) z enim samim API ključem. Cene se razlikujejo glede na model.'
+                                        : ' gives you access to 100+ AI models (GPT-4o, Claude, Mistral, Llama...) with a single API key. Pricing varies by model.'}
+                                    <br />
+                                    <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="underline font-semibold mt-1 inline-block">openrouter.ai</a>
+                                </div>
+                            )}
                         </>
                     )}
 
@@ -256,33 +393,41 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
                     {activeTab === 'instructions' && instructions && (
                         <div className="space-y-6">
                             <div className="p-4 bg-sky-50 border border-sky-200 rounded text-sm text-sky-800">
-                                <strong>Admin Mode:</strong> You can edit the specific rules the AI uses for generation. 
-                                Each line represents a rule. Changes are saved locally and apply to all future generations.
+                                <strong>{language === 'si' ? 'Administratorski način' : 'Admin Mode'}:</strong>{' '}
+                                {language === 'si'
+                                    ? 'Uredite pravila, ki jih AI uporablja pri generiranju. Vsaka vrstica predstavlja pravilo.'
+                                    : 'Edit the rules the AI uses for generation. Each line represents a rule.'}
                             </div>
 
                             <div>
-                                <label className="block font-bold text-slate-700 mb-1">Global Rules (Apply to everything)</label>
-                                <textarea 
+                                <label className="block font-bold text-slate-700 mb-1">
+                                    {language === 'si' ? 'Globalna pravila (veljajo za vse)' : 'Global Rules (Apply to everything)'}
+                                </label>
+                                <textarea
                                     className="w-full p-2 border border-slate-300 rounded text-sm font-mono h-32"
-                                    value={instructions.GLOBAL_RULES.join('\n')}
+                                    value={instructions.GLOBAL_RULES?.join('\n') || ''}
                                     onChange={(e) => handleGlobalRulesChange(e.target.value)}
                                 />
                             </div>
 
-                            {Object.entries(instructions.CHAPTERS).map(([key, chapter]: [string, any]) => (
+                            {instructions.CHAPTERS && Object.entries(instructions.CHAPTERS).map(([key, chapter]: [string, any]) => (
                                 <div key={key} className="border-t border-slate-200 pt-4">
                                     <h5 className="font-bold text-sky-700 mb-2">{chapter.title}</h5>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Specific Rules</label>
-                                    <textarea 
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                                        {language === 'si' ? 'Specifična pravila' : 'Specific Rules'}
+                                    </label>
+                                    <textarea
                                         className="w-full p-2 border border-slate-300 rounded text-sm font-mono h-32"
-                                        value={chapter.RULES.join('\n')}
+                                        value={chapter.RULES?.join('\n') || ''}
                                         onChange={(e) => handleInstructionsChange(key, e.target.value)}
                                     />
                                 </div>
                             ))}
-                            
+
                             <div className="pt-2">
-                                <button onClick={handleResetInstructions} className="text-red-500 text-xs hover:underline">Revert to System Defaults</button>
+                                <button onClick={handleResetInstructions} className="text-red-500 text-xs hover:underline">
+                                    {language === 'si' ? 'Povrni na sistemske privzete vrednosti' : 'Revert to System Defaults'}
+                                </button>
                             </div>
                         </div>
                     )}
@@ -301,7 +446,7 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
                         {activeTab === 'security' ? t.changePassword : t.save}
                     </button>
                 </div>
-             </div>
+            </div>
         </div>
     );
 };
