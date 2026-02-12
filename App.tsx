@@ -158,18 +158,11 @@ const App = () => {
 
   // Check API Key Status when user logs in or settings close
   const checkApiKey = useCallback(async () => {
-      const storedKey = storageService.getApiKey();
-      if (!storedKey) {
+      if (!hasValidApiKey()) {
           setShowAiWarning(true);
           return;
       }
-      const isValid = await validateApiKey(storedKey);
-      if (!isValid) {
-          storageService.clearApiKey();
-          setShowAiWarning(true);
-      } else {
-          setShowAiWarning(false);
-      }
+      setShowAiWarning(false);
   }, []);
 
   useEffect(() => {
