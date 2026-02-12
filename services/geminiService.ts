@@ -1,329 +1,740 @@
-// services/translationDiffService.ts
+// services/geminiService.ts
 // ═══════════════════════════════════════════════════════════════
-// Granular diff-based translation engine.
-// Tracks which fields changed since the last translation
-// and only sends changed content to the AI.
+// AI content generation service.
 //
-// TRANSLATION RULES are read from services/Instructions.ts
-// — the single source of truth. No hardcoded rules here.
+// THIS FILE CONTAINS NO CONTENT RULES.
+// All content rules, field rules, translation rules, and summary
+// rules are read from services/Instructions.ts — the single
+// source of truth.
+//
+// This file is responsible only for:
+//  - Building project context strings
+//  - Assembling prompts by combining Instructions rules + context
+//  - Calling the AI provider
+//  - Post-processing responses (JSON parsing, sanitization, merging)
 // ═══════════════════════════════════════════════════════════════
 
-import { supabase } from './supabaseClient.ts';
-import { generateContent } from './aiProvider.ts';
 import { storageService } from './storageService.ts';
-import { getTranslationRules } from './Instructions.ts';
+import {
+  getAppInstructions,
+  getFieldRule,
+  getTranslationRules,
+  getSummaryRules
+} from './Instructions.ts';
+import { detectProjectLanguage as detectLanguage } from '../utils.ts';
+import {
+  generateContent,
+  hasValidProviderKey,
+  validateProviderKey,
+  getProviderConfig,
+  type AIProviderType
+} from './aiProvider.ts';
 
-// ─── SIMPLE HASH (fast, no crypto needed) ────────────────────────
+// ─── BACKWARD COMPATIBILITY EXPORTS ─────────────────────────────
 
-const simpleHash = (str: string): string => {
-  let hash = 0;
-  const s = str.trim();
-  if (s.length === 0) return '0';
-  for (let i = 0; i < s.length; i++) {
-    const char = s.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return hash.toString(36);
+export const hasValidApiKey = hasValidProviderKey;
+
+export const validateApiKey = async (apiKey: string): Promise<boolean> => {
+  const provider = storageService.getAIProvider() || 'gemini';
+  return validateProviderKey(provider, apiKey);
 };
 
-// ─── NON-TRANSLATABLE KEYS (skip these) ──────────────────────────
+export const validateProviderApiKey = validateProviderKey;
 
-const SKIP_KEYS = new Set([
-  'id', 'startDate', 'endDate', 'date', 'level',
-  'category', 'likelihood', 'impact', 'type', 'predecessorId',
-  'projectAcronym'
-]);
+// ─── PROJECT CONTEXT BUILDER ─────────────────────────────────────
 
-const SKIP_VALUES = new Set([
-  'Low', 'Medium', 'High',
-  'Technical', 'Social', 'Economic',
-  'FS', 'SS', 'FF', 'SF'
-]);
+const getContext = (projectData: any): string => {
+  const sections: string[] = [];
 
-// ─── FLATTEN: Extract all translatable field paths + values ──────
-
-interface FieldEntry {
-  path: string;
-  value: string;
-  hash: string;
-}
-
-const flattenTranslatableFields = (obj: any, prefix: string = ''): FieldEntry[] => {
-  const entries: FieldEntry[] = [];
-
-  if (obj === null || obj === undefined) return entries;
-
-  if (typeof obj === 'string') {
-    const trimmed = obj.trim();
-    if (trimmed.length > 0 && !SKIP_VALUES.has(trimmed)) {
-      entries.push({ path: prefix, value: trimmed, hash: simpleHash(trimmed) });
-    }
-    return entries;
+  if (projectData.problemAnalysis?.coreProblem?.title) {
+    sections.push(`Problem Analysis:\n${JSON.stringify(projectData.problemAnalysis, null, 2)}`);
+  }
+  if (projectData.projectIdea?.mainAim) {
+    sections.push(`Project Idea:\n${JSON.stringify(projectData.projectIdea, null, 2)}`);
+  }
+  if (projectData.generalObjectives?.length > 0) {
+    sections.push(`General Objectives:\n${JSON.stringify(projectData.generalObjectives, null, 2)}`);
+  }
+  if (projectData.specificObjectives?.length > 0) {
+    sections.push(`Specific Objectives:\n${JSON.stringify(projectData.specificObjectives, null, 2)}`);
+  }
+  if (projectData.activities?.length > 0) {
+    sections.push(`Activities (Work Packages):\n${JSON.stringify(projectData.activities, null, 2)}`);
+  }
+  if (projectData.outputs?.length > 0) {
+    sections.push(`Outputs:\n${JSON.stringify(projectData.outputs, null, 2)}`);
+  }
+  if (projectData.outcomes?.length > 0) {
+    sections.push(`Outcomes:\n${JSON.stringify(projectData.outcomes, null, 2)}`);
+  }
+  if (projectData.impacts?.length > 0) {
+    sections.push(`Impacts:\n${JSON.stringify(projectData.impacts, null, 2)}`);
   }
 
-  if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      const itemPrefix = `${prefix}[${index}]`;
-      entries.push(...flattenTranslatableFields(item, itemPrefix));
-    });
-    return entries;
-  }
-
-  if (typeof obj === 'object') {
-    for (const [key, val] of Object.entries(obj)) {
-      if (SKIP_KEYS.has(key)) continue;
-      const newPrefix = prefix ? `${prefix}.${key}` : key;
-      entries.push(...flattenTranslatableFields(val, newPrefix));
-    }
-  }
-
-  return entries;
+  return sections.length > 0
+    ? `Here is the current project information (Context):\n${sections.join('\n')}`
+    : 'No project data available yet.';
 };
 
-// ─── GET/SET value by dot-bracket path ───────────────────────────
+// ─── JSON SCHEMA TEXT INSTRUCTION (for OpenRouter) ───────────────
 
-const getByPath = (obj: any, path: string): any => {
-  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
-  let current = obj;
-  for (const part of parts) {
-    if (current === null || current === undefined) return undefined;
-    const idx = Number(part);
-    current = Number.isNaN(idx) ? current[part] : current[idx];
-  }
-  return current;
-};
+const schemaToTextInstruction = (schema: any): string => {
+  try {
+    const typeToString = (t: any): string => {
+      if (!t) return 'string';
+      if (typeof t === 'string') return t.toLowerCase();
+      const str = String(t);
+      return str ? str.toLowerCase() : 'string';
+    };
 
-const setByPath = (obj: any, path: string, value: any): void => {
-  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    const idx = Number(part);
-    const nextKey = parts[i + 1];
-    const nextIsArray = !Number.isNaN(Number(nextKey));
-
-    if (Number.isNaN(idx)) {
-      if (current[part] === undefined || current[part] === null) {
-        current[part] = nextIsArray ? [] : {};
+    const simplify = (s: any): any => {
+      if (!s) return 'any';
+      const sType = typeToString(s.type);
+      if (sType === 'object') {
+        const props: any = {};
+        if (s.properties) {
+          for (const [key, val] of Object.entries(s.properties)) {
+            props[key] = simplify(val);
+          }
+        }
+        return { type: 'object', properties: props, required: s.required || [] };
       }
-      current = current[part];
+      if (sType === 'array') {
+        return { type: 'array', items: simplify(s.items) };
+      }
+      if (s.enum) return { type: sType, enum: s.enum };
+      return sType;
+    };
+
+    return `\n\nRESPONSE JSON SCHEMA (you MUST follow this structure exactly):\n${JSON.stringify(simplify(schema), null, 2)}\n`;
+  } catch (e) {
+    console.warn('[schemaToTextInstruction] Failed to convert schema:', e);
+    return '';
+  }
+};
+
+// ─── JSON SCHEMAS ────────────────────────────────────────────────
+
+import { Type } from "@google/genai";
+
+const problemNodeSchema = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+  },
+  required: ['title', 'description']
+};
+
+const readinessLevelValueSchema = {
+  type: Type.OBJECT,
+  properties: {
+    level: { type: Type.INTEGER },
+    justification: { type: Type.STRING }
+  },
+  required: ['level', 'justification']
+};
+
+const schemas: Record<string, any> = {
+  problemAnalysis: {
+    type: Type.OBJECT,
+    properties: {
+      coreProblem: problemNodeSchema,
+      causes: { type: Type.ARRAY, items: problemNodeSchema },
+      consequences: { type: Type.ARRAY, items: problemNodeSchema }
+    },
+    required: ['coreProblem', 'causes', 'consequences']
+  },
+  projectIdea: {
+    type: Type.OBJECT,
+    properties: {
+      mainAim: { type: Type.STRING },
+      stateOfTheArt: { type: Type.STRING },
+      proposedSolution: { type: Type.STRING },
+      policies: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: { name: { type: Type.STRING }, description: { type: Type.STRING } },
+          required: ['name', 'description']
+        }
+      },
+      readinessLevels: {
+        type: Type.OBJECT,
+        properties: {
+          TRL: readinessLevelValueSchema,
+          SRL: readinessLevelValueSchema,
+          ORL: readinessLevelValueSchema,
+          LRL: readinessLevelValueSchema,
+        },
+        required: ['TRL', 'SRL', 'ORL', 'LRL']
+      }
+    },
+    required: ['mainAim', 'stateOfTheArt', 'proposedSolution', 'policies', 'readinessLevels']
+  },
+  objectives: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        indicator: { type: Type.STRING }
+      },
+      required: ['title', 'description', 'indicator']
+    }
+  },
+  projectManagement: {
+    type: Type.OBJECT,
+    properties: {
+      description: { type: Type.STRING },
+      structure: {
+        type: Type.OBJECT,
+        properties: {
+          coordinator: { type: Type.STRING },
+          steeringCommittee: { type: Type.STRING },
+          advisoryBoard: { type: Type.STRING },
+          wpLeaders: { type: Type.STRING }
+        },
+        required: ['coordinator', 'steeringCommittee', 'wpLeaders']
+      }
+    },
+    required: ['description', 'structure']
+  },
+  activities: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        title: { type: Type.STRING },
+        tasks: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              startDate: { type: Type.STRING },
+              endDate: { type: Type.STRING },
+              dependencies: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    predecessorId: { type: Type.STRING },
+                    type: { type: Type.STRING, enum: ['FS', 'SS', 'FF', 'SF'] }
+                  },
+                  required: ['predecessorId', 'type']
+                }
+              }
+            },
+            required: ['id', 'title', 'description', 'startDate', 'endDate']
+          }
+        },
+        milestones: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              description: { type: Type.STRING }
+            },
+            required: ['id', 'description']
+          }
+        },
+        deliverables: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              description: { type: Type.STRING },
+              indicator: { type: Type.STRING }
+            },
+            required: ['id', 'description', 'indicator']
+          }
+        }
+      },
+      required: ['id', 'title', 'tasks', 'milestones', 'deliverables']
+    }
+  },
+  results: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        indicator: { type: Type.STRING }
+      },
+      required: ['title', 'description', 'indicator']
+    }
+  },
+  risks: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        category: { type: Type.STRING, enum: ['Technical', 'Social', 'Economic'] },
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        likelihood: { type: Type.STRING, enum: ['Low', 'Medium', 'High'] },
+        impact: { type: Type.STRING, enum: ['Low', 'Medium', 'High'] },
+        mitigation: { type: Type.STRING }
+      },
+      required: ['id', 'category', 'title', 'description', 'likelihood', 'impact', 'mitigation']
+    }
+  },
+  kers: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        exploitationStrategy: { type: Type.STRING }
+      },
+      required: ['id', 'title', 'description', 'exploitationStrategy']
+    }
+  }
+};
+
+// ─── SECTION → CHAPTER MAPPING ───────────────────────────────────
+
+const SECTION_TO_CHAPTER: Record<string, string> = {
+  problemAnalysis: '1',
+  projectIdea: '2',
+  generalObjectives: '3_AND_4',
+  specificObjectives: '3_AND_4',
+  projectManagement: '5',
+  activities: '5',
+  risks: '5',
+  outputs: '6',
+  outcomes: '6',
+  impacts: '6',
+  kers: '6',
+};
+
+// ─── SECTION → SCHEMA MAPPING ────────────────────────────────────
+
+const SECTION_TO_SCHEMA: Record<string, string> = {
+  problemAnalysis: 'problemAnalysis',
+  projectIdea: 'projectIdea',
+  generalObjectives: 'objectives',
+  specificObjectives: 'objectives',
+  projectManagement: 'projectManagement',
+  activities: 'activities',
+  outputs: 'results',
+  outcomes: 'results',
+  impacts: 'results',
+  risks: 'risks',
+  kers: 'kers',
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────────
+
+const isValidDate = (d: any): boolean => d instanceof Date && !isNaN(d.getTime());
+
+const sanitizeActivities = (activities: any[]): any[] => {
+  const taskMap = new Map<string, { startDate: Date; endDate: Date }>();
+
+  activities.forEach(wp => {
+    if (wp.tasks) {
+      wp.tasks.forEach((task: any) => {
+        if (task.id && task.startDate && task.endDate) {
+          taskMap.set(task.id, {
+            startDate: new Date(task.startDate),
+            endDate: new Date(task.endDate)
+          });
+        }
+      });
+    }
+  });
+
+  activities.forEach(wp => {
+    if (wp.tasks) {
+      wp.tasks.forEach((task: any) => {
+        if (task.dependencies && Array.isArray(task.dependencies)) {
+          task.dependencies.forEach((dep: any) => {
+            const pred = taskMap.get(dep.predecessorId);
+            const curr = taskMap.get(task.id);
+            if (
+              pred && curr &&
+              isValidDate(pred.startDate) && isValidDate(pred.endDate) &&
+              isValidDate(curr.startDate)
+            ) {
+              if (dep.type === 'FS' && curr.startDate <= pred.endDate) {
+                dep.type = 'SS';
+              }
+            }
+          });
+        }
+      });
+    }
+  });
+
+  return activities;
+};
+
+const smartMerge = (original: any, generated: any): any => {
+  if (original === undefined || original === null) return generated;
+  if (generated === undefined || generated === null) return original;
+  if (typeof original === 'string') return original.trim().length > 0 ? original : generated;
+
+  if (Array.isArray(original) && Array.isArray(generated)) {
+    const length = Math.max(original.length, generated.length);
+    const mergedArray: any[] = [];
+    for (let i = 0; i < length; i++) {
+      mergedArray.push(
+        i < original.length ? smartMerge(original[i], generated[i]) : generated[i]
+      );
+    }
+    return mergedArray;
+  }
+
+  if (typeof original === 'object' && typeof generated === 'object') {
+    const mergedObj = { ...generated };
+    for (const key in original) {
+      if (Object.prototype.hasOwnProperty.call(original, key)) {
+        mergedObj[key] = smartMerge(original[key], generated?.[key]);
+      }
+    }
+    return mergedObj;
+  }
+
+  return original !== null && original !== undefined ? original : generated;
+};
+
+// ─── RULES ASSEMBLER (reads from Instructions.ts) ───────────────
+
+const getRulesForSection = (sectionKey: string, language: 'en' | 'si'): string => {
+  const instructions = getAppInstructions(language);
+  const chapterKey = SECTION_TO_CHAPTER[sectionKey];
+
+  if (chapterKey && instructions.CHAPTERS?.[chapterKey]) {
+    const rules = instructions.CHAPTERS[chapterKey].RULES || [];
+    if (rules.length > 0) {
+      const header = language === 'si'
+        ? 'STROGA PRAVILA ZA TA RAZDELEK'
+        : 'STRICT RULES FOR THIS SECTION';
+      return `\n${header}:\n- ${rules.join('\n- ')}\n`;
+    }
+  }
+  return '';
+};
+
+// ─── LANGUAGE INSTRUCTIONS (read from global rules) ──────────────
+
+const getLanguageInstruction = (language: 'en' | 'si'): string => {
+  const instructions = getAppInstructions(language);
+  // The first global rule always specifies the language requirement
+  return instructions.GLOBAL_RULES[0] || '';
+};
+
+// ─── PROMPT BUILDER ──────────────────────────────────────────────
+
+const getPromptAndSchemaForSection = (
+  sectionKey: string,
+  projectData: any,
+  language: 'en' | 'si' = 'en',
+  mode: string = 'regenerate',
+  currentSectionData: any = null
+) => {
+  const context = getContext(projectData);
+  const instructions = getAppInstructions(language);
+  const globalRules = instructions.GLOBAL_RULES.join('\n');
+  const sectionRules = getRulesForSection(sectionKey, language);
+  const schemaKey = SECTION_TO_SCHEMA[sectionKey];
+  const schema = schemas[schemaKey];
+
+  if (!schema) {
+    throw new Error(`Unknown section key: ${sectionKey}`);
+  }
+
+  // Determine if we need text schema for non-Gemini providers
+  const config = getProviderConfig();
+  const needsTextSchema = config.provider !== 'gemini';
+  const textSchema = needsTextSchema ? schemaToTextInstruction(schema) : '';
+
+  // Language instruction
+  const langInstruction = language === 'si'
+    ? "KRITIČNO: Uporabnik je izbral SLOVENŠČINO. Celoten odgovor (naslovi, opisi, kazalniki itd.) MORA biti v SLOVENSKEM jeziku. Tudi če je podan kontekst v angleščini, MORAŠ generirati novo vsebino v slovenščini. Zagotovi visokokakovostno strokovno slovensko terminologijo."
+    : "CRITICAL: The user has selected ENGLISH language. Write the response in English. If the context is in Slovenian, translate the logic/ideas into English for the new content.";
+
+  // Fill vs regenerate instruction
+  const fillInstruction = mode === 'fill'
+    ? (language === 'si'
+      ? `\nPOMEMBNO: NAČIN DOPOLNJEVANJA.\nUporabnik je podal obstoječe podatke za ta razdelek: ${JSON.stringify(currentSectionData)}.\nNaloga: DOPOLNI to podatkovno strukturo.\nPRAVILA:\n1. OHRANI vsa obstoječa neprazna polja natančno takšna, kot so.\n2. GENERIRAJ strokovno vsebino SAMO za polja, ki so prazni nizi ("") ali manjkajoča.\n3. Če ima seznam manj elementov od priporočenega (glej PRAVILA spodaj), DODAJ NOVE ELEMENTE.\n4. Zagotovi, da je končni izhod veljaven JSON objekt, ki ustreza celotni shemi.\n`
+      : `\nIMPORTANT: COMPLETION MODE.\nThe user has provided existing data for this section: ${JSON.stringify(currentSectionData)}.\nYour task is to COMPLETE this data structure.\nRULES:\n1. KEEP all existing non-empty fields exactly as they are.\n2. GENERATE professional content ONLY for fields that are empty strings ("") or missing.\n3. If a list has fewer items than recommended (see RULES below), ADD NEW ITEMS.\n4. Ensure the final output is a valid JSON object matching the full schema.\n`)
+    : (language === 'si'
+      ? "Generiraj popolnoma nov, celovit odgovor za ta razdelek na podlagi konteksta."
+      : "Generate a completely new, full response for this section based on the context.");
+
+  // Global rules header
+  const globalRulesHeader = language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES';
+
+  // Section-specific task instruction
+  const taskInstruction = getSectionTaskInstruction(sectionKey, projectData, language);
+
+  // Assemble the prompt — NO hardcoded rules, everything comes from Instructions.ts
+  const prompt = [
+    context,
+    langInstruction,
+    fillInstruction,
+    `${globalRulesHeader}:\n${globalRules}`,
+    sectionRules,
+    textSchema,
+    taskInstruction
+  ].filter(Boolean).join('\n\n');
+
+  return { prompt, schema };
+};
+
+// ─── SECTION-SPECIFIC TASK INSTRUCTIONS ──────────────────────────
+// These are structural/contextual prompts, NOT content rules.
+// They tell the AI WHAT to generate, not HOW (the HOW is in Instructions.ts).
+
+const getSectionTaskInstruction = (
+  sectionKey: string,
+  projectData: any,
+  language: 'en' | 'si'
+): string => {
+  switch (sectionKey) {
+    case 'problemAnalysis':
+      return language === 'si'
+        ? `Na podlagi osrednjega problema "${projectData.problemAnalysis?.coreProblem?.title || ''}" ustvari (ali dopolni) zelo podrobno analizo problemov v skladu s pravili.`
+        : `Based on the core problem "${projectData.problemAnalysis?.coreProblem?.title || ''}", create (or complete) a very detailed problem analysis following the rules provided.`;
+
+    case 'projectIdea':
+      return language === 'si'
+        ? 'Na podlagi analize problemov razvij (ali dopolni) celovito projektno idejo. Upoštevaj posebna pravila oblikovanja za predlagano rešitev.'
+        : 'Based on the problem analysis, develop (or complete) a comprehensive project idea. Follow the specific formatting rules for the Proposed Solution.';
+
+    case 'generalObjectives':
+      return language === 'si'
+        ? 'Opredeli (ali dopolni) 3 do 5 širokih splošnih ciljev. Dosledno upoštevaj pravilo skladnje z GLAGOLOM V NEDOLOČNIKU.'
+        : 'Define (or complete) 3 to 5 broader, overall general objectives. Adhere strictly to the INFINITIVE VERB syntax rule.';
+
+    case 'specificObjectives':
+      return language === 'si'
+        ? 'Opredeli (ali dopolni) vsaj 5 ustvarjalnih, specifičnih S.M.A.R.T. ciljev. Dosledno upoštevaj pravilo skladnje z GLAGOLOM V NEDOLOČNIKU.'
+        : 'Define (or complete) at least 5 creative, specific S.M.A.R.T. objectives. Adhere strictly to the INFINITIVE VERB syntax rule.';
+
+    case 'projectManagement':
+      return language === 'si'
+        ? 'Ustvari VISOKO PROFESIONALEN, PODROBEN razdelek \'Upravljanje in organizacija\' v skladu s strogimi EU najboljšimi praksami in posebnimi vsebinskimi pravili.'
+        : "Create a HIGHLY PROFESSIONAL, DETAILED 'Management and Organization' section following strict EU best practices and the specific content rules provided.";
+
+    case 'activities': {
+      const today = new Date().toISOString().split('T')[0];
+      const projectStart = projectData.projectIdea?.startDate || today;
+      const dateNote = language === 'si'
+        ? `Projekt se strogo začne dne ${projectStart}. Vsi začetni datumi nalog MORAJO biti na ali po tem datumu.`
+        : `The project is strictly scheduled to start on ${projectStart}. All task Start Dates MUST be on or after this date.`;
+      const task = language === 'si'
+        ? 'Na podlagi specifičnih ciljev in rezultatov oblikuj (ali dopolni) podroben nabor delovnih sklopov (DS) v skladu s pravili glede količine, nalog in logike.'
+        : 'Based on the specific objectives and outputs, design (or complete) a detailed set of Work Packages (WPs) following the rules regarding quantity, tasks, and logic.';
+      return `${dateNote}\n${task}`;
+    }
+
+    case 'outputs':
+      return language === 'si'
+        ? 'Navedi (ali dopolni) vsaj 6 zelo podrobnih, oprijemljivih neposrednih rezultatov (predvidenih rezultatov).'
+        : 'List (or complete) at least 6 very detailed, tangible results (deliverables).';
+
+    case 'outcomes':
+      return language === 'si'
+        ? 'Opiši (ali dopolni) vsaj 6 vmesnih učinkov (srednjeročne spremembe).'
+        : 'Describe (or complete) at least 6 intangible results (medium-term changes).';
+
+    case 'impacts':
+      return language === 'si'
+        ? 'Opiši (ali dopolni) vsaj 6 dolgoročnih vplivov.'
+        : 'Describe (or complete) at least 6 long-term impacts.';
+
+    case 'risks':
+      return language === 'si'
+        ? 'Identificiraj (ali dopolni) vsaj 5 potencialnih kritičnih tveganj (Tehnično, Družbeno, Ekonomsko) z ustrezno logiko semaforja za izvoz v Docx.'
+        : 'Identify (or complete) at least 5 potential critical risks (Technical, Social, Economic) with correct Traffic Light coloring logic for Docx export in mind.';
+
+    case 'kers':
+      return language === 'si'
+        ? 'Identificiraj (ali dopolni) vsaj 5 ključnih izkoriščljivih rezultatov (KIR).'
+        : 'Identify (or complete) at least 5 Key Exploitable Results (KERs).';
+
+    default:
+      return '';
+  }
+};
+
+// ─── MAIN GENERATION FUNCTIONS ───────────────────────────────────
+
+export const generateSectionContent = async (
+  sectionKey: string,
+  projectData: any,
+  language: 'en' | 'si' = 'en',
+  mode: string = 'regenerate'
+) => {
+  const currentSectionData = projectData[sectionKey];
+  const { prompt, schema } = getPromptAndSchemaForSection(
+    sectionKey, projectData, language, mode, currentSectionData
+  );
+
+  const config = getProviderConfig();
+  const useNativeSchema = config.provider === 'gemini';
+
+  const result = await generateContent({
+    prompt,
+    jsonSchema: useNativeSchema ? schema : undefined,
+    jsonMode: !useNativeSchema,
+  });
+
+  const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+  let parsedData = JSON.parse(jsonStr);
+
+  // Post-processing: validation and sanitization
+  if (sectionKey === 'projectIdea' && jsonStr.startsWith('[')) {
+    throw new Error("API returned an array for projectIdea section, expected an object.");
+  }
+
+  if (sectionKey === 'activities' && Array.isArray(parsedData)) {
+    parsedData = sanitizeActivities(parsedData);
+  }
+
+  if (sectionKey === 'projectIdea' && parsedData.proposedSolution) {
+    let text = parsedData.proposedSolution;
+    text = text.replace(
+      /([^\n])\s*((?:\*\*|__)?(?:Faza|Phase)\s+\d+(?::|\.)(?:\*\*|__)?)/g,
+      '$1\n\n$2'
+    );
+    parsedData.proposedSolution = text;
+  }
+
+  if (mode === 'fill' && currentSectionData) {
+    parsedData = smartMerge(currentSectionData, parsedData);
+  }
+
+  return parsedData;
+};
+
+export const generateFieldContent = async (
+  path: (string | number)[],
+  projectData: any,
+  language: 'en' | 'si' = 'en'
+) => {
+  const context = getContext(projectData);
+  const fieldName = String(path[path.length - 1]);
+  const sectionName = String(path[0]);
+
+  const instructions = getAppInstructions(language);
+  const globalRules = instructions.GLOBAL_RULES.join('\n');
+  const globalRulesHeader = language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES';
+
+  // Language instruction
+  const langInstruction = language === 'si'
+    ? "POMEMBNO: Odgovor napiši strogo v slovenskem jeziku."
+    : "Provide the response in English.";
+
+  // Get field-specific rule from Instructions.ts
+  const fieldRule = getFieldRule(fieldName, language);
+  const fieldRuleText = fieldRule
+    ? `\n${language === 'si' ? 'PRAVILO ZA TO POLJE' : 'FIELD-SPECIFIC RULE'}:\n${fieldRule}\n`
+    : '';
+
+  // Build contextual information based on the field path
+  let specificContext = '';
+  let extraInstruction = '';
+
+  if (path.includes('milestones')) {
+    if (fieldName === 'date') {
+      const projectStartDate = projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0];
+      const wpIdx = path[1];
+      const msIdx = path[3];
+      const milestoneDesc = projectData.activities?.[wpIdx as number]?.milestones?.[msIdx as number]?.description || '';
+      specificContext = language === 'si' ? 'datum za mejnik' : 'a date for a Milestone';
+      extraInstruction = `\nCONTEXT:\n- Project Start Date: ${projectStartDate}\n- Milestone Description: "${milestoneDesc}"\nTASK: Estimate a realistic completion date.\nFORMAT: Return ONLY 'YYYY-MM-DD'. No other text.`;
     } else {
-      if (current[idx] === undefined || current[idx] === null) {
-        current[idx] = nextIsArray ? [] : {};
-      }
-      current = current[idx];
+      specificContext = language === 'si'
+        ? `mejnik v delovnem sklopu na poti ${JSON.stringify(path)}`
+        : `a Milestone in the Work Package defined in the path ${JSON.stringify(path)}`;
     }
-  }
-  const lastPart = parts[parts.length - 1];
-  const lastIdx = Number(lastPart);
-  if (Number.isNaN(lastIdx)) {
-    current[lastPart] = value;
+  } else if (path.includes('tasks')) {
+    specificContext = language === 'si' ? 'nalogo v delovnem sklopu' : 'a Task in the Work Package';
+  } else if (path.includes('deliverables')) {
+    specificContext = language === 'si' ? 'predvideni rezultat' : 'a Deliverable';
+  } else if (path.includes('risks')) {
+    specificContext = language === 'si' ? 'specifično tveganje' : 'a specific Risk';
   } else {
-    current[lastIdx] = value;
-  }
-};
-
-// ─── LOAD STORED HASHES FROM SUPABASE ────────────────────────────
-
-const loadStoredHashes = async (
-  projectId: string,
-  sourceLang: string,
-  targetLang: string
-): Promise<Map<string, string>> => {
-  const { data, error } = await supabase
-    .from('translation_hashes')
-    .select('field_path, source_hash')
-    .eq('project_id', projectId)
-    .eq('source_lang', sourceLang)
-    .eq('target_lang', targetLang);
-
-  if (error) {
-    console.warn('[TranslationDiff] Error loading hashes:', error.message);
-    return new Map();
+    specificContext = language === 'si'
+      ? `polje "${fieldName}"`
+      : `the field "${fieldName}"`;
   }
 
-  const map = new Map<string, string>();
-  (data || []).forEach(row => map.set(row.field_path, row.source_hash));
-  return map;
+  const taskLine = language === 'si'
+    ? `Generiraj profesionalno vrednost za ${specificContext} znotraj razdelka "${sectionName}". Vrni samo besedilo.`
+    : `Generate a professional value for ${specificContext} within "${sectionName}". Just return the text value.`;
+
+  const prompt = [
+    context,
+    langInstruction,
+    `${globalRulesHeader}:\n${globalRules}`,
+    fieldRuleText,
+    extraInstruction,
+    taskLine
+  ].filter(Boolean).join('\n\n');
+
+  const result = await generateContent({ prompt });
+  return result.text;
 };
 
-// ─── SAVE HASHES TO SUPABASE (batch upsert) ─────────────────────
+export const generateProjectSummary = async (
+  projectData: any,
+  language: 'en' | 'si' = 'en'
+) => {
+  const context = getContext(projectData);
 
-const saveHashes = async (
-  projectId: string,
-  sourceLang: string,
-  targetLang: string,
-  entries: FieldEntry[]
-): Promise<void> => {
-  if (entries.length === 0) return;
+  // Get summary rules from Instructions.ts
+  const summaryRules = getSummaryRules(language);
+  const summaryRulesHeader = language === 'si' ? 'PRAVILA ZA POVZETEK' : 'SUMMARY RULES';
 
-  const rows = entries.map(e => ({
-    project_id: projectId,
-    source_lang: sourceLang,
-    target_lang: targetLang,
-    field_path: e.path,
-    source_hash: e.hash,
-    updated_at: new Date().toISOString()
-  }));
+  const langInstruction = language === 'si'
+    ? 'Napiši povzetek v profesionalnem slovenskem jeziku.'
+    : 'Write the summary in professional English.';
 
-  const { error } = await supabase
-    .from('translation_hashes')
-    .upsert(rows, { onConflict: 'project_id,source_lang,target_lang,field_path' });
+  const prompt = [
+    context,
+    langInstruction,
+    `${summaryRulesHeader}:\n- ${summaryRules.join('\n- ')}`
+  ].join('\n\n');
 
-  if (error) {
-    console.warn('[TranslationDiff] Error saving hashes:', error.message);
-  }
+  const result = await generateContent({ prompt });
+  return result.text;
 };
 
-// ─── GROUP CHANGED FIELDS INTO SECTION CHUNKS ────────────────────
-
-const groupBySection = (fields: FieldEntry[]): Map<string, FieldEntry[]> => {
-  const groups = new Map<string, FieldEntry[]>();
-  for (const field of fields) {
-    const section = field.path.split('.')[0].split('[')[0];
-    if (!groups.has(section)) groups.set(section, []);
-    groups.get(section)!.push(field);
-  }
-  return groups;
-};
-
-// ─── TRANSLATE A BATCH OF FIELDS ─────────────────────────────────
-
-const translateFieldBatch = async (
-  fields: FieldEntry[],
+export const translateProjectContent = async (
+  projectData: any,
   targetLanguage: 'en' | 'si'
-): Promise<Map<string, string>> => {
+) => {
   const langName = targetLanguage === 'si' ? 'Slovenian' : 'English';
 
-  // Read translation rules from the central Instructions.ts
+  // Get translation rules from Instructions.ts
   const translationRules = getTranslationRules(targetLanguage);
-
-  // Build a simple key→value map for the AI
-  const toTranslate: Record<string, string> = {};
-  fields.forEach((f, i) => {
-    toTranslate[`field_${i}`] = f.value;
-  });
 
   const prompt = [
     `You are a professional translator for EU Project Proposals.`,
-    `Translate each value in the following JSON object into ${langName}.`,
+    `Translate the following JSON object strictly into ${langName}.`,
     `RULES:\n- ${translationRules.join('\n- ')}`,
-    `\nADDITIONAL:\n- Keep all keys exactly as they are (field_0, field_1, etc.).\n- Return ONLY valid JSON. No markdown, no explanation.`,
-    `\nJSON:\n${JSON.stringify(toTranslate, null, 2)}`
+    `Return ONLY the valid JSON string.`,
+    `\nJSON to Translate:\n${JSON.stringify(projectData)}`
   ].join('\n');
 
   const result = await generateContent({ prompt, jsonMode: true });
   const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-  const translated = JSON.parse(jsonStr);
-
-  const resultMap = new Map<string, string>();
-  fields.forEach((f, i) => {
-    const key = `field_${i}`;
-    if (translated[key] && typeof translated[key] === 'string') {
-      resultMap.set(f.path, translated[key]);
-    }
-  });
-
-  return resultMap;
+  return JSON.parse(jsonStr);
 };
 
-// ─── MAIN: SMART INCREMENTAL TRANSLATION ─────────────────────────
-
-export const smartTranslateProject = async (
-  sourceData: any,
-  targetLanguage: 'en' | 'si',
-  existingTargetData: any,
-  projectId: string
-): Promise<{
-  translatedData: any;
-  stats: { total: number; changed: number; translated: number; failed: number };
-}> => {
-  const sourceLang = targetLanguage === 'si' ? 'en' : 'si';
-
-  // 1. Flatten all translatable fields from source
-  const sourceFields = flattenTranslatableFields(sourceData);
-  console.log(`[TranslationDiff] Source has ${sourceFields.length} translatable fields.`);
-
-  // 2. Load stored hashes from last translation
-  const storedHashes = await loadStoredHashes(projectId, sourceLang, targetLanguage);
-  console.log(`[TranslationDiff] Found ${storedHashes.size} stored hashes.`);
-
-  // 3. Determine which fields changed
-  const changedFields: FieldEntry[] = [];
-  const unchangedFields: FieldEntry[] = [];
-
-  for (const field of sourceFields) {
-    const storedHash = storedHashes.get(field.path);
-    if (storedHash && storedHash === field.hash) {
-      unchangedFields.push(field);
-    } else {
-      changedFields.push(field);
-    }
-  }
-
-  console.log(`[TranslationDiff] ${changedFields.length} fields changed, ${unchangedFields.length} unchanged.`);
-
-  // 4. Start with existing target data as base
-  const translatedData = existingTargetData
-    ? JSON.parse(JSON.stringify(existingTargetData))
-    : JSON.parse(JSON.stringify(sourceData));
-
-  // 5. Translate changed fields in section-based batches
-  const stats = {
-    total: sourceFields.length,
-    changed: changedFields.length,
-    translated: 0,
-    failed: 0
-  };
-
-  if (changedFields.length === 0) {
-    console.log('[TranslationDiff] Nothing changed – no translation needed!');
-    return { translatedData, stats };
-  }
-
-  const sectionGroups = groupBySection(changedFields);
-  const successfullyTranslated: FieldEntry[] = [];
-
-  for (const [section, fields] of sectionGroups) {
-    console.log(`[TranslationDiff] Translating section "${section}" – ${fields.length} fields...`);
-
-    const BATCH_SIZE = 30;
-    for (let i = 0; i < fields.length; i += BATCH_SIZE) {
-      const batch = fields.slice(i, i + BATCH_SIZE);
-
-      try {
-        const results = await translateFieldBatch(batch, targetLanguage);
-
-        for (const [path, translatedValue] of results) {
-          setByPath(translatedData, path, translatedValue);
-          stats.translated++;
-        }
-
-        batch.forEach(f => {
-          if (results.has(f.path)) {
-            successfullyTranslated.push(f);
-          }
-        });
-      } catch (error: any) {
-        console.warn(`[TranslationDiff] Batch failed for "${section}" (${batch.length} fields):`, error.message);
-        stats.failed += batch.length;
-
-        for (const field of batch) {
-          const existingTarget = getByPath(translatedData, field.path);
-          if (!existingTarget || existingTarget.trim() === '' || existingTarget === field.value) {
-            setByPath(translatedData, field.path, field.value);
-          }
-        }
-      }
-    }
-  }
-
-  // 6. Save hashes for all successfully translated fields + unchanged fields
-  const allToSave = [...successfullyTranslated, ...unchangedFields];
-  await saveHashes(projectId, sourceLang, targetLanguage, allToSave);
-
-  console.log(`[TranslationDiff] Done: ${stats.translated}/${stats.changed} translated, ${stats.failed} failed, ${unchangedFields.length} skipped.`);
-
-  return { translatedData, stats };
-};
+export const detectProjectLanguage = detectLanguage;
