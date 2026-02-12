@@ -92,7 +92,6 @@ const App = () => {
     setModalConfig(prev => ({ ...prev, isOpen: false }));
   };
 
-  // Ensure TEXT[language] exists before accessing
   const t = TEXT[language] || TEXT['en'];
   const STEPS = getSteps(language);
   const SUB_STEPS = getSubSteps(language);
@@ -171,8 +170,11 @@ const App = () => {
       }));
   }, [projectData, language]);
 
-  // Check API Key Status when user logs in or settings close
+  // ═══════════════════════════════════════════════════════════════
+  // FIX #2: checkApiKey now reloads settings from Supabase first
+  // ═══════════════════════════════════════════════════════════════
   const checkApiKey = useCallback(async () => {
+      await storageService.loadSettings();
       if (!hasValidApiKey()) {
           setShowAiWarning(true);
           return;
@@ -210,12 +212,9 @@ const App = () => {
       }
 
       await storageService.saveProject(projectData, language, currentProjectId);
-
       storageService.setCurrentProjectId(projectId);
-
       await loadActiveProject(projectId);
       setIsProjectListOpen(false);
-
       setCurrentStepId(null);
       setHasUnsavedTranslationChanges(false);
   };
@@ -226,11 +225,14 @@ const App = () => {
       }
 
       const newProj = await storageService.createProject();
+      if (!newProj || !newProj.id) {
+          setError('Failed to create project. Check your session.');
+          return;
+      }
 
       await refreshProjectList();
       setCurrentProjectId(newProj.id);
       await loadActiveProject(newProj.id);
-
       setIsProjectListOpen(false);
       setCurrentStepId(1);
   };
@@ -267,7 +269,6 @@ const App = () => {
   const handleSaveToStorage = async () => {
       try {
           if (currentUser) {
-              // 1. Save to Supabase
               await storageService.saveProject(projectData, language, currentProjectId);
               const otherLang = language === 'en' ? 'si' : 'en';
               if (projectVersions[otherLang]) {
@@ -275,7 +276,6 @@ const App = () => {
               }
               await refreshProjectList();
 
-              // 2. DOWNLOAD JSON TO DISK (Foreground)
               const exportData = {
                   meta: {
                       version: '3.0',
@@ -302,7 +302,6 @@ const App = () => {
       }
   };
 
-  // --- Utility to Enforce API Key ---
   const ensureApiKey = () => {
       if (showAiWarning || !hasValidApiKey()) {
           setIsSettingsOpen(true);
@@ -326,7 +325,6 @@ const App = () => {
           setProjectData(translatedData);
           setLanguage(targetLang);
           setHasUnsavedTranslationChanges(false);
-          // Auto-save translation
           await storageService.saveProject(translatedData, targetLang, currentProjectId);
       } catch (e) {
          if (e.message === 'MISSING_API_KEY') {
@@ -358,21 +356,18 @@ const App = () => {
   const handleLanguageSwitchRequest = async (newLang) => {
     if (newLang === language) return;
 
-    // Auto-save current
     if (currentUser) {
        await storageService.saveProject(projectData, language, currentProjectId);
     }
 
     if (!hasContent(projectData)) {
       setLanguage(newLang);
-      // Try load from DB for new lang based on ID
       const loaded = await storageService.loadProject(newLang, currentProjectId);
       setProjectData(loaded || createEmptyProjectData());
       setHasUnsavedTranslationChanges(false);
       return;
     }
 
-    // Check if we have a version in memory or storage
     let cachedVersion = projectVersions[newLang];
     if (!cachedVersion) {
         cachedVersion = await storageService.loadProject(newLang, currentProjectId);
@@ -486,6 +481,9 @@ const App = () => {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // FIX #3: handleImportProject with null-check for newProj
+  // ═══════════════════════════════════════════════════════════════
   const handleImportProject = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -498,6 +496,10 @@ const App = () => {
         const importedJson = JSON.parse(text);
 
         const newProj = await storageService.createProject();
+        if (!newProj || !newProj.id) {
+            throw new Error('Failed to create new project. Please check your login session.');
+        }
+
         let finalData = createEmptyProjectData();
         let targetLang = 'en';
 
@@ -507,21 +509,21 @@ const App = () => {
              const safeEn = en ? safeMerge(en) : null;
              const safeSi = si ? safeMerge(si) : null;
 
-             // Save both versions to new ID
              if (safeEn) await storageService.saveProject(safeEn, 'en', newProj.id);
              if (safeSi) await storageService.saveProject(safeSi, 'si', newProj.id);
 
              if (preferredLang === 'si' && safeSi) { finalData = safeSi; targetLang = 'si'; }
-             else { finalData = safeEn || safeSi; targetLang = safeEn ? 'en' : 'si'; }
+             else { finalData = safeEn || safeSi || createEmptyProjectData(); targetLang = safeEn ? 'en' : 'si'; }
 
         } else if (importedJson.problemAnalysis) {
           const detectedLang = detectProjectLanguage(importedJson);
           finalData = safeMerge(importedJson);
           targetLang = detectedLang as 'en' | 'si';
           await storageService.saveProject(finalData, targetLang, newProj.id);
+        } else {
+          throw new Error('Unrecognized JSON format. Expected project data with meta+data or problemAnalysis.');
         }
 
-        // Switch to new project
         await refreshProjectList();
         setCurrentProjectId(newProj.id);
         storageService.setCurrentProjectId(newProj.id);
@@ -544,7 +546,6 @@ const App = () => {
     if (Array.isArray(data)) {
         return data.some(item => (item.title && item.title.trim() !== '') || (item.description && item.description.trim() !== ''));
     }
-    // Object checks
     if (sectionKey === 'problemAnalysis') {
         return !!data.coreProblem.title || data.causes.some(c => c.title) || data.consequences.some(c => c.title);
     }
@@ -790,11 +791,14 @@ const App = () => {
   const currentProjectMeta = userProjects.find(p => p.id === currentProjectId);
   const displayTitle = currentProjectMeta?.title || projectData.projectIdea?.projectTitle || t.projects.untitled;
 
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER: Not logged in
+  // ═══════════════════════════════════════════════════════════════
   if (!currentUser) {
       return (
         <>
             {shouldShowBanner && <ApiWarningBanner onDismiss={() => setIsWarningDismissed(true)} onOpenSettings={() => setIsSettingsOpen(true)} language={language} />}
-            <SettingsModal isOpen={isSettingsOpen} onClose={() => { setIsSettingsOpen(false); checkApiKey(); }} language={language} />
+            <SettingsModal isOpen={isSettingsOpen} onClose={async () => { setIsSettingsOpen(false); await checkApiKey(); }} language={language} />
             <AuthScreen
                 onLoginSuccess={handleLoginSuccess}
                 language={language}
@@ -805,13 +809,17 @@ const App = () => {
       );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER: Logged in
+  // ═══════════════════════════════════════════════════════════════
   return (
     <>
+      {/* FIX #2: SettingsModal onClose is now async, reloads settings */}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => {
+        onClose={async () => {
             setIsSettingsOpen(false);
-            checkApiKey();
+            await checkApiKey();
             loadCustomLogo();
         }}
         language={language}
@@ -865,7 +873,6 @@ const App = () => {
             {shouldShowBanner && <ApiWarningBanner onDismiss={() => setIsWarningDismissed(true)} onOpenSettings={() => setIsSettingsOpen(true)} language={language} />}
 
             <div className="absolute top-4 left-4 z-20 flex gap-2" style={{ top: shouldShowBanner ? '4rem' : '1rem' }}>
-                 {/* Project Switcher in Welcome Screen Header */}
                  <button onClick={() => setIsProjectListOpen(true)} className="px-3 py-1 bg-white/80 backdrop-blur rounded shadow text-sm font-semibold text-slate-700 hover:bg-white flex items-center gap-1 cursor-pointer border border-slate-300">
                      <svg className="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                      <span className="max-w-[150px] truncate">{displayTitle}</span>
@@ -985,73 +992,72 @@ const App = () => {
                     <h3 className="px-4 text-xs font-semibold uppercase text-slate-400 tracking-wider">{t.projectActions}</h3>
                     <div className="mt-2 space-y-1">
                     <button onClick={handleSaveToStorage} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.SAVE className="h-5 w-5" /> {t.saveProject}
+                        <ICONS.SAVE className="h-4 w-4 text-green-600" />{t.saveProject}
                     </button>
-                    <button onClick={() => importInputRef.current?.click()} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.IMPORT className="h-5 w-5" /> {t.importProject}
-                    </button>
-                    <input type="file" ref={importInputRef} onChange={handleImportProject} className="hidden" accept=".json" />
+                    <label className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
+                        <ICONS.IMPORT className="h-4 w-4 text-purple-600" />{t.importProject}
+                        <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImportProject}/>
+                    </label>
                     <button onClick={handleExportDocx} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.DOCX className="h-5 w-5" /> {t.exportDocx}
+                        <ICONS.DOCX className="h-4 w-4 text-blue-600" />{t.exportDocx}
                     </button>
                     <button onClick={handleExportSummary} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.SUMMARY className="h-5 w-5" /> {t.exportSummary}
+                        <ICONS.SUMMARY className="h-4 w-4 text-teal-600" />{t.exportSummary}
                     </button>
                     <button onClick={handlePrint} className="w-full text-left px-4 py-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-3 cursor-pointer">
-                        <ICONS.PRINT className="h-5 w-5" /> {t.print}
+                        <ICONS.PRINT className="h-4 w-4 text-slate-600" />{t.print}
                     </button>
-                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 rounded-md text-red-600 hover:bg-red-50 flex items-center gap-3 border-t border-slate-100 mt-2 cursor-pointer">
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 rounded-md text-red-500 hover:bg-red-50 flex items-center gap-3 cursor-pointer mt-2">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                         {t.auth.logout}
                     </button>
                     </div>
                 </div>
             </aside>
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-shrink-0 bg-white border-b border-slate-200 p-2 pl-4 lg:hidden">
+            <main id="main-scroll-container" className="flex-1 overflow-y-auto p-4 md:p-8">
+                <div className="lg:hidden mb-4">
                     <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
                 </div>
 
+                {error && (
+                    <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-md mb-4 flex justify-between items-center">
+                        <span>{error}</span>
+                        <button onClick={() => setError(null)} className="text-red-700 font-bold">&times;</button>
+                    </div>
+                )}
+
                 <ProjectDisplay
-                    projectData={projectData}
                     activeStepId={currentStepId}
+                    projectData={projectData}
                     onUpdateData={handleUpdateData}
-                    onGenerateSection={sectionKey => sectionKey === 'expectedResults' ? handleGenerateCompositeSection(sectionKey) : handleGenerateSection(sectionKey)}
-                    onGenerateField={handleGenerateField}
                     onAddItem={handleAddItem}
                     onRemoveItem={handleRemoveItem}
-                    isLoading={isLoading}
-                    error={error}
+                    onGenerateSection={handleGenerateSection}
+                    onGenerateCompositeSection={handleGenerateCompositeSection}
+                    onGenerateField={handleGenerateField}
                     language={language}
                     missingApiKey={showAiWarning}
                 />
-            </div>
+            </main>
         </div>
       </div>
       )}
 
-      {/* PRINT LAYOUT */}
-      <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-visible w-full h-full pointer-events-none print:pointer-events-auto">
-        <PrintLayout projectData={projectData} language={language} logo={appLogo} />
-      </div>
+      {/* PRINT LAYOUT (hidden, only visible when printing) */}
+      <PrintLayout projectData={projectData} language={language} logo={appLogo} />
 
-      {/* EXPORT CHARTS: Always rendered in background */}
-      <div id="export-container" style={{ position: 'fixed', top: 0, left: 0, width: '1200px', zIndex: -9999, opacity: 1, background: '#ffffff', pointerEvents: 'none' }}>
-           <div className="bg-white p-4">
-                <GanttChart activities={projectData.activities} language={language} id="gantt-chart-export" forceViewMode="project" containerWidth={1150} />
-           </div>
-           <div className="bg-white p-4">
-                <PERTChart activities={projectData.activities} language={language} id="pert-chart-export" printMode={true} containerWidth={1150} />
-           </div>
-           <div className="bg-white p-4" style={{ width: '1200px' }}>
-                <Organigram
-                    structure={projectData.projectManagement?.structure}
-                    activities={projectData.activities}
-                    language={language}
-                    id="organigram-export"
-                />
-           </div>
+      {/* EXPORT-ONLY CHART CONTAINERS (hidden, used by html2canvas) */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+          <div id="gantt-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
+              <GanttChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
+          </div>
+          <div id="pert-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
+              <PERTChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
+          </div>
+          <div id="organigram-export" style={{ width: '1000px', background: 'white', padding: '20px' }}>
+              <Organigram projectManagement={projectData.projectManagement} activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1000} printMode={true} />
+          </div>
       </div>
     </>
   );
