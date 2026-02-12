@@ -1,4 +1,3 @@
-
 export const TEXT = {
   en: {
     appTitle: "EU Intervention Logic AI Assistant",
@@ -272,7 +271,7 @@ export const TEXT = {
       apiKeySaved: "Settings saved successfully!",
       noKeyWarning: "Missing API Key",
       noKeyMessage: "Please enter your Gemini API key in settings to use AI features.",
-      manualModeBanner: "⚠️ API key not detected. AI features are disabled.",
+      manualModeBanner: " API key not detected. AI features are disabled.",
       enterKeyAction: "ENTER API KEY",
       projectSaved: "Project successfully saved!",
       validating: "Validating Key...",
@@ -280,7 +279,6 @@ export const TEXT = {
       modelLabel: "AI Model Name",
       modelDesc: "Specify the Gemini model version (e.g., gemini-3-pro-preview). Leave empty for default.",
       modelPlaceholder: "Default: gemini-3-pro-preview",
-      // New Auth Keys - SI
       emailLabel: "E-poštni naslov",
       displayNameLabel: "Prikazno ime (Uporabnik)",
       displayNameDesc: "Unikatno ime. Če prazno, se uporabi e-pošta.",
@@ -295,7 +293,6 @@ export const TEXT = {
       twoFactorLabel: "Koda iz aplikacije",
       setup2FADesc: "Skenirajte ta ključ v Google Authenticator ali Microsoft Authenticator:",
       cancel: "Prekliči",
-      // Settings Tabs
       tabGeneral: "General & AI",
       tabProfile: "Profile",
       tabSecurity: "Security",
@@ -371,7 +368,7 @@ export const TEXT = {
     policyPlaceholder: "Vnesite uradno ime politike EU...",
     policyDescPlaceholder: "Opišite, kako se projekt usklajuje s to politiko...",
     coreProblem: "Glavni Problem",
-    coreProblemDesc: "Opredelite osrednji problem, ki ga bo vaš projekt reševal.",
+    coreProblemDesc: "Opredelite osrednji problem, ki ga bo vaš projekt reševat.",
     coreProblemTitlePlaceholder: "Vnesite naziv glavnega problema...",
     coreProblemDescPlaceholder: "Podrobno opišite glavni problem...",
     causes: "Vzroki",
@@ -461,7 +458,7 @@ export const TEXT = {
         kerDesc: "Podroben opis",
         exploitationStrategy: "Strategija izkoriščanja",
         titlePlaceholder: "Vnesite specifičen naziv (npr. Algoritem za...)",
-        descPlaceholder: "Poglobljen in natančen tehnični opis rezultata...",
+        descPlaceholder: "Poglobljen in natančen tehničen opis rezultata...",
         strategyPlaceholder: "Strokovna, natančna in poglobljena strategija izkoriščanja..."
     },
     management: {
@@ -585,7 +582,7 @@ export const TEXT = {
       apiKeySaved: "Nastavitve uspešno shranjene!",
       noKeyWarning: "Manjka API ključ",
       noKeyMessage: "Prosimo, vnesite svoj Gemini API ključ v nastavitvah za uporabo UI funkcij.",
-      manualModeBanner: "⚠️ API ključ ni zaznan. UI funkcije so onemogočene.",
+      manualModeBanner: " API ključ ni zaznan. UI funkcije so onemogočene.",
       enterKeyAction: "VNESI API KLJUČ",
       projectSaved: "Projekt uspešno shranjen!",
       validating: "Preverjanje ključa...",
@@ -593,7 +590,6 @@ export const TEXT = {
       modelLabel: "Ime UI Modela",
       modelDesc: "Določite verzijo Gemini modela (npr. gemini-3-pro-preview). Pustite prazno za privzeto.",
       modelPlaceholder: "Privzeto: gemini-3-pro-preview",
-      // New Auth Keys - SI
       emailLabel: "E-poštni naslov",
       displayNameLabel: "Prikazno ime (Uporabnik)",
       displayNameDesc: "Unikatno ime. Če prazno, se uporabi e-pošta.",
@@ -608,7 +604,6 @@ export const TEXT = {
       twoFactorLabel: "Koda iz aplikacije",
       setup2FADesc: "Skenirajte ta ključ v Google Authenticator ali Microsoft Authenticator:",
       cancel: "Prekliči",
-      // Settings Tabs
       tabGeneral: "Splošno & UI",
       tabProfile: "Profil",
       tabSecurity: "Varnost",
