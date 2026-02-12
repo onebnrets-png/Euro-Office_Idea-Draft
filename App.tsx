@@ -1043,25 +1043,22 @@ const App = () => {
         </div>
       </div>
       )}
-
       {/* PRINT LAYOUT – hidden on screen, visible only when printing */}
 <div className="hidden print:block">
     <PrintLayout projectData={projectData} language={language} logo={appLogo} />
 </div>
-
 {/* EXPORT-ONLY CHART CONTAINERS (hidden, used by html2canvas) */}
 <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
-
-          <div id="gantt-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
-              <GanttChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
-          </div>
-          <div id="pert-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
-              <PERTChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
-          </div>
-          <div id="organigram-export" style={{ width: '1000px', background: 'white', padding: '20px' }}>
-              <Organigram projectManagement={projectData.projectManagement} activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1000} printMode={true} />
-          </div>
-      </div>
+    <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
+        <GanttChart activities={projectData.activities} language={language} forceViewMode="project" containerWidth={2400} printMode={true} id="gantt-export" />
+    </div>
+    <div id="pert-chart-export" style={{ width: '1200px', background: 'white', padding: '20px' }}>
+        <PERTChart activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1200} printMode={true} />
+    </div>
+    <div id="organigram-export" style={{ width: '1000px', background: 'white', padding: '20px' }}>
+        <Organigram projectManagement={projectData.projectManagement} activities={projectData.activities} language={language} forceViewMode={true} containerWidth={1000} printMode={true} />
+    </div>
+</div>
     </>
   );
 };
