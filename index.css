@@ -1,0 +1,45 @@
+/* ─── SCREEN: hide print layout ─── */
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
+/* ─── PRINT: show print layout, hide app UI ─── */
+@media print {
+  .print\:hidden,
+  .no-print {
+    display: none !important;
+  }
+  .print\:block {
+    display: block !important;
+  }
+  body {
+    background: white !important;
+  }
+}
+
+/* ─── Custom scrollbar (for sidebar) ─── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+
+/* ─── Prevent double scrollbar ─── */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
