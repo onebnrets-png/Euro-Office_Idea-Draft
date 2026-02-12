@@ -27,18 +27,40 @@ export interface AIGenerateResult {
 }
 
 // ─── OPENROUTER POPULAR MODELS ───────────────────────────────────
+// Organized by category for easy selection in the UI
 
 export const OPENROUTER_MODELS = [
+  // ═══ PROPRIETARY FLAGSHIP MODELS ═══
   { id: 'openai/gpt-4o', name: 'OpenAI GPT-4o', description: 'Most capable OpenAI model' },
   { id: 'openai/gpt-4o-mini', name: 'OpenAI GPT-4o Mini', description: 'Fast & affordable OpenAI' },
   { id: 'openai/o3-mini', name: 'OpenAI o3-mini', description: 'OpenAI reasoning model' },
   { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', description: 'Anthropic balanced model' },
   { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4', description: 'Anthropic most capable' },
   { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro (via OpenRouter)', description: 'Google via OpenRouter' },
-  { id: 'mistralai/mistral-large-latest', name: 'Mistral Large', description: 'Mistral flagship' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', description: 'Meta open-source' },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', description: 'DeepSeek chat model' },
-  { id: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 72B', description: 'Alibaba flagship' },
+
+  // ═══ OPEN-SOURCE — CHINESE FLAGSHIP 🇨🇳 ═══
+  { id: 'deepseek/deepseek-v3.2', name: '🇨🇳 DeepSeek V3.2', description: 'DeepSeek flagship – top open-source, MoE 671B' },
+  { id: 'deepseek/deepseek-r1', name: '🇨🇳 DeepSeek R1', description: 'DeepSeek reasoning model – rivals OpenAI o1' },
+  { id: 'deepseek/deepseek-r1-0528', name: '🇨🇳 DeepSeek R1 0528', description: 'Latest R1 update – enhanced reasoning' },
+  { id: 'moonshotai/kimi-k2.5', name: '🇨🇳 Kimi K2.5 (Moonshot AI)', description: '#1 open-source – reasoning + visual coding' },
+  { id: 'moonshotai/kimi-k2', name: '🇨🇳 Kimi K2 (Moonshot AI)', description: '1T param MoE – coding & agentic tasks' },
+  { id: 'z-ai/glm-5', name: '🇨🇳 GLM-5 (Zhipu AI)', description: 'Z.AI latest flagship – frontier open-source' },
+  { id: 'z-ai/glm-4.5-air:free', name: '🇨🇳 GLM-4.5 Air (FREE)', description: 'Zhipu AI – free lightweight model' },
+  { id: 'qwen/qwen3-235b-a22b', name: '🇨🇳 Qwen3 235B A22B (Alibaba)', description: 'Alibaba MoE 235B – top reasoning & coding' },
+  { id: 'qwen/qwen3-max', name: '🇨🇳 Qwen3 Max (Alibaba)', description: 'Alibaba cloud-hosted flagship' },
+  { id: 'qwen/qwen3-coder', name: '🇨🇳 Qwen3 Coder (Alibaba)', description: 'Alibaba coding specialist – 480B MoE' },
+  { id: 'minimax/minimax-m2.1', name: '🇨🇳 MiniMax M2.1', description: 'MiniMax flagship – coding & agents, efficient' },
+  { id: 'minimax/minimax-m2', name: '🇨🇳 MiniMax M2', description: 'MiniMax – compact high-performance model' },
+
+  // ═══ OPEN-SOURCE — META LLAMA 🦙 ═══
+  { id: 'meta-llama/llama-4-maverick', name: '🦙 Llama 4 Maverick (Meta)', description: 'Meta MoE 128 experts – top Llama model' },
+  { id: 'meta-llama/llama-4-scout', name: '🦙 Llama 4 Scout (Meta)', description: 'Meta MoE 16 experts – fast & efficient' },
+  { id: 'meta-llama/llama-3.3-70b-instruct', name: '🦙 Llama 3.3 70B (Meta)', description: 'Meta proven workhorse – great price/quality' },
+
+  // ═══ OPEN-SOURCE — MISTRAL 🇫🇷 ═══
+  { id: 'mistralai/mistral-large-2512', name: '🇫🇷 Mistral Large 3 (Dec 2025)', description: 'Mistral flagship – 262K context' },
+  { id: 'mistralai/devstral-2512', name: '🇫🇷 Devstral 2 (Mistral)', description: 'Mistral agentic coding specialist – 123B MoE' },
+  { id: 'mistralai/mistral-small-2503', name: '🇫🇷 Mistral Small (Mar 2025)', description: 'Mistral lightweight – fast responses' },
 ];
 
 // ─── PROVIDER DETECTION ──────────────────────────────────────────
@@ -62,7 +84,7 @@ export function getProviderConfig(): AIProviderConfig {
 }
 
 export function getDefaultModel(provider: AIProviderType): string {
-  if (provider === 'openrouter') return 'openai/gpt-4o';
+  if (provider === 'openrouter') return 'deepseek/deepseek-v3.2';
   return 'gemini-3-pro-preview';
 }
 
@@ -205,7 +227,7 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
         throw new Error('MISSING_API_KEY');
       }
       if (response.status === 429) {
-        throw new Error('Google Gemini API Quota Exceeded. You have reached the limit for the free tier. Please try again later or switch to a paid plan.');
+        throw new Error('API Quota Exceeded. You have reached the rate limit. Please try again later or switch to a different model/plan.');
       }
       throw new Error(`OpenRouter Error: ${errorMsg}`);
     }
