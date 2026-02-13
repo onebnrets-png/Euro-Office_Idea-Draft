@@ -17,16 +17,25 @@ export const useAuth = () => {
   const [isWarningDismissed, setIsWarningDismissed] = useState(false);
   const [appLogo, setAppLogo] = useState(BRAND_ASSETS.logoText);
 
+  // ─── Load custom logo from settings cache ──────────────────────
+  const loadCustomLogo = useCallback(() => {
+    const custom = storageService.getCustomLogo();
+    setAppLogo(custom || BRAND_ASSETS.logoText);
+  }, []);
+
   // ─── Restore session on mount ──────────────────────────────────
   useEffect(() => {
     const restoreSession = async () => {
       const email = await storageService.restoreSession();
       if (email) {
         setCurrentUser(email);
+        // restoreSession() already calls loadSettings() internally,
+        // so cachedSettings is populated — now load the logo.
+        loadCustomLogo();
       }
     };
     restoreSession();
-  }, []);
+  }, [loadCustomLogo]);
 
   // ─── Check API key ─────────────────────────────────────────────
   const checkApiKey = useCallback(async () => {
@@ -44,27 +53,23 @@ export const useAuth = () => {
     }
   }, [currentUser, checkApiKey]);
 
-  // ─── Load custom logo ──────────────────────────────────────────
-  const loadCustomLogo = useCallback(() => {
-    const custom = storageService.getCustomLogo();
-    setAppLogo(custom || BRAND_ASSETS.logoText);
-  }, []);
-
   // ─── Login ─────────────────────────────────────────────────────
   const handleLoginSuccess = useCallback((username: string) => {
     setCurrentUser(username);
-  }, []);
+    // Settings are loaded during login (storageService.login calls loadSettings),
+    // so we can load the custom logo immediately.
+    // Small timeout to ensure settings cache is populated after login completes.
+    setTimeout(() => {
+      loadCustomLogo();
+    }, 100);
+  }, [loadCustomLogo]);
 
   // ─── Logout ────────────────────────────────────────────────────
-  // Returns a promise so the caller can chain cleanup actions.
   const handleLogout = useCallback(async () => {
     await storageService.logout();
     setCurrentUser(null);
     setIsWarningDismissed(false);
     setAppLogo(BRAND_ASSETS.logoText);
-    // NOTE: Caller (App.tsx) must also reset project state:
-    //   setCurrentProjectId(null)
-    //   setProjectData(createEmptyProjectData())
   }, []);
 
   // ─── Dismiss warning ───────────────────────────────────────────
