@@ -105,7 +105,7 @@ const App = () => {
     currentUser: auth.currentUser,
   });
 
-    const generation = useGeneration({
+  const generation = useGeneration({
     projectData: pm.projectData,
     setProjectData: pm.setProjectData,
     language,
@@ -142,6 +142,12 @@ const App = () => {
     setModalConfig,
     closeModal,
   });
+
+  // ═══════════════════════════════════════════════════════════════
+  // CRITICAL: All useEffect hooks MUST be BEFORE any conditional
+  // return statement. React requires hooks to be called in the
+  // same order on every render.
+  // ═══════════════════════════════════════════════════════════════
 
   // ─── Show project list on login ────────────────────────────────
   useEffect(() => {
