@@ -6,6 +6,10 @@
 //
 // TRANSLATION RULES are read from services/Instructions.ts
 // — the single source of truth. No hardcoded rules here.
+//
+// NON-TRANSLATABLE fields (IDs, dates, acronyms, levels,
+// dependencies, categories) are ALWAYS COPIED from source
+// to target — never translated, never skipped.
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
@@ -27,7 +31,9 @@ const simpleHash = (str: string): string => {
   return hash.toString(36);
 };
 
-// ─── NON-TRANSLATABLE KEYS (skip these) ──────────────────────────
+// ─── NON-TRANSLATABLE KEYS ──────────────────────────────────────
+// These keys are NEVER sent to the AI for translation.
+// Instead they are COPIED directly from source to target.
 
 const SKIP_KEYS = new Set([
   'id', 'startDate', 'endDate', 'date', 'level',
@@ -228,6 +234,48 @@ const translateFieldBatch = async (
   return resultMap;
 };
 
+// ─── COPY NON-TRANSLATABLE DATA FROM SOURCE TO TARGET ────────────
+// Recursively walks the source tree and copies every SKIP_KEYS
+// value (IDs, dates, acronyms, levels, dependencies, categories)
+// into the target. Also ensures arrays have matching structure.
+
+const copyNonTranslatableFromSource = (source: any, target: any): void => {
+  if (!source || typeof source !== 'object') return;
+
+  if (Array.isArray(source)) {
+    for (let i = 0; i < source.length; i++) {
+      // Ensure target slot exists with correct type
+      if (target[i] === undefined || target[i] === null) {
+        if (typeof source[i] === 'object' && source[i] !== null) {
+          target[i] = Array.isArray(source[i]) ? [] : {};
+        } else {
+          target[i] = source[i];
+          continue;
+        }
+      }
+      if (typeof source[i] === 'object' && source[i] !== null) {
+        copyNonTranslatableFromSource(source[i], target[i]);
+      }
+    }
+    // If source array is shorter than target, leave extra target items as-is
+    return;
+  }
+
+  for (const [key, val] of Object.entries(source)) {
+    if (SKIP_KEYS.has(key)) {
+      // ALWAYS overwrite target with source value for non-translatable keys
+      target[key] = val;
+    } else if (typeof val === 'object' && val !== null) {
+      // Recurse into nested objects/arrays
+      if (target[key] === undefined || target[key] === null) {
+        target[key] = Array.isArray(val) ? [] : {};
+      }
+      copyNonTranslatableFromSource(val, target[key]);
+    }
+    // String/number fields that are translatable → leave for AI translation
+  }
+};
+
 // ─── MAIN: SMART INCREMENTAL TRANSLATION ─────────────────────────
 
 export const smartTranslateProject = async (
@@ -269,7 +317,15 @@ export const smartTranslateProject = async (
     ? JSON.parse(JSON.stringify(existingTargetData))
     : JSON.parse(JSON.stringify(sourceData));
 
-  // 5. Translate changed fields in section-based batches
+  // 5. CRITICAL: Copy ALL non-translatable data from source to target.
+  //    SKIP_KEYS fields (IDs, dates, acronyms, dependencies, levels,
+  //    categories, etc.) are never sent to the AI — they must be
+  //    copied directly. Without this step, Gantt/PERT charts break,
+  //    readiness levels disappear, and acronyms go missing.
+  copyNonTranslatableFromSource(sourceData, translatedData);
+  console.log(`[TranslationDiff] Non-translatable fields copied from source.`);
+
+  // 6. Translate changed fields in section-based batches
   const stats = {
     total: sourceFields.length,
     changed: changedFields.length,
@@ -309,9 +365,10 @@ export const smartTranslateProject = async (
         console.warn(`[TranslationDiff] Batch failed for "${section}" (${batch.length} fields):`, error.message);
         stats.failed += batch.length;
 
+        // Fallback: keep existing target value, or copy source if target is empty
         for (const field of batch) {
           const existingTarget = getByPath(translatedData, field.path);
-          if (!existingTarget || existingTarget.trim() === '' || existingTarget === field.value) {
+          if (!existingTarget || (typeof existingTarget === 'string' && existingTarget.trim() === '')) {
             setByPath(translatedData, field.path, field.value);
           }
         }
@@ -319,7 +376,7 @@ export const smartTranslateProject = async (
     }
   }
 
-  // 6. Save hashes for all successfully translated fields + unchanged fields
+  // 7. Save hashes for all successfully translated fields + unchanged fields
   const allToSave = [...successfullyTranslated, ...unchangedFields];
   await saveHashes(projectId, sourceLang, targetLanguage, allToSave);
 
