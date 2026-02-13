@@ -6,7 +6,7 @@
 import { useCallback } from 'react';
 import { storageService } from '../services/storageService.ts';
 import { smartTranslateProject } from '../services/translationDiffService.ts';
-import { createEmptyProjectData } from '../utils.ts';
+import { createEmptyProjectData, detectProjectLanguage } from '../utils.ts';
 import { TEXT } from '../locales.ts';
 
 interface UseTranslationProps {
@@ -48,6 +48,19 @@ export const useTranslation = ({
   setModalConfig,
   closeModal,
 }: UseTranslationProps) => {
+
+  // ─── Check if data is actually in the expected language ────────
+  // This prevents the bug where EN version contains SI text
+  // (because createProject saves the same data for both languages)
+
+  const isDataInCorrectLanguage = useCallback(
+    (data: any, expectedLang: 'en' | 'si'): boolean => {
+      if (!data || !hasContent(data)) return false;
+      const detectedLang = detectProjectLanguage(data);
+      return detectedLang === expectedLang;
+    },
+    [hasContent]
+  );
 
   // ─── Perform AI translation ────────────────────────────────────
 
@@ -149,12 +162,12 @@ export const useTranslation = ({
     async (newLang: 'en' | 'si') => {
       if (newLang === language) return;
 
-      // Save current data before switching (only if logged in — matching original)
+      // Save current data before switching (only if logged in)
       if (currentUser) {
         await storageService.saveProject(projectData, language, currentProjectId);
       }
 
-      // If no content, just switch
+      // If no content in current project, just switch
       if (!hasContent(projectData)) {
         setLanguage(newLang);
         const loaded = await storageService.loadProject(newLang, currentProjectId);
@@ -171,8 +184,13 @@ export const useTranslation = ({
 
       const tCurrent = TEXT[language] || TEXT['en'];
 
-      // No target version exists → ask to translate or copy
-      if (!hasContent(cachedVersion)) {
+      // ─── KEY FIX: Check if cached version is ACTUALLY in the target language ───
+      // If EN version contains SI text (or vice versa), treat it as missing.
+      const cachedHasContent = hasContent(cachedVersion);
+      const cachedIsCorrectLanguage = cachedHasContent && isDataInCorrectLanguage(cachedVersion, newLang);
+
+      // No valid target version → ask to translate or copy
+      if (!cachedHasContent || !cachedIsCorrectLanguage) {
         setModalConfig({
           isOpen: true,
           title: tCurrent.modals.missingTranslationTitle,
@@ -215,7 +233,7 @@ export const useTranslation = ({
         return;
       }
 
-      // No changes → just switch
+      // Cached version exists, is in correct language, no changes → just switch
       performSwitchOnly(newLang, cachedVersion);
     },
     [
@@ -226,6 +244,7 @@ export const useTranslation = ({
       currentUser,
       hasContent,
       hasUnsavedTranslationChanges,
+      isDataInCorrectLanguage,
       performTranslation,
       performCopy,
       performSwitchOnly,
