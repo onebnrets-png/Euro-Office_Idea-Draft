@@ -12,8 +12,8 @@ import SettingsModal from './components/SettingsModal';
 import ProjectListModal from './components/ProjectListModal';
 
 // ─── Constants & Utilities ────────────────────────────────────
-import { ICONS, TEXT, getSteps, getSubSteps } from './constants';
-import { BRAND_ASSETS } from './constants';
+import { ICONS, getSteps, getSubSteps, BRAND_ASSETS } from './constants';
+import { TEXT } from './locales';
 import { downloadBlob } from './utils';
 
 // ─── Hooks ────────────────────────────────────────────────────
