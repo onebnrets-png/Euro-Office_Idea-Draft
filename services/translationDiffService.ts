@@ -10,6 +10,9 @@
 // NON-TRANSLATABLE fields (IDs, dates, acronyms, levels,
 // dependencies, categories) are ALWAYS COPIED from source
 // to target — never translated, never skipped.
+//
+// RATE LIMITING: 2s delay between batches + exponential
+// backoff retry (up to 3 retries) on 429 errors.
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
@@ -234,6 +237,47 @@ const translateFieldBatch = async (
   return resultMap;
 };
 
+// ─── TRANSLATE WITH RETRY (exponential backoff on 429) ───────────
+
+const MAX_RETRIES = 3;
+
+const translateFieldBatchWithRetry = async (
+  fields: FieldEntry[],
+  targetLanguage: 'en' | 'si'
+): Promise<Map<string, string>> => {
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // On retry, wait with exponential backoff: 4s, 8s, 16s
+      if (attempt > 0) {
+        const delay = 2000 * Math.pow(2, attempt); // 4000, 8000, 16000
+        console.log(`[TranslationDiff] Rate limited — retry ${attempt}/${MAX_RETRIES}, waiting ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+
+      return await translateFieldBatch(fields, targetLanguage);
+    } catch (e: any) {
+      lastError = e;
+      const msg = e.message || '';
+
+      // Only retry on rate limit errors
+      const isRateLimit = msg.includes('429') ||
+        msg.includes('Quota') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('rate limit') ||
+        msg.includes('Rate Limit') ||
+        msg.includes('Too Many Requests');
+
+      if (!isRateLimit || attempt === MAX_RETRIES) {
+        throw e; // Not a rate limit error, or we've exhausted retries
+      }
+    }
+  }
+
+  throw lastError; // Should not reach here, but just in case
+};
+
 // ─── COPY NON-TRANSLATABLE DATA FROM SOURCE TO TARGET ────────────
 // Recursively walks the source tree and copies every SKIP_KEYS
 // value (IDs, dates, acronyms, levels, dependencies, categories)
@@ -257,7 +301,6 @@ const copyNonTranslatableFromSource = (source: any, target: any): void => {
         copyNonTranslatableFromSource(source[i], target[i]);
       }
     }
-    // If source array is shorter than target, leave extra target items as-is
     return;
   }
 
@@ -340,6 +383,7 @@ export const smartTranslateProject = async (
 
   const sectionGroups = groupBySection(changedFields);
   const successfullyTranslated: FieldEntry[] = [];
+  let batchIndex = 0;
 
   for (const [section, fields] of sectionGroups) {
     console.log(`[TranslationDiff] Translating section "${section}" – ${fields.length} fields...`);
@@ -348,8 +392,15 @@ export const smartTranslateProject = async (
     for (let i = 0; i < fields.length; i += BATCH_SIZE) {
       const batch = fields.slice(i, i + BATCH_SIZE);
 
+      // ═══ RATE LIMIT PROTECTION: Wait 2s between batches ═══
+      if (batchIndex > 0) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      batchIndex++;
+
       try {
-        const results = await translateFieldBatch(batch, targetLanguage);
+        // Use retry-enabled translation (auto-retries on 429)
+        const results = await translateFieldBatchWithRetry(batch, targetLanguage);
 
         for (const [path, translatedValue] of results) {
           setByPath(translatedData, path, translatedValue);
