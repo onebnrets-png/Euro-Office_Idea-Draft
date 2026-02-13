@@ -29,13 +29,12 @@ export const useAuth = () => {
     try {
       const { currentLevel, nextLevel } = await storageService.getAAL();
       if (nextLevel === 'aal2' && currentLevel !== 'aal2') {
-        // User has MFA enrolled but hasn't verified this session
         const { totp } = await storageService.getMFAFactors();
         const verifiedFactor = totp.find((f: any) => f.factor_type === 'totp' && f.status === 'verified');
         if (verifiedFactor) {
           setMfaFactorId(verifiedFactor.id);
           setNeedsMFAVerify(true);
-          return true; // MFA verification needed
+          return true;
         }
       }
     } catch (err) {
@@ -43,7 +42,7 @@ export const useAuth = () => {
     }
     setNeedsMFAVerify(false);
     setMfaFactorId(null);
-    return false; // No MFA needed
+    return false;
   }, []);
 
   // ─── Restore session on mount ──────────────────────────────────
@@ -56,15 +55,16 @@ export const useAuth = () => {
           setCurrentUser(email);
           loadCustomLogo();
         }
-        // If MFA is needed, we don't set currentUser yet — AuthScreen shows MFA prompt
       }
     };
     restoreSession();
   }, [loadCustomLogo, checkMFA]);
 
-  // ─── Check API key ─────────────────────────────────────────────
+  // ─── Check API key (uses ensureSettingsLoaded instead of loadSettings) ─
+  // ★ FIX: Use ensureSettingsLoaded() instead of loadSettings()
+  // This prevents overwriting the cache that register() just populated.
   const checkApiKey = useCallback(async () => {
-    await storageService.loadSettings();
+    await storageService.ensureSettingsLoaded();
     if (!hasValidApiKey()) {
       setShowAiWarning(true);
     } else {
@@ -80,10 +80,8 @@ export const useAuth = () => {
 
   // ─── Login ─────────────────────────────────────────────────────
   const handleLoginSuccess = useCallback(async (username: string) => {
-    // After Supabase login, check if MFA is needed
     const mfaNeeded = await checkMFA();
     if (mfaNeeded) {
-      // Don't set currentUser yet — show MFA screen
       return;
     }
     setCurrentUser(username);
