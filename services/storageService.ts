@@ -474,5 +474,73 @@ export const storageService = {
     }
 
     cachedProjectsMeta = null;
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // MFA (Supabase Auth TOTP)
+  // ═══════════════════════════════════════════════════════════════
+
+  async getMFAFactors(): Promise<{ totp: any[] }> {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) {
+      console.warn('getMFAFactors error:', error.message);
+      return { totp: [] };
+    }
+    return { totp: data?.totp || [] };
+  },
+
+  async enrollMFA(): Promise<{ factorId: string; qrUri: string; secret: string } | null> {
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName: 'INTERVENCIJSKA-LOGIKA'
+    });
+    if (error) {
+      console.error('enrollMFA error:', error.message);
+      return null;
+    }
+    return {
+      factorId: data.id,
+      qrUri: data.totp.uri,
+      secret: data.totp.secret
+    };
+  },
+
+  async challengeAndVerifyMFA(factorId: string, code: string): Promise<{ success: boolean; message?: string }> {
+    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+    if (challengeError) {
+      return { success: false, message: challengeError.message };
+    }
+
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId,
+      challengeId: challenge.id,
+      code
+    });
+
+    if (verifyError) {
+      return { success: false, message: verifyError.message };
+    }
+
+    return { success: true };
+  },
+
+  async unenrollMFA(factorId: string): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId });
+    if (error) {
+      return { success: false, message: error.message };
+    }
+    return { success: true };
+  },
+
+  async getAAL(): Promise<{ currentLevel: string; nextLevel: string }> {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error) {
+      console.warn('getAAL error:', error.message);
+      return { currentLevel: 'aal1', nextLevel: 'aal1' };
+    }
+    return {
+      currentLevel: data.currentLevel || 'aal1',
+      nextLevel: data.nextLevel || 'aal1'
+    };
   }
 };
