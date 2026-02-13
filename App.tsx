@@ -105,7 +105,7 @@ const App = () => {
     currentUser: auth.currentUser,
   });
 
-  const generation = useGeneration({
+    const generation = useGeneration({
     projectData: pm.projectData,
     setProjectData: pm.setProjectData,
     language,
@@ -116,6 +116,11 @@ const App = () => {
     checkSectionHasContent: pm.checkSectionHasContent,
     setModalConfig,
     closeModal,
+    // NEW: for smart translate-from-other-language
+    currentProjectId: pm.currentProjectId,
+    projectVersions: pm.projectVersions,
+    setLanguage,
+    setProjectVersions: pm.setProjectVersions,
   });
 
   const translation = useTranslation({
