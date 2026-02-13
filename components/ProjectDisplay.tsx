@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { ICONS, getReadinessLevelsDefinitions, getSteps } from '../constants.tsx';
 import { TEXT } from '../locales.ts';
 import GanttChart from './GanttChart.tsx';
@@ -57,29 +57,42 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
     
     const textAreaRef = useRef(null);
     
-    const adjustHeight = () => {
+    const adjustHeight = useCallback(() => {
         const el = textAreaRef.current;
         if (el) {
             el.style.height = 'auto';
             el.style.height = `${el.scrollHeight}px`;
         }
-    };
-    
-    useEffect(() => {
-        adjustHeight();
-    }, [value]);
-
-    useEffect(() => {
-        adjustHeight();
-        const rafId = requestAnimationFrame(() => adjustHeight());
-        return () => cancelAnimationFrame(rafId);
     }, []);
+    
+    // PRIMARY FIX: runs on EVERY value change including first async load
+    // Uses requestAnimationFrame to ensure browser has finished layout
+    useEffect(() => {
+        adjustHeight();
+        const rafId = requestAnimationFrame(() => {
+            adjustHeight();
+        });
+        return () => cancelAnimationFrame(rafId);
+    }, [value, adjustHeight]);
 
+    // SECONDARY FIX: ResizeObserver catches container width changes
+    // (CSS grid/flex reflows) that affect scrollHeight
+    useEffect(() => {
+        const el = textAreaRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => {
+            adjustHeight();
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [adjustHeight]);
+
+    // Also re-adjust when the window is resized
     useEffect(() => {
         const handleResize = () => adjustHeight();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    }, [adjustHeight]);
 
     return (
         <div className={className}>
@@ -204,7 +217,7 @@ const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependenc
                 {(task.dependencies || []).map((dep, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-slate-200 text-xs shadow-sm">
                         <span className="text-slate-700">{t.predecessor}: <strong className="text-sky-700">{dep.predecessorId}</strong> <span className="text-slate-400">({dep.type})</span></span>
-                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1">×</button>
+                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1"></button>
                     </div>
                 ))}
             </div>
