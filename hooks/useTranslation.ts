@@ -1,6 +1,7 @@
 // hooks/useTranslation.ts
 // ═══════════════════════════════════════════════════════════════
 // Language switching and smart diff-based translation.
+// Errors are handled gracefully with user-friendly messages.
 // ═══════════════════════════════════════════════════════════════
 
 import { useCallback } from 'react';
@@ -50,8 +51,6 @@ export const useTranslation = ({
 }: UseTranslationProps) => {
 
   // ─── Check if data is actually in the expected language ────────
-  // This prevents the bug where EN version contains SI text
-  // (because createProject saves the same data for both languages)
 
   const isDataInCorrectLanguage = useCallback(
     (data: any, expectedLang: 'en' | 'si'): boolean => {
@@ -60,6 +59,50 @@ export const useTranslation = ({
       return detectedLang === expectedLang;
     },
     [hasContent]
+  );
+
+  // ─── Friendly translation error handler ────────────────────────
+
+  const handleTranslationError = useCallback(
+    (e: any, targetLang: 'en' | 'si') => {
+      const msg = e.message || e.toString();
+
+      // Missing API key → open settings
+      if (msg === 'MISSING_API_KEY') {
+        setIsSettingsOpen(true);
+        return;
+      }
+
+      // Quota / credit exceeded
+      if (msg.includes('Quota') || msg.includes('credits') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('rate limit') || msg.includes('afford')) {
+        setModalConfig({
+          isOpen: true,
+          title: targetLang === 'si' ? 'Nezadostna sredstva AI' : 'Insufficient AI Credits',
+          message: targetLang === 'si'
+            ? 'Za prevod ni dovolj sredstev pri AI ponudniku. Možne rešitve:\n\n• Dopolnite kredit pri vašem AI ponudniku\n• V Nastavitvah zamenjajte na cenejši model\n• V Nastavitvah preklopite na drugega AI ponudnika'
+            : 'Not enough AI credits for translation. Possible solutions:\n\n• Top up credits with your AI provider\n• Switch to a cheaper model in Settings\n• Switch to a different AI provider in Settings',
+          confirmText: targetLang === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          secondaryText: '',
+          cancelText: targetLang === 'si' ? 'Zapri' : 'Close',
+          onConfirm: () => {
+            closeModal();
+            setIsSettingsOpen(true);
+          },
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // Generic — friendly message, details in console
+      console.error('[Translation Error]:', e);
+      setError(
+        targetLang === 'si'
+          ? 'Napaka pri prevajanju. Preverite konzolo (F12) za podrobnosti.'
+          : 'Translation failed. Check console (F12) for details.'
+      );
+    },
+    [setIsSettingsOpen, setModalConfig, closeModal, setError]
   );
 
   // ─── Perform AI translation ────────────────────────────────────
@@ -73,6 +116,7 @@ export const useTranslation = ({
 
       const tTarget = TEXT[targetLang] || TEXT['en'];
       setIsLoading(`${tTarget.generating} (Smart Translation)...`);
+      setError(null);
 
       try {
         const existingTargetData = await storageService.loadProject(
@@ -87,6 +131,16 @@ export const useTranslation = ({
           currentProjectId!
         );
 
+        // Check if translation actually succeeded
+        if (stats.failed > 0 && stats.translated === 0) {
+          // ALL failed — don't switch, show friendly error
+          throw new Error(
+            stats.failed > 50
+              ? 'credits'  // Likely a quota issue if all batches failed
+              : 'Translation failed for all fields'
+          );
+        }
+
         setProjectData(translatedData);
         setLanguage(targetLang);
         setHasUnsavedTranslationChanges(false);
@@ -98,25 +152,17 @@ export const useTranslation = ({
         }));
 
         if (stats.failed > 0) {
+          // Partial success — switch but warn
           setError(
             targetLang === 'si'
-              ? `Prevod delno uspel: ${stats.translated}/${stats.changed} polj prevedenih, ${stats.failed} neuspelih.`
-              : `Translation partially done: ${stats.translated}/${stats.changed} fields translated, ${stats.failed} failed.`
+              ? `Prevod delno uspel: ${stats.translated}/${stats.changed} polj prevedenih. Nekatera polja poskusite ponovno.`
+              : `Translation partially done: ${stats.translated}/${stats.changed} fields translated. Try again for remaining fields.`
           );
         } else if (stats.changed === 0) {
           console.log('[Translation] No changes detected – all fields up to date.');
         }
       } catch (e: any) {
-        if (e.message === 'MISSING_API_KEY') {
-          setIsSettingsOpen(true);
-        } else {
-          console.error('Translation failed', e);
-          setError(
-            targetLang === 'si'
-              ? 'Napaka pri prevajanju. Preverite konzolo (F12).'
-              : 'Translation failed. Check console (F12) for details.'
-          );
-        }
+        handleTranslationError(e, targetLang);
       } finally {
         setIsLoading(false);
       }
@@ -131,6 +177,7 @@ export const useTranslation = ({
       setIsLoading,
       setError,
       setIsSettingsOpen,
+      handleTranslationError,
     ]
   );
 
@@ -184,8 +231,7 @@ export const useTranslation = ({
 
       const tCurrent = TEXT[language] || TEXT['en'];
 
-      // ─── KEY FIX: Check if cached version is ACTUALLY in the target language ───
-      // If EN version contains SI text (or vice versa), treat it as missing.
+      // KEY FIX: Check if cached version is ACTUALLY in the target language
       const cachedHasContent = hasContent(cachedVersion);
       const cachedIsCorrectLanguage = cachedHasContent && isDataInCorrectLanguage(cachedVersion, newLang);
 
