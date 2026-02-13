@@ -165,7 +165,7 @@ const App: React.FC = () => {
     setIsProjectListOpen(true);
   };
 
-  // ─── Login Screen ─────────────────────────────────────────
+    // ─── Login Screen ─────────────────────────────────────────
   if (!auth.currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-sky-100 flex items-center justify-center p-4">
@@ -182,6 +182,11 @@ const App: React.FC = () => {
           onLoginSuccess={auth.handleLoginSuccess}
           language={language}
           onLanguageSwitch={handleLanguageSwitch}
+          onStartEditing={() => {}}
+          completedSteps={steps.map(() => false)}
+          projectIdea={{ projectTitle: '', projectAcronym: '' }}
+          setLanguage={(lang: 'en' | 'si') => handleLanguageSwitch(lang)}
+          logo={auth.appLogo || BRAND_ASSETS.logo}
         />
         <SettingsModal
           isOpen={isSettingsOpen}
