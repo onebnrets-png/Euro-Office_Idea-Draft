@@ -1,6 +1,7 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// Errors are handled gracefully with user-friendly modals.
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useCallback } from 'react';
@@ -48,6 +49,72 @@ export const useGeneration = ({
 
   const t = TEXT[language] || TEXT['en'];
 
+  // ─── Friendly error handler ────────────────────────────────────
+  // Converts raw API errors into user-friendly modal messages.
+  // Never shows raw error text on the main screen.
+
+  const handleAIError = useCallback(
+    (e: any, context: string = '') => {
+      const msg = e.message || e.toString();
+
+      // Missing API key → open settings
+      if (msg === 'MISSING_API_KEY') {
+        setIsSettingsOpen(true);
+        return;
+      }
+
+      // Quota / credit exceeded
+      if (msg.includes('Quota') || msg.includes('credits') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('rate limit') || msg.includes('afford')) {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Nezadostna sredstva AI' : 'Insufficient AI Credits',
+          message: language === 'si'
+            ? 'Vaš AI ponudnik nima dovolj sredstev za to zahtevo. Možne rešitve:\n\n• Dopolnite kredit pri vašem AI ponudniku\n• V Nastavitvah zamenjajte na cenejši model\n• V Nastavitvah preklopite na drugega AI ponudnika'
+            : 'Your AI provider does not have enough credits for this request. Possible solutions:\n\n• Top up credits with your AI provider\n• Switch to a cheaper model in Settings\n• Switch to a different AI provider in Settings',
+          confirmText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          secondaryText: '',
+          cancelText: language === 'si' ? 'Zapri' : 'Close',
+          onConfirm: () => {
+            closeModal();
+            setIsSettingsOpen(true);
+          },
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // JSON parse error (AI returned bad format)
+      if (msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
+        setError(
+          language === 'si'
+            ? 'AI je vrnil nepravilen format. Poskusite ponovno.'
+            : 'AI returned an invalid format. Please try again.'
+        );
+        return;
+      }
+
+      // Network error
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed to fetch') || msg.includes('ERR_')) {
+        setError(
+          language === 'si'
+            ? 'Omrežna napaka. Preverite internetno povezavo in poskusite ponovno.'
+            : 'Network error. Check your internet connection and try again.'
+        );
+        return;
+      }
+
+      // Generic fallback — still friendly, with console detail
+      console.error(`[AI Error] ${context}:`, e);
+      setError(
+        language === 'si'
+          ? 'Napaka pri generiranju. Preverite konzolo (F12) za podrobnosti.'
+          : 'Generation error. Check console (F12) for details.'
+      );
+    },
+    [language, setIsSettingsOpen, setModalConfig, closeModal]
+  );
+
   // ─── Execute section generation ────────────────────────────────
 
   const executeGeneration = useCallback(
@@ -78,7 +145,7 @@ export const useGeneration = ({
             console.warn('Schedule warnings:', schedResult.warnings);
           }
 
-          // Auto-generate risks after activities (matching original exactly)
+          // Auto-generate risks after activities
           setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
           try {
             const risksContent = await generateSectionContent(
@@ -96,11 +163,7 @@ export const useGeneration = ({
         setProjectData(newData);
         setHasUnsavedTranslationChanges(true);
       } catch (e: any) {
-        if (e.message === 'MISSING_API_KEY') {
-          setIsSettingsOpen(true);
-        } else {
-          setError(`${t.error}: ${e.message}`);
-        }
+        handleAIError(e, `generateSection(${sectionKey})`);
       } finally {
         setIsLoading(false);
       }
@@ -112,7 +175,7 @@ export const useGeneration = ({
       closeModal,
       setProjectData,
       setHasUnsavedTranslationChanges,
-      setIsSettingsOpen,
+      handleAIError,
     ]
   );
 
@@ -167,6 +230,7 @@ export const useGeneration = ({
       const runComposite = async (mode: string) => {
         closeModal();
         setIsLoading(true);
+        setError(null);
 
         try {
           for (const s of sections) {
@@ -184,11 +248,11 @@ export const useGeneration = ({
             });
             await new Promise((r) => setTimeout(r, 100));
           }
+          setHasUnsavedTranslationChanges(true);
         } catch (e: any) {
-          setError(e.message);
+          handleAIError(e, 'generateComposite');
         } finally {
           setIsLoading(false);
-          setHasUnsavedTranslationChanges(true);
         }
       };
 
@@ -219,6 +283,7 @@ export const useGeneration = ({
       setHasUnsavedTranslationChanges,
       setIsSettingsOpen,
       setModalConfig,
+      handleAIError,
     ]
   );
 
@@ -233,21 +298,18 @@ export const useGeneration = ({
 
       const fieldName = path[path.length - 1];
       setIsLoading(`${t.generating} ${String(fieldName)}...`);
+      setError(null);
 
       try {
         const content = await generateFieldContent(path, projectData, language);
         handleUpdateData(path, content);
       } catch (e: any) {
-        if (e.message === 'MISSING_API_KEY') {
-          setIsSettingsOpen(true);
-        } else {
-          console.error(e);
-        }
+        handleAIError(e, `generateField(${String(fieldName)})`);
       } finally {
         setIsLoading(false);
       }
     },
-    [ensureApiKey, projectData, language, t, handleUpdateData, setIsSettingsOpen]
+    [ensureApiKey, projectData, language, t, handleUpdateData, setIsSettingsOpen, handleAIError]
   );
 
   // ─── Summary generation ────────────────────────────────────────
@@ -259,7 +321,21 @@ export const useGeneration = ({
       const text = await generateProjectSummary(projectData, language);
       setSummaryText(text);
     } catch (e: any) {
-      setSummaryText('Error generating summary: ' + e.message);
+      const msg = e.message || '';
+      if (msg.includes('credits') || msg.includes('Quota') || msg.includes('afford')) {
+        setSummaryText(
+          language === 'si'
+            ? 'Nezadostna sredstva AI. Dopolnite kredit ali zamenjajte model v Nastavitvah.'
+            : 'Insufficient AI credits. Top up credits or switch model in Settings.'
+        );
+      } else {
+        setSummaryText(
+          language === 'si'
+            ? 'Napaka pri generiranju povzetka. Poskusite ponovno.'
+            : 'Error generating summary. Please try again.'
+        );
+      }
+      console.error('[Summary Error]:', e);
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -285,7 +361,11 @@ export const useGeneration = ({
       );
     } catch (e: any) {
       console.error(e);
-      alert('Failed to generate DOCX');
+      alert(
+        language === 'si'
+          ? 'Napaka pri generiranju DOCX datoteke.'
+          : 'Failed to generate DOCX file.'
+      );
     }
   }, [summaryText, projectData, language]);
 
