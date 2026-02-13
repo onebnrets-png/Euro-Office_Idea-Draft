@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
 // All business logic lives in hooks:
-//   - useAuth           → authentication, session, API key check
+//   - useAuth           → authentication, session, API key check, MFA
 //   - useProjectManager → CRUD, save/load, import/export, navigation
 //   - useTranslation    → language switching, diff-based translation
 //   - useGeneration     → AI content generation, summaries
@@ -97,7 +97,7 @@ const App = () => {
 
   // ─── Hooks ─────────────────────────────────────────────────────
 
-  const auth = useAuth();
+  const auth = useAuth(); // ★ MFA: now also exposes needsMFAVerify, mfaFactorId, handleMFAVerified
 
   const pm = useProjectManager({
     language,
@@ -223,7 +223,7 @@ const App = () => {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER: Not logged in
+  // RENDER: Not logged in (or MFA verification pending)       ★ MFA
   // ═══════════════════════════════════════════════════════════════
   if (!auth.currentUser) {
     return (
@@ -245,6 +245,10 @@ const App = () => {
           language={language}
           setLanguage={(lang: string) => setLanguage(lang as 'en' | 'si')}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          needsMFAVerify={auth.needsMFAVerify}       // ★ MFA
+          mfaFactorId={auth.mfaFactorId}             // ★ MFA
+          onMFAVerified={auth.handleMFAVerified}     // ★ MFA
+          onMFACancel={handleLogout}                  // ★ MFA
         />
       </>
     );
