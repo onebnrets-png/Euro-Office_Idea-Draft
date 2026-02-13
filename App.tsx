@@ -74,7 +74,7 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<'en' | 'si'>('si');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isProjectListOpen, setIsProjectListOpen] = useState(false);  // ← ONLY ONE declaration
+  const [isProjectListOpen, setIsProjectListOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
     title: '',
@@ -208,7 +208,7 @@ const App: React.FC = () => {
 
         {/* Step navigation */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {steps.map((step, stepIndex) => {
+          {steps.map((step: any, stepIndex: number) => {
             const isActive = pm.currentStep === stepIndex;
             const isCompleted = pm.isStepCompleted(stepIndex);
             return (
@@ -344,21 +344,41 @@ const App: React.FC = () => {
           </button>
         </header>
 
-        {/* Project Display */}
-        <ProjectDisplay
-          projectData={pm.projectData}
-          onUpdateData={pm.handleUpdateData}
-          language={language}
-          currentStep={pm.currentStep}
-          currentSubStep={pm.currentSubStep}
-          onGenerateSection={gen.handleGenerateSection}
-          onGenerateCompositeSection={gen.handleGenerateCompositeSection}
-          onGenerateField={gen.handleGenerateField}
-          isLoading={isLoading}
-          error={gen.error}
-          steps={steps}
-          subSteps={subSteps}
-        />
+        {/* Project Display — safe guard for undefined projectData */}
+        {pm.projectData ? (
+          <ProjectDisplay
+            projectData={pm.projectData}
+            onUpdateData={pm.handleUpdateData}
+            language={language}
+            currentStep={pm.currentStep}
+            currentSubStep={pm.currentSubStep}
+            onGenerateSection={gen.handleGenerateSection}
+            onGenerateCompositeSection={gen.handleGenerateCompositeSection}
+            onGenerateField={gen.handleGenerateField}
+            isLoading={isLoading}
+            error={gen.error}
+            steps={steps}
+            subSteps={subSteps}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-[calc(100vh-56px)] text-gray-400">
+            <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <p className="text-lg font-medium text-gray-500 mb-2">
+              {language === 'si' ? 'Izberite ali ustvarite projekt' : 'Select or create a project'}
+            </p>
+            <p className="text-sm text-gray-400 mb-6">
+              {language === 'si' ? 'Kliknite spodnji gumb za odprtje seznama projektov' : 'Click the button below to open the project list'}
+            </p>
+            <button
+              onClick={handleOpenProjectList}
+              className="px-6 py-2.5 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors font-medium"
+            >
+              {language === 'si' ? 'Odpri projekte' : 'Open Projects'}
+            </button>
+          </div>
+        )}
       </main>
 
       {/* ── Loading Overlay ─────────────────────────────────── */}
@@ -427,23 +447,29 @@ const App: React.FC = () => {
 
       {/* ── Print Layout (hidden, shown only when printing) ── */}
       <div className="hidden print:block">
-        <PrintLayout
-          projectData={pm.projectData}
-          language={language}
-          logo={auth.appLogo || BRAND_ASSETS.logo}
-        />
+        {pm.projectData && (
+          <PrintLayout
+            projectData={pm.projectData}
+            language={language}
+            logo={auth.appLogo || BRAND_ASSETS.logo}
+          />
+        )}
       </div>
 
       {/* ── Hidden chart containers for export ───────────────── */}
-      <div id="gantt-export-container" className="fixed -left-[9999px] w-[1200px]">
-        <GanttChart projectData={pm.projectData} language={language} />
-      </div>
-      <div id="pert-export-container" className="fixed -left-[9999px] w-[1200px]">
-        <PERTChart projectData={pm.projectData} language={language} />
-      </div>
-      <div id="organigram-export-container" className="fixed -left-[9999px] w-[1200px]">
-        <Organigram projectData={pm.projectData} language={language} />
-      </div>
+      {pm.projectData && (
+        <>
+          <div id="gantt-export-container" className="fixed -left-[9999px] w-[1200px]">
+            <GanttChart projectData={pm.projectData} language={language} />
+          </div>
+          <div id="pert-export-container" className="fixed -left-[9999px] w-[1200px]">
+            <PERTChart projectData={pm.projectData} language={language} />
+          </div>
+          <div id="organigram-export-container" className="fixed -left-[9999px] w-[1200px]">
+            <Organigram projectData={pm.projectData} language={language} />
+          </div>
+        </>
+      )}
     </div>
   );
 };
