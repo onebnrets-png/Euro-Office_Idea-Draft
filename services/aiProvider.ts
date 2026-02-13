@@ -17,8 +17,8 @@ export interface AIProviderConfig {
 
 export interface AIGenerateOptions {
   prompt: string;
-  jsonSchema?: any;         // Gemini-native schema (Type.OBJECT etc.)
-  jsonMode?: boolean;       // For OpenRouter: request JSON output
+  jsonSchema?: any;
+  jsonMode?: boolean;
   temperature?: number;
 }
 
@@ -26,8 +26,28 @@ export interface AIGenerateResult {
   text: string;
 }
 
+// ─── GEMINI MODELS ───────────────────────────────────────────────
+
+export const GEMINI_MODELS = [
+  // ═══ GENERATION 3 (Latest) ═══
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', description: 'Most intelligent — multimodal, agentic, reasoning' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', description: 'Balanced speed & intelligence' },
+
+  // ═══ GENERATION 2.5 (Stable) ═══
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced thinking — code, math, STEM, long context' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Best price-performance — fast, thinking enabled' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', description: 'Ultra fast — cost-efficient, high throughput' },
+
+  // ═══ GENERATION 2.5 (Preview) ═══
+  { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash Preview (Sep 2025)', description: 'Latest Flash preview with enhancements' },
+  { id: 'gemini-2.5-flash-lite-preview-09-2025', name: 'Gemini 2.5 Flash-Lite Preview (Sep 2025)', description: 'Latest Flash-Lite preview' },
+
+  // ═══ GENERATION 2.0 (Deprecated March 2026) ═══
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (⚠ deprecated)', description: 'Shutdown March 31, 2026 — migrate to 2.5+' },
+  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite (⚠ deprecated)', description: 'Shutdown March 31, 2026 — migrate to 2.5+' },
+];
+
 // ─── OPENROUTER POPULAR MODELS ───────────────────────────────────
-// Organized by category for easy selection in the UI
 
 export const OPENROUTER_MODELS = [
   // ═══ PROPRIETARY FLAGSHIP MODELS ═══
@@ -72,7 +92,6 @@ export function getProviderConfig(): AIProviderConfig {
   let apiKey = '';
   if (provider === 'gemini') {
     apiKey = storageService.getApiKey() || '';
-    // Fallback to env
     if (!apiKey && typeof process !== 'undefined' && process.env?.API_KEY) {
       apiKey = process.env.API_KEY;
     }
@@ -105,7 +124,6 @@ export async function validateProviderKey(provider: AIProviderType, apiKey: stri
     }
 
     if (provider === 'openrouter') {
-      // OpenRouter keys start with 'sk-or-'
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         headers: { 'Authorization': `Bearer ${apiKey}` }
       });
@@ -174,7 +192,7 @@ async function generateWithGemini(config: AIProviderConfig, options: AIGenerateO
     return { text: response.text.trim() };
   } catch (e: any) {
     handleProviderError(e, 'gemini');
-    throw e; // TypeScript: unreachable, but satisfies compiler
+    throw e;
   }
 }
 
@@ -185,7 +203,6 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
     { role: 'user', content: options.prompt }
   ];
 
-  // If JSON mode requested, add a system message instructing JSON output
   if (options.jsonSchema || options.jsonMode) {
     messages.unshift({
       role: 'system',
@@ -198,7 +215,6 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
     messages: messages,
   };
 
-  // OpenRouter supports response_format for JSON mode on compatible models
   if (options.jsonSchema || options.jsonMode) {
     body.response_format = { type: 'json_object' };
   }
