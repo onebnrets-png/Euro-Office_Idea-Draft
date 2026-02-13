@@ -1,5 +1,5 @@
 // components/SettingsModal.tsx
-// Settings modal with model selection for both Gemini and OpenRouter + 2FA.
+// Settings modal with model selection for both Gemini and OpenRouter + Supabase MFA.
 
 import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/storageService.ts';
@@ -7,54 +7,11 @@ import { validateProviderKey, OPENROUTER_MODELS, GEMINI_MODELS, type AIProviderT
 import { getFullInstructions, saveAppInstructions, resetAppInstructions } from '../services/Instructions.ts';
 import { TEXT } from '../locales.ts';
 
-// ─── Lightweight TOTP helpers (no external dependency) ───────────
-const base32Decode = (encoded: string): Uint8Array => {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    let bits = '';
-    for (const char of encoded.toUpperCase()) {
-        const val = alphabet.indexOf(char);
-        if (val === -1) continue;
-        bits += val.toString(2).padStart(5, '0');
-    }
-    const bytes = new Uint8Array(Math.floor(bits.length / 8));
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(bits.slice(i * 8, i * 8 + 8), 2);
-    }
-    return bytes;
-};
-
-const hmacSha1 = async (keyBytes: Uint8Array, message: Uint8Array): Promise<Uint8Array> => {
-    const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-    const sig = await crypto.subtle.sign('HMAC', key, message);
-    return new Uint8Array(sig);
-};
-
-const verifyTOTP = async (secret: string, userCode: string): Promise<boolean> => {
-    const period = 30;
-    const keyBytes = base32Decode(secret);
-    const now = Math.floor(Date.now() / 1000 / period);
-    for (let window = -1; window <= 1; window++) {
-        const time = now + window;
-        const timeBytes = new Uint8Array(8);
-        let t = time;
-        for (let i = 7; i >= 0; i--) { timeBytes[i] = t & 0xff; t >>= 8; }
-        const hmac = await hmacSha1(keyBytes, timeBytes);
-        const offset = hmac[hmac.length - 1] & 0x0f;
-        const code = ((hmac[offset] & 0x7f) << 24 | hmac[offset + 1] << 16 | hmac[offset + 2] << 8 | hmac[offset + 3]) % 1000000;
-        if (code.toString().padStart(6, '0') === userCode) return true;
-    }
-    return false;
-};
-
-const buildOtpAuthUri = (secret: string, email: string, issuer = 'INTERVENCIJSKA-LOGIKA'): string =>
-    `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
-
+// ─── QR Code via external service ────────────────────────────────
 const QRCodeImage = ({ value, size = 200 }: { value: string; size?: number }) => {
     const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
     return <img src={url} alt="QR Code" width={size} height={size} className="rounded-lg border border-slate-200" />;
 };
-
-const has2FASupport = (): boolean => typeof storageService.get2FASecret === 'function';
 
 // ─── Component ───────────────────────────────────────────────────
 
@@ -77,12 +34,11 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
-    // 2FA State
-    const [twoFASecret, setTwoFASecret] = useState('');
-    const [twoFAEnabled, setTwoFAEnabled] = useState(false);
-    const [twoFAAvailable, setTwoFAAvailable] = useState(false);
-    const [showEnroll2FA, setShowEnroll2FA] = useState(false);
-    const [enrollVerifyCode, setEnrollVerifyCode] = useState('');
+    // 2FA State (Supabase MFA)
+    const [mfaFactors, setMfaFactors] = useState<any[]>([]);
+    const [mfaEnrolling, setMfaEnrolling] = useState(false);
+    const [enrollData, setEnrollData] = useState<{ factorId: string; qrUri: string; secret: string } | null>(null);
+    const [enrollCode, setEnrollCode] = useState('');
     const [enrollError, setEnrollError] = useState('');
 
     // Instructions State
@@ -111,10 +67,10 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
         setAiProvider(provider);
 
         const gKey = storageService.getApiKey();
-        if (gKey) setGeminiKey(gKey);
+        if (gKey) setGeminiKey(gKey); else setGeminiKey('');
 
         const orKey = storageService.getOpenRouterKey();
-        if (orKey) setOpenRouterKey(orKey);
+        if (orKey) setOpenRouterKey(orKey); else setOpenRouterKey('');
 
         const model = storageService.getCustomModel();
         if (model) setModelName(model);
@@ -125,32 +81,20 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
 
         setInstructions(getFullInstructions());
 
-        // Load 2FA status (safe — only if localStorage auth is available)
+        // Load MFA factors from Supabase
         try {
-            if (has2FASupport()) {
-                const email = storageService.getCurrentUser?.() || '';
-                if (email) {
-                    const result = await storageService.get2FASecret(email);
-                    if (result?.success && result?.secret) {
-                        setTwoFASecret(result.secret);
-                        const users = JSON.parse(localStorage.getItem('eu_app_users') || '[]');
-                        const user = users.find((u: any) => u.email === email);
-                        setTwoFAEnabled(user?.isVerified === true);
-                        setTwoFAAvailable(true);
-                    }
-                }
-            } else {
-                setTwoFAAvailable(false);
-            }
+            const { totp } = await storageService.getMFAFactors();
+            setMfaFactors(totp.filter((f: any) => f.status === 'verified'));
         } catch {
-            setTwoFAAvailable(false);
+            setMfaFactors([]);
         }
 
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
-        setShowEnroll2FA(false);
-        setEnrollVerifyCode('');
+        setMfaEnrolling(false);
+        setEnrollData(null);
+        setEnrollCode('');
         setEnrollError('');
         setMessage('');
         setIsError(false);
@@ -246,36 +190,53 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
         setMessage(language === 'si' ? "Logo odstranjen." : "Logo removed.");
     };
 
-    // ─── 2FA Handlers ────────────────────────────────────────────
-    const handleStart2FAEnroll = () => { setShowEnroll2FA(true); setEnrollVerifyCode(''); setEnrollError(''); };
-
-    const handleVerify2FAEnroll = async () => {
+    // ─── MFA Handlers (Supabase) ─────────────────────────────────
+    const handleStartMFAEnroll = async () => {
         setEnrollError('');
-        if (enrollVerifyCode.length !== 6) { setEnrollError(language === 'si' ? 'Vnesi 6-mestno kodo.' : 'Enter a 6-digit code.'); return; }
-        const isValid = await verifyTOTP(twoFASecret, enrollVerifyCode);
-        if (isValid) {
-            const email = storageService.getCurrentUser?.() || '';
-            const users = JSON.parse(localStorage.getItem('eu_app_users') || '[]');
-            const idx = users.findIndex((u: any) => u.email === email);
-            if (idx !== -1) { users[idx].isVerified = true; localStorage.setItem('eu_app_users', JSON.stringify(users)); }
-            setTwoFAEnabled(true); setShowEnroll2FA(false);
-            setMessage(language === 'si' ? '2FA uspešno aktiviran!' : '2FA enabled successfully!'); setIsError(false);
-        } else { setEnrollError(language === 'si' ? 'Napačna koda. Poskusi znova.' : 'Invalid code. Try again.'); }
+        setEnrollCode('');
+        const result = await storageService.enrollMFA();
+        if (result) {
+            setEnrollData(result);
+            setMfaEnrolling(true);
+        } else {
+            setEnrollError(language === 'si' ? 'Napaka pri inicializaciji 2FA.' : 'Failed to initialize 2FA.');
+        }
     };
 
-    const handleDisable2FA = () => {
-        if (!confirm(language === 'si' ? 'Ali res želiš deaktivirati 2FA?' : 'Disable two-factor authentication?')) return;
-        const email = storageService.getCurrentUser?.() || '';
-        const users = JSON.parse(localStorage.getItem('eu_app_users') || '[]');
-        const idx = users.findIndex((u: any) => u.email === email);
-        if (idx !== -1) {
-            users[idx].isVerified = false;
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let s = '';
-            for (let i = 0; i < 16; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
-            users[idx].twoFactorSecret = s; localStorage.setItem('eu_app_users', JSON.stringify(users)); setTwoFASecret(s);
+    const handleVerifyMFAEnroll = async () => {
+        setEnrollError('');
+        if (enrollCode.length !== 6) {
+            setEnrollError(language === 'si' ? 'Vnesi 6-mestno kodo.' : 'Enter a 6-digit code.');
+            return;
         }
-        setTwoFAEnabled(false); setShowEnroll2FA(false);
-        setMessage(language === 'si' ? '2FA deaktiviran.' : '2FA disabled.'); setIsError(false);
+        if (!enrollData) return;
+
+        const result = await storageService.challengeAndVerifyMFA(enrollData.factorId, enrollCode);
+        if (result.success) {
+            setMfaEnrolling(false);
+            setEnrollData(null);
+            // Reload factors
+            const { totp } = await storageService.getMFAFactors();
+            setMfaFactors(totp.filter((f: any) => f.status === 'verified'));
+            setMessage(language === 'si' ? '2FA uspešno aktiviran!' : '2FA enabled successfully!');
+            setIsError(false);
+        } else {
+            setEnrollError(result.message || (language === 'si' ? 'Napačna koda.' : 'Invalid code.'));
+            setEnrollCode('');
+        }
+    };
+
+    const handleDisableMFA = async (factorId: string) => {
+        if (!confirm(language === 'si' ? 'Ali res želiš deaktivirati 2FA?' : 'Disable two-factor authentication?')) return;
+        const result = await storageService.unenrollMFA(factorId);
+        if (result.success) {
+            setMfaFactors(prev => prev.filter(f => f.id !== factorId));
+            setMessage(language === 'si' ? '2FA deaktiviran.' : '2FA disabled.');
+            setIsError(false);
+        } else {
+            setIsError(true);
+            setMessage(result.message || (language === 'si' ? 'Napaka pri deaktivaciji.' : 'Failed to disable 2FA.'));
+        }
     };
 
     // ─── Instructions Handlers ───────────────────────────────────
@@ -307,8 +268,7 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
     if (!isOpen) return null;
 
     const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : OPENROUTER_MODELS;
-    const userEmail = (typeof storageService.getCurrentUser === 'function' ? storageService.getCurrentUser() : '') || '';
-    const otpAuthUri = twoFASecret ? buildOtpAuthUri(twoFASecret, userEmail) : '';
+    const hasMFA = mfaFactors.length > 0;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -430,60 +390,90 @@ const SettingsModal = ({ isOpen, onClose, language }) => {
                                         </div>
                                     </div>
 
-                                    {/* ─── 2FA Section (only if localStorage auth available) ─── */}
-                                    {twoFAAvailable && (
-                                        <div className="border-t border-slate-200 pt-6">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div>
-                                                    <h4 className="font-bold text-slate-700">{language === 'si' ? 'Dvostopenjsko preverjanje (2FA)' : 'Two-Factor Authentication (2FA)'}</h4>
-                                                    <p className="text-sm text-slate-500 mt-1">{language === 'si' ? 'Uporabi authenticator aplikacijo za dodatno zaščito.' : 'Use an authenticator app for extra security.'}</p>
-                                                </div>
-                                                <div className={`px-3 py-1 rounded-full text-xs font-bold ${twoFAEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                    {twoFAEnabled ? (language === 'si' ? 'AKTIVNO' : 'ACTIVE') : (language === 'si' ? 'NEAKTIVNO' : 'INACTIVE')}
-                                                </div>
+                                    {/* ─── 2FA Section (Supabase MFA) ─── */}
+                                    <div className="border-t border-slate-200 pt-6">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h4 className="font-bold text-slate-700">{language === 'si' ? 'Dvostopenjsko preverjanje (2FA)' : 'Two-Factor Authentication (2FA)'}</h4>
+                                                <p className="text-sm text-slate-500 mt-1">{language === 'si' ? 'Uporabi authenticator aplikacijo za dodatno zaščito.' : 'Use an authenticator app for extra security.'}</p>
                                             </div>
+                                            <div className={`px-3 py-1 rounded-full text-xs font-bold ${hasMFA ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                {hasMFA ? (language === 'si' ? 'AKTIVNO' : 'ACTIVE') : (language === 'si' ? 'NEAKTIVNO' : 'INACTIVE')}
+                                            </div>
+                                        </div>
 
-                                            {twoFAEnabled && !showEnroll2FA && (
-                                                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                                    <div className="flex items-center gap-3 mb-3">
-                                                        <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                                        <p className="text-sm text-green-800 font-medium">{language === 'si' ? 'Račun je zaščiten z 2FA.' : 'Account is protected with 2FA.'}</p>
-                                                    </div>
-                                                    <button onClick={handleDisable2FA} className="px-4 py-2 text-sm bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors">{language === 'si' ? 'Deaktiviraj 2FA' : 'Disable 2FA'}</button>
+                                        {/* MFA Active */}
+                                        {hasMFA && !mfaEnrolling && (
+                                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                                    <p className="text-sm text-green-800 font-medium">{language === 'si' ? 'Račun je zaščiten z 2FA.' : 'Account is protected with 2FA.'}</p>
                                                 </div>
-                                            )}
+                                                {mfaFactors.map(factor => (
+                                                    <div key={factor.id} className="flex items-center justify-between mt-2">
+                                                        <span className="text-xs text-slate-600 font-mono">{factor.friendly_name || 'TOTP'}</span>
+                                                        <button onClick={() => handleDisableMFA(factor.id)} className="px-4 py-2 text-sm bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors">
+                                                            {language === 'si' ? 'Deaktiviraj' : 'Disable'}
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
 
-                                            {!twoFAEnabled && !showEnroll2FA && (
-                                                <button onClick={handleStart2FAEnroll} className="px-5 py-2.5 bg-sky-600 text-white rounded-lg hover:bg-sky-700 font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                                        {/* MFA Not Active — Show Setup Button */}
+                                        {!hasMFA && !mfaEnrolling && (
+                                            <>
+                                                {enrollError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">{enrollError}</div>}
+                                                <button onClick={handleStartMFAEnroll} className="px-5 py-2.5 bg-sky-600 text-white rounded-lg hover:bg-sky-700 font-semibold transition-colors flex items-center gap-2 shadow-sm">
                                                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                                     {language === 'si' ? 'Nastavi 2FA' : 'Set up 2FA'}
                                                 </button>
-                                            )}
+                                            </>
+                                        )}
 
-                                            {showEnroll2FA && (
-                                                <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-5">
-                                                    <div>
-                                                        <h5 className="font-bold text-slate-700 mb-2">{language === 'si' ? '1. Skeniraj QR kodo' : '1. Scan QR Code'}</h5>
-                                                        <p className="text-sm text-slate-500 mb-4">{language === 'si' ? 'Odpri authenticator aplikacijo in skeniraj QR kodo.' : 'Open your authenticator app and scan the QR code.'}</p>
-                                                        <div className="flex justify-center p-4 bg-white rounded-lg border border-slate-200"><QRCodeImage value={otpAuthUri} size={200} /></div>
-                                                        <div className="mt-3 text-center">
-                                                            <p className="text-xs text-slate-400 mb-1">{language === 'si' ? 'Ali ročno vnesi ključ:' : 'Or enter key manually:'}</p>
-                                                            <code className="text-sm font-mono bg-white px-3 py-1.5 rounded border border-slate-200 text-slate-700 select-all tracking-widest">{twoFASecret}</code>
-                                                        </div>
+                                        {/* MFA Enrollment Flow */}
+                                        {mfaEnrolling && enrollData && (
+                                            <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-5">
+                                                <div>
+                                                    <h5 className="font-bold text-slate-700 mb-2">{language === 'si' ? '1. Skeniraj QR kodo' : '1. Scan QR Code'}</h5>
+                                                    <p className="text-sm text-slate-500 mb-4">{language === 'si' ? 'Odpri authenticator aplikacijo (Google Authenticator, Authy, ...) in skeniraj QR kodo.' : 'Open your authenticator app (Google Authenticator, Authy, ...) and scan the QR code.'}</p>
+                                                    <div className="flex justify-center p-4 bg-white rounded-lg border border-slate-200">
+                                                        <QRCodeImage value={enrollData.qrUri} size={200} />
                                                     </div>
-                                                    <div className="border-t border-slate-200 pt-4">
-                                                        <h5 className="font-bold text-slate-700 mb-2">{language === 'si' ? '2. Vnesi kodo' : '2. Enter Code'}</h5>
-                                                        {enrollError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">{enrollError}</div>}
-                                                        <div className="flex gap-3">
-                                                            <input type="text" value={enrollVerifyCode} onChange={(e) => setEnrollVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" maxLength={6} className="flex-1 p-3 border border-slate-300 rounded-lg text-center text-xl tracking-widest font-mono focus:ring-2 focus:ring-sky-500" autoFocus onKeyDown={(e) => e.key === 'Enter' && enrollVerifyCode.length === 6 && handleVerify2FAEnroll()} />
-                                                            <button onClick={handleVerify2FAEnroll} disabled={enrollVerifyCode.length !== 6} className="px-5 py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 font-semibold disabled:opacity-50 transition-colors">{language === 'si' ? 'Potrdi' : 'Verify'}</button>
-                                                        </div>
+                                                    <div className="mt-3 text-center">
+                                                        <p className="text-xs text-slate-400 mb-1">{language === 'si' ? 'Ali ročno vnesi ključ:' : 'Or enter key manually:'}</p>
+                                                        <code className="text-sm font-mono bg-white px-3 py-1.5 rounded border border-slate-200 text-slate-700 select-all tracking-widest">{enrollData.secret}</code>
                                                     </div>
-                                                    <div className="text-right"><button onClick={() => setShowEnroll2FA(false)} className="text-sm text-slate-500 hover:text-slate-700 underline">{language === 'si' ? 'Prekliči' : 'Cancel'}</button></div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
+
+                                                <div className="border-t border-slate-200 pt-4">
+                                                    <h5 className="font-bold text-slate-700 mb-2">{language === 'si' ? '2. Vnesi kodo' : '2. Enter Code'}</h5>
+                                                    {enrollError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">{enrollError}</div>}
+                                                    <div className="flex gap-3">
+                                                        <input
+                                                            type="text"
+                                                            value={enrollCode}
+                                                            onChange={(e) => setEnrollCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                            placeholder="000000"
+                                                            maxLength={6}
+                                                            className="flex-1 p-3 border border-slate-300 rounded-lg text-center text-xl tracking-widest font-mono focus:ring-2 focus:ring-sky-500"
+                                                            autoFocus
+                                                            onKeyDown={(e) => e.key === 'Enter' && enrollCode.length === 6 && handleVerifyMFAEnroll()}
+                                                        />
+                                                        <button onClick={handleVerifyMFAEnroll} disabled={enrollCode.length !== 6} className="px-5 py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 font-semibold disabled:opacity-50 transition-colors">
+                                                            {language === 'si' ? 'Potrdi' : 'Verify'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="text-right">
+                                                    <button onClick={() => { setMfaEnrolling(false); setEnrollData(null); }} className="text-sm text-slate-500 hover:text-slate-700 underline">
+                                                        {language === 'si' ? 'Prekliči' : 'Cancel'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
