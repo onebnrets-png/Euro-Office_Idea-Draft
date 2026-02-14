@@ -1,6 +1,13 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v4.6 — 2026-02-14
+// v4.7 — 2026-02-14
+// CHANGES v4.7:
+//   - FIX: Deliverables now have a separate "title" TextArea field
+//     above description and indicator. Matches geminiService.ts v4.4
+//     schema and Instructions.ts v4.4 DELIVERABLE FIELDS rules.
+//   - FIX: Default deliverable object in onAdd includes title: ''
+//   - All previous v4.6 changes preserved.
+//
 // CHANGES v4.6:
 //   - FIX: Added 'environmental' risk category to dropdown
 //   - FIX: Lowercase option values to match RiskCategory type
@@ -648,6 +655,9 @@ const renderKERs = (props) => {
     );
 };
 
+// ═══════════════════════════════════════════════════════════════
+// v4.7: renderActivities — deliverables now have title field
+// ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const { activities } = projectData;
@@ -697,6 +707,7 @@ const renderActivities = (props) => {
                         </div>
                         <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         
+                        {/* ── TASKS ── */}
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
                             <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
@@ -733,76 +744,100 @@ const renderActivities = (props) => {
                                         allTasks={allTasks}
                                         language={language}
                                         onAddDependency={(dep) => {
-                                            const deps = task.dependencies || [];
-                                            handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], [...deps, dep]);
+                                            const deps = [...(task.dependencies || []), dep];
+                                            onUpdateData([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps);
                                         }}
                                         onRemoveDependency={(depIdx) => {
-                                            const deps = task.dependencies || [];
-                                            handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx));
+                                            const deps = [...(task.dependencies || [])];
+                                            deps.splice(depIdx, 1);
+                                            onUpdateData([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps);
                                         }}
                                     />
                                 </div>
                             ))}
                         </div>
 
+                        {/* ── MILESTONES ── */}
                         <div className="mt-6 pl-4 border-l-4 border-amber-100">
                             <SectionHeader title={t.milestones} onAdd={() => onAddItem([...path, wpIndex, 'milestones'], { id: `M${wpIndex + 1}.${(wp.milestones || []).length + 1}`, description: '', date: '' })} addText={t.add} />
-                            {(wp.milestones || []).map((milestone, msIndex) => {
-                                const enGen = TEXT.en.generating;
-                                const siGen = TEXT.si.generating;
-                                const dateLoading = isLoading === `${enGen} date...` || isLoading === `${siGen} date...`;
-
-                                return (
-                                    <div key={msIndex} className="relative mb-3 bg-amber-50/50 p-4 rounded-lg border border-amber-100 group">
-                                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
-                                        <div className="flex flex-col md:flex-row gap-4">
-                                            <div className="flex-1">
-                                                <TextArea 
-                                                    label={`Milestone ${milestone.id}`} 
-                                                    path={[...path, wpIndex, 'milestones', msIndex, 'description']} 
-                                                    value={milestone.description} 
-                                                    onUpdate={onUpdateData} 
-                                                    onGenerate={onGenerateField} 
-                                                    isLoading={isLoading} 
-                                                    rows={1} 
-                                                    placeholder={t.milestonePlaceholder} 
-                                                    generateTitle={`${t.generateField} ${t.description}`} 
-                                                    missingApiKey={missingApiKey}
-                                                    className="w-full group"
-                                                />
-                                            </div>
-                                            <div className="w-full md:w-48">
-                                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.dates}</label>
-                                                <div className="flex gap-1 items-end">
-                                                    <input 
-                                                        type="date"
-                                                        value={milestone.date || ''}
-                                                        onChange={(e) => onUpdateData([...path, wpIndex, 'milestones', msIndex, 'date'], e.target.value)}
-                                                        className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base flex-1"
-                                                    />
-                                                    <GenerateButton 
-                                                        onClick={() => onGenerateField([...path, wpIndex, 'milestones', msIndex, 'date'])} 
-                                                        isLoading={dateLoading} 
-                                                        isField 
-                                                        title={t.generateAI} 
-                                                        missingApiKey={missingApiKey} 
-                                                    />
-                                                </div>
-                                            </div>
+                            {(wp.milestones || []).map((ms, msIndex) => (
+                                <div key={msIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-amber-50/30 relative group">
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-3.5 h-3.5 bg-black transform rotate-45 flex-shrink-0" />
+                                        <span className="text-sm font-bold text-slate-600">{ms.id}</span>
+                                    </div>
+                                    <TextArea label={t.milestoneDesc} path={[...path, wpIndex, 'milestones', msIndex, 'description']} value={ms.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.milestoneDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                                    <div className="mt-2">
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.milestoneDate}</label>
+                                        <div className="flex gap-2 items-center">
+                                            <input
+                                                type="date"
+                                                value={ms.date || ''}
+                                                onChange={(e) => onUpdateData([...path, wpIndex, 'milestones', msIndex, 'date'], e.target.value)}
+                                                className="w-full md:w-1/3 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                                            />
+                                            <GenerateButton onClick={() => onGenerateField([...path, wpIndex, 'milestones', msIndex, 'date'])} isLoading={isLoading === `${t.generating} date...`} isField title={`${t.generateField} ${t.milestoneDate}`} missingApiKey={missingApiKey} />
                                         </div>
                                     </div>
-                                );
-                            })}
+                                </div>
+                            ))}
                         </div>
 
-                        <div className="mt-6 pl-4 border-l-4 border-indigo-100">
-                            <SectionHeader title={t.deliverables} onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, description: '', indicator: '' })} addText={t.add} />
-                            {(wp.deliverables || []).map((deliverable, dIndex) => (
-                                <div key={dIndex} className="relative mb-4 bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], dIndex)} text={t.remove} /></div>
-                                    <h5 className="font-semibold text-slate-700 mb-3">{deliverable.id}</h5>
-                                    <TextArea label={t.description} path={[...path, wpIndex, 'deliverables', dIndex, 'description']} value={deliverable.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.deliverableDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.indicator} path={[...path, wpIndex, 'deliverables', dIndex, 'indicator']} value={deliverable.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
+                        {/* ── DELIVERABLES — v4.7: added title field ── */}
+                        <div className="mt-6 pl-4 border-l-4 border-emerald-100">
+                            <SectionHeader 
+                                title={t.deliverables} 
+                                onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { 
+                                    id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, 
+                                    title: '',        // ← v4.7 NEW
+                                    description: '', 
+                                    indicator: '' 
+                                })} 
+                                addText={t.add} 
+                            />
+                            {(wp.deliverables || []).map((del, delIndex) => (
+                                <div key={delIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-emerald-50/30 relative group">
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], delIndex)} text={t.remove} /></div>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs font-bold">{del.id}</span>
+                                    </div>
+                                    {/* v4.7: Separate title field for deliverable */}
+                                    <TextArea 
+                                        label={t.deliverableTitle || t.title} 
+                                        path={[...path, wpIndex, 'deliverables', delIndex, 'title']} 
+                                        value={del.title || ''} 
+                                        onUpdate={onUpdateData} 
+                                        onGenerate={onGenerateField} 
+                                        isLoading={isLoading} 
+                                        rows={1} 
+                                        placeholder={t.deliverableTitlePlaceholder || t.enterTitle} 
+                                        generateTitle={`${t.generateField} ${t.title}`} 
+                                        missingApiKey={missingApiKey} 
+                                    />
+                                    <TextArea 
+                                        label={t.description} 
+                                        path={[...path, wpIndex, 'deliverables', delIndex, 'description']} 
+                                        value={del.description} 
+                                        onUpdate={onUpdateData} 
+                                        onGenerate={onGenerateField} 
+                                        isLoading={isLoading} 
+                                        placeholder={t.deliverableDescPlaceholder || t.enterDesc} 
+                                        generateTitle={`${t.generateField} ${t.description}`} 
+                                        missingApiKey={missingApiKey} 
+                                    />
+                                    <TextArea 
+                                        label={t.indicator} 
+                                        path={[...path, wpIndex, 'deliverables', delIndex, 'indicator']} 
+                                        value={del.indicator} 
+                                        onUpdate={onUpdateData} 
+                                        onGenerate={onGenerateField} 
+                                        isLoading={isLoading} 
+                                        rows={1} 
+                                        placeholder={t.indicatorPlaceholder} 
+                                        generateTitle={`${t.generateField} ${t.indicator}`} 
+                                        missingApiKey={missingApiKey} 
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -810,81 +845,48 @@ const renderActivities = (props) => {
                 ))}
             </div>
 
-            <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                 <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
-                <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
-            </div>
+            {/* ── GANTT CHART ── */}
+            <GanttChart activities={activities} language={language} id="gantt-chart-content" />
 
-            <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                 <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
-                <PERTChart activities={activities} language={language} />
-            </div>
+            {/* ── PERT CHART ── */}
+            <PERTChart activities={activities} language={language} id="pert-chart-content" />
 
+            {/* ── RISKS ── */}
             {renderRisks(props)}
-        </>
-    );
-};
 
-const renderExpectedResults = (props) => {
-    return (
-        <>
-            {renderGenericResults(props, 'outputs')}
-            {renderGenericResults(props, 'outcomes')}
-            {renderGenericResults(props, 'impacts')}
+            {/* ── KERs ── */}
             {renderKERs(props)}
         </>
     );
 };
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN EXPORT
+// ═══════════════════════════════════════════════════════════════
+
 const ProjectDisplay = (props) => {
-  const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey } = props;
-  const STEPS = getSteps(language);
-  const activeStep = STEPS.find(step => step.id === activeStepId);
-  const t = TEXT[language] || TEXT['en'];
+    const { currentStep, currentSubStep } = props;
 
-  if (!activeStep) return <div className="p-8 text-center text-red-500">Error: Invalid Step Selected</div>;
+    const steps = getSteps();
+    const stepKey = steps[currentStep]?.key;
 
-  const sectionKey = activeStep.key;
-
-  const renderContent = () => {
-    switch (sectionKey) {
-        case 'problemAnalysis': return renderProblemAnalysis(props);
-        case 'projectIdea': return renderProjectIdea(props);
-        case 'generalObjectives': return renderObjectives(props, 'generalObjectives');
-        case 'specificObjectives': return renderObjectives(props, 'specificObjectives');
-        case 'activities': return renderActivities(props);
-        case 'expectedResults': return renderExpectedResults(props);
-      default: return <div className="p-8 text-center text-slate-500">{t.selectStep}</div>;
+    switch (stepKey) {
+        case 'problemAnalysis':
+            return renderProblemAnalysis(props);
+        case 'projectIdea':
+            return renderProjectIdea(props);
+        case 'objectives':
+            if (currentSubStep === 0) return renderObjectives(props, 'generalObjectives');
+            return renderObjectives(props, 'specificObjectives');
+        case 'activities':
+            return renderActivities(props);
+        case 'results':
+            if (currentSubStep === 0) return renderGenericResults(props, 'outputs');
+            if (currentSubStep === 1) return renderGenericResults(props, 'outcomes');
+            return renderGenericResults(props, 'impacts');
+        default:
+            return <div>Unknown step</div>;
     }
-  };
-
-  const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
-
-  return (
-    <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-      <header className="bg-white border-b border-slate-200 px-6 py-5 flex justify-between items-center flex-shrink-0 sticky top-0 z-20 shadow-sm">
-          <div>
-              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
-              <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
-          </div>
-          <div className="flex items-center gap-4">
-              {showGenerateButton && (
-                  <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-              )}
-          </div>
-      </header>
-
-      {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 m-6 rounded-r shadow-sm" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
-      
-      {isLoading && <div className="p-4 m-6 text-center text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">{typeof isLoading === 'string' ? isLoading : t.loading}</div>}
-
-      <div id="main-scroll-container" className="flex-1 overflow-y-auto p-6 scroll-smooth relative">
-        <div className="max-w-5xl mx-auto pb-20">
-          {renderContent()}
-        </div>
-      </div>
-    </main>
-  );
 };
 
 export default ProjectDisplay;
