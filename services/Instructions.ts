@@ -451,6 +451,10 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Every task has startDate and endDate in YYYY-MM-DD format',
       'All WP and task titles use NOUN PHRASES, not infinitive verbs',
       'No markdown formatting in any text field',
+      'Every task (except WP1 T1.1) has at least 1 dependency in its dependencies array',
+      'Dependencies reference only valid predecessorId values from earlier tasks',
+      'Every deliverable description has 2–4 substantive sentences (not just a title)',
+      'Every deliverable indicator is specific and measurable (includes format, quantity, verification method)',
     ],
     si: [
       'ZADNJI DS (najvišja številka) je "Upravljanje in koordinacija projekta" — NE nobena druga tema',
@@ -462,6 +466,10 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Vsaka naloga ima startDate in endDate v formatu YYYY-MM-DD',
       'Vsi naslovi DS in nalog uporabljajo SAMOSTALNIŠKE ZVEZE, ne nedoločnik',
       'Brez markdown formatiranja v nobenem besedilnem polju',
+      'Vsaka naloga (razen DS1 T1.1) ima vsaj 1 odvisnost v polju dependencies',
+      'Odvisnosti navajajo samo veljavne predecessorId vrednosti iz prejšnjih nalog',
+      'Vsak opis dosežka (deliverable) ima 2–4 vsebinske stavke (ne samo naslov)',
+      'Vsak kazalnik dosežka je specifičen in merljiv (vključuje format, količino, način preverjanja)',
     ]
   },
   _default: {
