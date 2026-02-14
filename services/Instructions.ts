@@ -1,26 +1,23 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 4.0 – 2026-02-14
+// Version 4.1 – 2026-02-14
 //
 // ARCHITECTURE PRINCIPLE:
 //   This file is the ONLY place where content rules are defined.
 //   geminiService.ts reads from here — it has ZERO own rules.
 //   Anything changed here IS THE LAW — no exceptions.
 //
-// CHANGES v4.0:
-//   - Migrated ALL rule blocks from geminiService.ts into this file:
-//     * LANGUAGE_DIRECTIVES (EN/SI)
-//     * LANGUAGE_MISMATCH_TEMPLATE
-//     * ACADEMIC_RIGOR_RULES (EN/SI)
-//     * HUMANIZATION_RULES (EN/SI)
-//     * PROJECT_TITLE_RULES (EN/SI)
-//     * QUALITY_GATES (per section, EN/SI)
-//     * SECTION_TASK_INSTRUCTIONS (per section, EN/SI)
-//     * MODE_INSTRUCTIONS (fill/enhance/regenerate, EN/SI)
-//   - New exports for every rule block
-//   - geminiService.ts now imports everything — defines nothing
-//   - All rules editable via Settings UI → instant effect
+// CHANGES v4.1:
+//   - TITLE FORMAT RULES: Infinitive verb ONLY for objectives.
+//     Work packages, tasks, milestones, deliverables → noun phrase (action).
+//     Outputs, outcomes, impacts → result-oriented noun phrase.
+//     KERs → specific noun phrase (asset/product name).
+//   - Updated CHAPTERS 5 and 6 to enforce correct title formats.
+//   - Updated SECTION_TASK_INSTRUCTIONS for activities, outputs,
+//     outcomes, impacts, risks, kers to use noun phrases.
+//   - Updated QUALITY_GATES._default to enforce section-specific format.
+//   - All previous v4.0 changes preserved.
 //
 // English-only default text (AI interprets rules in English regardless
 // of output language). Slovenian prompt variants are stored alongside.
@@ -422,7 +419,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
   _default: {
     en: [
       'Every description has ≥3 substantive sentences',
-      'All titles begin with an infinitive verb',
+      'All titles use the CORRECT format for their section (infinitive for objectives, noun phrase for activities/results/KERs) — see TITLE FORMAT RULES',
       'No vague filler phrases — be specific and analytical',
       'Content is directly linked to the project context and problem analysis',
       'Any cited source must be real and verifiable',
@@ -432,7 +429,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
     ],
     si: [
       'Vsak opis ima ≥3 vsebinske stavke',
-      'Vsi naslovi se začnejo z glagolom v nedoločniku',
+      'Vsi naslovi uporabljajo PRAVILNO obliko za svoj razdelek (nedoločnik za cilje, samostalniška zveza za aktivnosti/rezultate/KER) — glej PRAVILA ZA FORMAT NASLOVOV',
       'Brez nejasnih fraz — bodi specifičen in analitičen',
       'Vsebina je neposredno povezana s kontekstom projekta in analizo problemov',
       'Vsak naveden vir mora biti resničen in preverljiv',
@@ -504,12 +501,12 @@ OBVEZNE ZAHTEVE:
 - Piši kot izkušen človeški svetovalec — variraj stavke, izogibaj se AI frazam.`
   },
   generalObjectives: {
-    en: 'Define 3–5 general objectives.\nMANDATORY: Title with infinitive verb. At least 3 substantive sentences. No markdown. Vary sentence structures.',
-    si: 'Opredeli 3–5 splošnih ciljev.\nOBVEZNO: Naslov z nedoločniškim glagolom. Vsaj 3 vsebinske stavke. BREZ markdown. Variraj stavčne strukture.'
+    en: 'Define 3–5 general objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Strengthen…", "Develop…"). At least 3 substantive sentences. No markdown. Vary sentence structures.',
+    si: 'Opredeli 3–5 splošnih ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Okrepiti…", "Razviti…"). Vsaj 3 vsebinske stavke. BREZ markdown. Variraj stavčne strukture.'
   },
   specificObjectives: {
-    en: 'Define at least 5 S.M.A.R.T. objectives.\nMANDATORY: Title with infinitive verb. Measurable KPI. No markdown. Vary sentence structures.',
-    si: 'Opredeli vsaj 5 S.M.A.R.T. ciljev.\nOBVEZNO: Naslov z nedoločniškim glagolom. Merljiv KPI. BREZ markdown. Variraj stavčne strukture.'
+    en: 'Define at least 5 S.M.A.R.T. objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Develop…", "Increase…"). Measurable KPI. No markdown. Vary sentence structures.',
+    si: 'Opredeli vsaj 5 S.M.A.R.T. ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Razviti…", "Povečati…"). Merljiv KPI. BREZ markdown. Variraj stavčne strukture.'
   },
   projectManagement: {
     en: 'Create a DETAILED project management section.\nMust include: coordination, steering committee, WP leaders, decision-making, quality, conflicts, reporting.\nNo markdown. Write like an experienced consultant.',
@@ -518,41 +515,55 @@ OBVEZNE ZAHTEVE:
   activities: {
     en: `Project starts: {{projectStart}}. All task dates on or after this.
 Design Work Packages based on objectives.
-MANDATORY: Title with infinitive verb, at least 3 tasks, 1 milestone, 1 deliverable.
+MANDATORY TITLE FORMAT: WP titles and task titles MUST use NOUN PHRASES (action nouns), NOT infinitive verbs.
+- CORRECT WP: "Development of a cross-border digital training curriculum"
+- INCORRECT WP: "Develop a cross-border digital training curriculum"
+- CORRECT task: "Design of the semantic data model"
+- INCORRECT task: "Design the semantic data model"
+Milestone titles: noun phrase describing the event (e.g., "Completion of pilot phase").
+Deliverable titles: noun phrase describing the product (e.g., "Training curriculum document").
+At least 3 tasks, 1 milestone, 1 deliverable per WP.
 Deliverables verifiable via desk review. No vague descriptions. No markdown. Vary sentences.`,
     si: `Začetek projekta: {{projectStart}}. Vsi datumi nalog na ali po tem datumu.
 Oblikuj delovne sklope na podlagi ciljev.
-OBVEZNO: Naslov z nedoločniškim glagolom, vsaj 3 naloge, 1 mejnik, 1 dosežek.
+OBVEZEN FORMAT NASLOVOV: Naslovi DS in nalog MORAJO uporabljati SAMOSTALNIŠKE ZVEZE (dejavniški samostalniki), NE nedoločnik.
+- PRAVILNO DS: "Razvoj čezmejnega digitalnega učnega načrta"
+- NAPAČNO DS: "Razviti čezmejni digitalni učni načrt"
+- PRAVILNO naloga: "Oblikovanje semantičnega podatkovnega modela"
+- NAPAČNO naloga: "Oblikovati semantični podatkovni model"
+Naslovi mejnikov: samostalniška zveza z opisom dogodka (npr. "Zaključek pilotne faze").
+Naslovi dosežkov: samostalniška zveza z opisom produkta (npr. "Dokument učnega načrta").
+Vsaj 3 naloge, 1 mejnik, 1 dosežek na DS.
 Dosežki preverljivi z desk review. BREZ nejasnih opisov. BREZ markdown. Variraj stavke.`
   },
   outputs: {
-    en: 'At least 6 detailed tangible outputs.\nTitle with infinitive verb, description 3+ sentences, measurable indicator.\nNo markdown. Vary sentences.',
-    si: 'Vsaj 6 podrobnih neposrednih rezultatov.\nNaslov z nedoločniškim glagolom, opis 3+ stavki, merljiv kazalnik.\nBREZ markdown. Variraj stavke.'
+    en: 'At least 6 detailed tangible outputs.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing what was produced/established — NOT an infinitive verb.\n- CORRECT: "Established cross-border knowledge exchange platform"\n- INCORRECT: "Establish a knowledge exchange platform"\nDescription 3+ sentences, measurable indicator. No markdown. Vary sentences.',
+    si: 'Vsaj 6 podrobnih neposrednih rezultatov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje, kaj je bilo ustvarjeno/vzpostavljeno — NE nedoločnik.\n- PRAVILNO: "Vzpostavljena platforma za čezmejno izmenjavo znanj"\n- NAPAČNO: "Vzpostaviti platformo za izmenjavo znanj"\nOpis 3+ stavki, merljiv kazalnik. BREZ markdown. Variraj stavke.'
   },
   outcomes: {
-    en: 'At least 6 medium-term outcomes.\nTitle with infinitive verb, description 3+ sentences, measurable indicator.\nNo markdown. Vary sentences.',
-    si: 'Vsaj 6 vmesnih učinkov.\nNaslov z nedoločniškim glagolom, opis 3+ stavki, merljiv kazalnik.\nBREZ markdown. Variraj stavke.'
+    en: 'At least 6 medium-term outcomes.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing the change achieved — NOT an infinitive verb.\n- CORRECT: "Strengthened digital competences of 200 SME managers"\n- INCORRECT: "Strengthen digital competences"\nDescription 3+ sentences, measurable indicator. No markdown. Vary sentences.',
+    si: 'Vsaj 6 vmesnih učinkov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje doseženo spremembo — NE nedoločnik.\n- PRAVILNO: "Okrepljene digitalne kompetence 200 vodij MSP"\n- NAPAČNO: "Okrepiti digitalne kompetence"\nOpis 3+ stavki, merljiv kazalnik. BREZ markdown. Variraj stavke.'
   },
   impacts: {
-    en: 'At least 6 long-term impacts.\nTitle with infinitive verb, description 3+ sentences with Pathway to Impact, measurable indicator.\nNo markdown. Vary sentences.',
-    si: 'Vsaj 6 dolgoročnih vplivov.\nNaslov z nedoločniškim glagolom, opis 3+ stavki s Pathway to Impact, merljiv kazalnik.\nBREZ markdown. Variraj stavke.'
+    en: 'At least 6 long-term impacts.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing the long-term change — NOT an infinitive verb.\n- CORRECT: "Reduced youth unemployment in Danube region by 15%"\n- INCORRECT: "Reduce youth unemployment"\nDescription 3+ sentences with Pathway to Impact, measurable indicator. No markdown. Vary sentences.',
+    si: 'Vsaj 6 dolgoročnih vplivov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje dolgoročno spremembo — NE nedoločnik.\n- PRAVILNO: "Zmanjšana brezposelnost mladih v Podonavju za 15 %"\n- NAPAČNO: "Zmanjšati brezposelnost mladih"\nOpis 3+ stavki s Pathway to Impact, merljiv kazalnik. BREZ markdown. Variraj stavke.'
   },
   risks: {
-    en: 'At least 5 risks (Technical, Social, Economic).\nSpecific title, detailed description, likelihood, impact, mitigation.\nNo markdown. Vary sentences.',
-    si: 'Vsaj 5 tveganj (Tehnično, Družbeno, Ekonomsko).\nSpecifičen naslov, podroben opis, verjetnost, vpliv, ukrepi za ublažitev.\nBREZ markdown. Variraj stavke.'
+    en: 'At least 5 risks (Technical, Social, Economic).\nRisk titles: short NOUN PHRASES (e.g., "Low partner engagement", "Technical platform failure").\nDetailed description, likelihood, impact, mitigation. No markdown. Vary sentences.',
+    si: 'Vsaj 5 tveganj (Tehnično, Družbeno, Ekonomsko).\nNaslovi tveganj: kratke SAMOSTALNIŠKE ZVEZE (npr. "Nizka vključenost partnerjev", "Tehnična odpoved platforme").\nPodroben opis, verjetnost, vpliv, ukrepi za ublažitev. BREZ markdown. Variraj stavke.'
   },
   kers: {
-    en: 'At least 5 Key Exploitable Results.\nSpecific title, detailed description, exploitation strategy.\nNo markdown. Vary sentences.',
-    si: 'Vsaj 5 ključnih izkoriščljivih rezultatov.\nSpecifičen naslov, podroben opis, strategija izkoriščanja.\nBREZ markdown. Variraj stavke.'
+    en: 'At least 5 Key Exploitable Results.\nMANDATORY TITLE FORMAT: SPECIFIC NOUN PHRASE naming the asset/product — NOT an infinitive verb.\n- CORRECT: "Digital mentorship toolkit", "Cross-border SME competence framework"\n- INCORRECT: "Develop a mentorship toolkit"\nDetailed description, exploitation strategy. No markdown. Vary sentences.',
+    si: 'Vsaj 5 ključnih izkoriščljivih rezultatov.\nOBVEZEN FORMAT NASLOVA: SPECIFIČNA SAMOSTALNIŠKA ZVEZA, ki poimenuje produkt/sredstvo — NE nedoločnik.\n- PRAVILNO: "Digitalni mentorski priročnik", "Čezmejni okvir kompetenc za MSP"\n- NAPAČNO: "Razviti mentorski priročnik"\nPodroben opis, strategija izkoriščanja. BREZ markdown. Variraj stavke.'
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// DEFAULT INSTRUCTIONS (original structure — unchanged)
+// DEFAULT INSTRUCTIONS (original structure — updated v4.1)
 // ───────────────────────────────────────────────────────────────
 
 const DEFAULT_INSTRUCTIONS = {
-  version: '4.0',
+  version: '4.1',
   lastUpdated: '2026-02-14',
 
   GLOBAL_RULES: `
@@ -696,7 +707,7 @@ LANGUAGE AND TERMINOLOGY
 
 TITLE FORMAT RULES (MANDATORY – SECTION-SPECIFIC)
 ═══════════════════════════════════════════════════════════════════
-Different sections require DIFFERENT title formats. Using the wrong format is an error.
+Different sections require DIFFERENT title formats. Using the wrong format is an ERROR.
 
 A. INFINITIVE VERB — ONLY for OBJECTIVES (General Goals + Specific Goals)
    - English: "Develop …", "Strengthen …", "Establish …", "Increase …"
@@ -713,6 +724,8 @@ B. NOUN PHRASE (SAMOSTALNIŠKA OBLIKA) — for WORK PACKAGES, TASKS, DELIVERABLE
    - INCORRECT WP title: "Develop a cross-border digital training curriculum" (infinitive — wrong for WP)
    - CORRECT task title: "Design of the semantic data model"
    - CORRECT task title: "Oblikovanje semantičnega podatkovnega modela"
+   - CORRECT milestone: "Completion of pilot testing phase" / "Zaključek pilotne faze testiranja"
+   - CORRECT deliverable: "Training curriculum document" / "Dokument učnega načrta"
 
 C. RESULT-ORIENTED NOUN PHRASE — for OUTPUTS, OUTCOMES, IMPACTS
    - Describe WHAT IS ACHIEVED or PRODUCED, not the action.
@@ -902,13 +915,16 @@ CHAPTERS 3 & 4 – OBJECTIVES (GENERAL AND SPECIFIC)
 
 PURPOSE: Define a measurable goal framework that translates the problem analysis into actionable targets.
 
+TITLE FORMAT REMINDER: Objective titles are the ONLY titles that use infinitive verbs.
+
 GENERAL GOALS (STRATEGIC OBJECTIVES)
 - Define 3–5 general goals representing broad, long-term changes.
 - Each goal title MUST begin with an infinitive verb.
 - Each: 3–5 sentence description of strategic direction and relevance, with at least one citation or benchmark reference.
 - Must align with EU-level objectives and the project's main aim.
 - CORRECT: "Strengthen digital competences of SMEs in cross-border regions to enhance their competitiveness in the EU single market."
-- INCORRECT: "Improvement of digital skills."
+- INCORRECT: "Improvement of digital skills." (noun form — wrong for objectives)
+- INCORRECT: "Strengthening of digital competences" (gerund/noun — wrong for objectives)
 
 SPECIFIC GOALS (OPERATIONAL OBJECTIVES)
 - At least 5 specific goals, each contributing to at least one general goal.
@@ -917,6 +933,8 @@ SPECIFIC GOALS (OPERATIONAL OBJECTIVES)
 - Measurable indicator as concrete metric: "increase by 25 % within 12 months", "train 200 participants by month 18".
 - Each must state which general goal(s) it supports and which cause(s) it addresses.
 - Include a citation or benchmark that justifies the target value.
+- CORRECT: "Develop a digital skills training programme for 200 SME managers by Month 12"
+- INCORRECT: "Development of a digital skills training programme" (noun form — wrong)
 
 KPI vs. DELIVERABLE DISTINCTION
 - Strictly distinguish between deliverables and KPIs.
@@ -936,6 +954,8 @@ LOGICAL CONSISTENCY
 CHAPTER 5 – ACTIVITIES
 
 PURPOSE: Detail the operational plan – what, who, when, and how. Activities are grouped into work packages and must directly implement the goals from Chapters 3–4.
+
+TITLE FORMAT REMINDER: Work package, task, milestone, and deliverable titles use NOUN PHRASES — NOT infinitive verbs. See TITLE FORMAT RULES in GLOBAL_RULES.
 
 ─── 5A. PROJECT MANAGEMENT ───
 
@@ -971,6 +991,7 @@ TASKS
 - CORRECT: "Design of the semantic data model", "Oblikovanje semantičnega podatkovnega modela"
 - INCORRECT: "Design the semantic data model", "Oblikovati semantični podatkovni model"
 - Each task: ≥3 sentences describing methodology, responsible partner/role, expected result.
+- Logical sequence within WP.
 
 TIMING AND DEPENDENCIES
 - Start/end dates (YYYY-MM-DD) for every WP and task.
@@ -982,6 +1003,7 @@ MILESTONES
 - CORRECT: "Completion of pilot testing phase", "Zaključek pilotne faze testiranja"
 - INCORRECT: "Complete pilot testing", "Zaključiti pilotno testiranje"
 - Each: title, date, measurable verification criterion.
+- Distributed across timeline, not clustered at end.
 
 DELIVERABLES
 - ≥1 per WP. IDs: D[WP].[seq] (D1.1, D2.1).
@@ -999,22 +1021,24 @@ LUMP SUM COMPATIBILITY
 
 C&D&E DISTINCTION RULE (COMMUNICATION, DISSEMINATION, EXPLOITATION)
 Within the last WP, every task must be labelled:
-- (C) Communication Tasks – general public, media. Awareness. Examples: "Manage social media (C)", "Produce promotional video (C)".
-- (D) Dissemination Tasks – experts, policy-makers, practitioners. Knowledge transfer. Examples: "Present at conferences (D)", "Publish policy brief (D)".
-- (E) Exploitation Tasks – concrete use/adoption/commercialisation after project. Sustainability. Examples: "Develop business plan (E)", "Negotiate licensing agreements (E)".
+- (C) Communication Tasks – general public, media. Awareness. Examples: "Management of social media channels (C)", "Production of promotional video (C)".
+- (D) Dissemination Tasks – experts, policy-makers, practitioners. Knowledge transfer. Examples: "Presentation of results at conferences (D)", "Publication of policy brief (D)".
+- (E) Exploitation Tasks – concrete use/adoption/commercialisation after project. Sustainability. Examples: "Development of business plan (E)", "Negotiation of licensing agreements (E)".
 - Never treat C and D as synonyms. Each task carries exactly one label. If spanning two categories, split into two tasks.
 
 ─── 5C. RISK MANAGEMENT ───
 
 RISK REGISTER
 - ≥5 risks spanning ≥3 categories: Technical, Societal, Economic (+ Legal, Environmental, Political encouraged).
-- Each: ID (RISK1, RISK2…), Category, Title (≤10 words), Description (2–4 sentences), Probability (Low/Medium/High), Impact (Low/Medium/High), Mitigation Strategy (≥3 sentences for High risks).
+- Each: ID (RISK1, RISK2…), Category, Title (≤10 words, noun phrase), Description (2–4 sentences), Probability (Low/Medium/High), Impact (Low/Medium/High), Mitigation Strategy (≥3 sentences for High risks).
 `,
 
     chapter6_results: `
 CHAPTER 6 – EXPECTED RESULTS
 
 PURPOSE: Define the full results chain: Outputs → Outcomes → Impacts → KERs.
+
+TITLE FORMAT REMINDER: Output, outcome, and impact titles use RESULT-ORIENTED NOUN PHRASES. KER titles use SPECIFIC NOUN PHRASES naming the asset. NONE of these use infinitive verbs. See TITLE FORMAT RULES in GLOBAL_RULES.
 
 ─── 6A. OUTPUTS ───
 - ≥6 outputs. Each title MUST use a RESULT-ORIENTED NOUN PHRASE (what was produced/established), NOT an infinitive verb.
@@ -1048,7 +1072,10 @@ IMPACT PATHWAY NARRATIVE
 - All EU policy references must be real and verifiable.
 
 ─── 6D. KEY EXPLOITABLE RESULTS (KERs) ───
-- ≥5 KERs. Each: ID (KER1, KER2…), title (≤12 words, SPECIFIC NOUN PHRASE naming the asset — NOT an infinitive verb), description (≥4 sentences: what, why valuable, who can use, how different), exploitation strategy (≥3 sentences: WHO, HOW, WHEN), link to WP deliverable/output.
+- ≥5 KERs. Each: ID (KER1, KER2…), title (≤12 words, SPECIFIC NOUN PHRASE naming the asset — NOT an infinitive verb).
+- CORRECT: "Digital mentorship toolkit", "Digitalni mentorski priročnik"
+- INCORRECT: "Develop a mentorship toolkit" (infinitive — wrong for KER)
+- Description (≥4 sentences: what, why valuable, who can use, how different), exploitation strategy (≥3 sentences: WHO, HOW, WHEN), link to WP deliverable/output.
 `
   },
 
@@ -1079,9 +1106,11 @@ STRUCTURAL INTEGRITY
 
 LINGUISTIC QUALITY
 - Translate into grammatically correct, natural-sounding target language.
-- Respect the infinitive-verb rule in both languages:
-  * English: "To develop …", "To strengthen …"
-  * Slovenian: "Razviti …", "Okrepiti …", "Vzpostaviti …"
+- TITLE FORMAT MUST BE PRESERVED during translation:
+  * Objective titles: infinitive verb in both languages (EN: "Develop…" → SI: "Razviti…")
+  * WP/task/milestone/deliverable titles: noun phrase in both languages (EN: "Development of…" → SI: "Razvoj…")
+  * Output/outcome/impact titles: result noun phrase in both languages (EN: "Established platform…" → SI: "Vzpostavljena platforma…")
+  * KER titles: specific noun phrase in both languages (EN: "Digital toolkit" → SI: "Digitalni priročnik")
 - Use gender-appropriate forms in Slovenian where applicable.
 - Adapt EU terminology to officially used terms: "deliverable" → "dosežek", "work package" → "delovni sklop", "milestone" → "mejnik", "output" → "rezultat", "outcome" → "učinek", "impact" → "vpliv".
 
@@ -1106,12 +1135,12 @@ MANDATORY SECTIONS (in order)
 3. Main aim (single sentence from Chapter 2).
 4. General and specific goals (brief overview, infinitive-verb form).
 5. Methodology (approach and work-package structure).
-6. Expected results (key outputs, outcomes, impacts).
+6. Expected results (key outputs, outcomes, impacts — using result-oriented noun phrases).
 7. EU policy alignment (2–3 policies from Chapter 2).
 
 STYLE
 - Professional, concise, persuasive.
-- All titles in infinitive-verb form.
+- Objective titles in infinitive-verb form; result titles in noun-phrase form.
 - ≥2 quantitative indicators from goals or results with citations.
 - No new information beyond project data.
 - All citations must reference real, verifiable sources.
