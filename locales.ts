@@ -407,6 +407,8 @@ export const TEXT = {
     taskDescPlaceholder: "Opišite nalogo...",
     milestonePlaceholder: "Opišite mejnik...",
     deliverableDescPlaceholder: "Opišite rezultat...",
+    deliverableTitle: "Naslov rezultata",
+    deliverableTitlePlaceholder: "Vnesite naslov rezultata...",
     indicatorPlaceholder: "Vnesite merljiv kazalnik...",
     enterTitle: "Vnesite naziv...",
     enterDesc: "Vnesite opis...",
