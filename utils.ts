@@ -116,12 +116,12 @@ export const createEmptyProjectData = () => {
         dependencies: []
       }],
       milestones: [{ id: 'M1.1', description: '', date: '' }],
-      deliverables: [{ id: 'D1.1', description: '', indicator: '' }]
+      deliverables: [{ id: 'D1.1', title: '', description: '', indicator: '' }]
     }],
     outputs: [{ title: '', description: '', indicator: '' }],
     outcomes: [{ title: '', description: '', indicator: '' }],
     impacts: [{ title: '', description: '', indicator: '' }],
-    risks: [{ id: 'RISK1', category: 'Technical', title: '', description: '', likelihood: 'Low', impact: 'Low', mitigation: '' }],
+    risks: [{ id: 'RISK1', category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' }],
     kers: [{ id: 'KER1', title: '', description: '', exploitationStrategy: '' }],
   };
 };
