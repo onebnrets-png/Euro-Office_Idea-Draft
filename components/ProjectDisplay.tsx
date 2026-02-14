@@ -866,26 +866,83 @@ const renderActivities = (props) => {
 
 const ProjectDisplay = ({ projectData, activeStepId, language, onUpdateData, onGenerateSection, onGenerateCompositeSection, onGenerateField, onAddItem, onRemoveItem, isLoading, error, missingApiKey }) => {
     const STEPS = getSteps(language);
+    const t = TEXT[language] || TEXT['en'];
     const currentStepObj = STEPS.find(s => s.id === activeStepId);
     const stepKey = currentStepObj?.key;
 
     const sharedProps = { projectData, onUpdateData, onGenerateSection, onGenerateCompositeSection, onGenerateField, onAddItem, onRemoveItem, isLoading, error, language, missingApiKey };
 
+    // Section-level AI generate button (shown above each main section)
+    const SectionAIButtons = ({ sectionKey, compositeKey = null }) => {
+        const genLabel = t.generateAI || 'Generate AI';
+        const fillLabel = t.fillMissing || 'Fill Missing';
+        const enhanceLabel = t.enhance || 'Enhance';
+        const regenLabel = t.regenerate || 'Regenerate';
+        const sectionLoading = isLoading === `${t.generating} ${sectionKey}...`;
+
+        return (
+            <div className="flex flex-wrap gap-2 mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <GenerateButton
+                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'fill') : onGenerateSection(sectionKey, 'fill')}
+                    isLoading={sectionLoading}
+                    title={fillLabel}
+                    text={fillLabel}
+                    missingApiKey={missingApiKey}
+                />
+                <GenerateButton
+                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'enhance') : onGenerateSection(sectionKey, 'enhance')}
+                    isLoading={sectionLoading}
+                    title={enhanceLabel}
+                    text={enhanceLabel}
+                    missingApiKey={missingApiKey}
+                />
+                <GenerateButton
+                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'regenerate') : onGenerateSection(sectionKey, 'regenerate')}
+                    isLoading={sectionLoading}
+                    title={regenLabel}
+                    text={regenLabel}
+                    missingApiKey={missingApiKey}
+                />
+            </div>
+        );
+    };
+
     const renderContent = () => {
         switch (stepKey) {
             case 'problemAnalysis':
-                return renderProblemAnalysis(sharedProps);
+                return (
+                    <>
+                        <SectionAIButtons sectionKey="problemAnalysis" />
+                        {renderProblemAnalysis(sharedProps)}
+                    </>
+                );
             case 'projectIdea':
-                return renderProjectIdea(sharedProps);
+                return (
+                    <>
+                        <SectionAIButtons sectionKey="projectIdea" />
+                        {renderProjectIdea(sharedProps)}
+                    </>
+                );
             case 'generalObjectives':
-                return renderObjectives(sharedProps, 'generalObjectives');
+                return (
+                    <>
+                        <SectionAIButtons sectionKey="generalObjectives" />
+                        {renderObjectives(sharedProps, 'generalObjectives')}
+                    </>
+                );
             case 'specificObjectives':
-                return renderObjectives(sharedProps, 'specificObjectives');
+                return (
+                    <>
+                        <SectionAIButtons sectionKey="specificObjectives" />
+                        {renderObjectives(sharedProps, 'specificObjectives')}
+                    </>
+                );
             case 'activities':
                 return renderActivities(sharedProps);
             case 'expectedResults':
                 return (
                     <>
+                        <SectionAIButtons compositeKey="expectedResults" sectionKey="outputs" />
                         {renderGenericResults(sharedProps, 'outputs')}
                         {renderGenericResults(sharedProps, 'outcomes')}
                         {renderGenericResults(sharedProps, 'impacts')}
