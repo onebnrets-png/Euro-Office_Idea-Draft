@@ -1,12 +1,27 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 4.2 – 2026-02-14
+// Version 4.3 – 2026-02-14
 //
 // ARCHITECTURE PRINCIPLE:
 //   This file is the ONLY place where content rules are defined.
 //   geminiService.ts reads from here — it has ZERO own rules.
 //   Anything changed here IS THE LAW — no exceptions.
+//
+// CHANGES v4.3:
+//   - FIXED: chapter5_activities section 5B — WP ordering corrected:
+//     Project Management WP is now defined as LAST (not WP1).
+//     Dissemination WP is SECOND-TO-LAST. This aligns with
+//     SECTION_TASK_INSTRUCTIONS.activities which already had
+//     the correct ordering rule.
+//   - FIXED: SECTION_TASK_INSTRUCTIONS.risks — added 'Environmental'
+//     / 'Okoljsko' risk category to instructions.
+//   - FIXED: chapter5_activities section 5C risk register — added
+//     'Environmental' category alongside Technical, Societal, Economic.
+//   - FIXED: chapter5_activities section 5B WP count — changed from
+//     "Minimum 5 work packages" to "Between 6 and 10 work packages"
+//     to match SECTION_TASK_INSTRUCTIONS.activities.
+//   - All previous v4.2 changes preserved.
 //
 // CHANGES v4.2:
 //   - FIXED: projectManagement section now has TWO distinct parts:
@@ -518,7 +533,7 @@ OBVEZNE ZAHTEVE:
     si: 'Opredeli vsaj 5 S.M.A.R.T. ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Razviti…", "Povečati…"). Merljiv KPI. BREZ markdown. Variraj stavčne strukture.'
   },
 
-      projectManagement: {
+  projectManagement: {
     en: `Create a DETAILED project management section with TWO distinct parts:
 
 PART 1 — DESCRIPTION FIELD (projectManagement.description):
@@ -678,8 +693,8 @@ OBLIKOVANJE:
     si: 'Vsaj 6 dolgoročnih vplivov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje dolgoročno spremembo — NE nedoločnik.\n- PRAVILNO: "Zmanjšana brezposelnost mladih v Podonavju za 15 %"\n- NAPAČNO: "Zmanjšati brezposelnost mladih"\nOpis 3+ stavki s Pathway to Impact, merljiv kazalnik. BREZ markdown. Variraj stavke.'
   },
   risks: {
-    en: 'At least 5 risks (Technical, Social, Economic).\nRisk titles: short NOUN PHRASES (e.g., "Low partner engagement", "Technical platform failure").\nDetailed description, likelihood, impact, mitigation. No markdown. Vary sentences.',
-    si: 'Vsaj 5 tveganj (Tehnično, Družbeno, Ekonomsko).\nNaslovi tveganj: kratke SAMOSTALNIŠKE ZVEZE (npr. "Nizka vključenost partnerjev", "Tehnična odpoved platforme").\nPodroben opis, verjetnost, vpliv, ukrepi za ublažitev. BREZ markdown. Variraj stavke.'
+    en: 'At least 5 risks spanning at least 3 categories from: technical, social, economic, environmental.\nRisk titles: short NOUN PHRASES (e.g., "Low partner engagement", "Technical platform failure", "Adverse environmental impact").\nDetailed description, likelihood (low/medium/high), impact (low/medium/high), mitigation. No markdown. Vary sentences.',
+    si: 'Vsaj 5 tveganj, ki pokrivajo vsaj 3 kategorije izmed: technical, social, economic, environmental.\nNaslovi tveganj: kratke SAMOSTALNIŠKE ZVEZE (npr. "Nizka vključenost partnerjev", "Tehnična odpoved platforme", "Neugoden okoljski vpliv").\nPodroben opis, verjetnost (low/medium/high), vpliv (low/medium/high), ukrepi za ublažitev. BREZ markdown. Variraj stavke.\nKATEGORIJE MORAJO biti zapisane z malo začetnico v angleškem jeziku: technical, social, economic, environmental — NE z veliko začetnico!'
   },
   kers: {
     en: 'At least 5 Key Exploitable Results.\nMANDATORY TITLE FORMAT: SPECIFIC NOUN PHRASE naming the asset/product — NOT an infinitive verb.\n- CORRECT: "Digital mentorship toolkit", "Cross-border SME competence framework"\n- INCORRECT: "Develop a mentorship toolkit"\nDetailed description, exploitation strategy. No markdown. Vary sentences.',
@@ -688,11 +703,11 @@ OBLIKOVANJE:
 };
 
 // ───────────────────────────────────────────────────────────────
-// DEFAULT INSTRUCTIONS (original structure — updated v4.2)
+// DEFAULT INSTRUCTIONS (original structure — updated v4.3)
 // ───────────────────────────────────────────────────────────────
 
 const DEFAULT_INSTRUCTIONS = {
-  version: '4.2',
+  version: '4.3',
   lastUpdated: '2026-02-14',
 
   GLOBAL_RULES: `
@@ -1116,8 +1131,18 @@ FORBIDDEN in structure fields: descriptions, explanations, responsibilities, mee
 ─── 5B. WORK PACKAGES ───
 
 STRUCTURE
-- Minimum 5 work packages: ≥3 content/thematic, 1 management (WP1), 1 dissemination/communication/exploitation (last WP).
+- Between 6 and 10 work packages for a complex project.
+- This MUST include exactly 2 ADMINISTRATIVE / HORIZONTAL WPs:
+  a) 1 "Dissemination, Communication and Exploitation" WP (second-to-last).
+  b) 1 "Project Management and Coordination" WP (ALWAYS the LAST WP — highest number).
+- All remaining WPs (4–8) are TECHNICAL / THEMATIC WPs directly linked to specific objectives.
 - Sequential numbering: WP1, WP2, WP3, …
+
+WP ORDERING RULE (MANDATORY — NO EXCEPTIONS):
+- WP1 = foundational/analytical WP (e.g., "Needs analysis and methodology").
+- WP2 through WPn-2 = technical/thematic WPs in logical sequence.
+- WPn-1 = Dissemination, Communication and Exploitation.
+- WPn = Project Management and Coordination (ALWAYS LAST — NEVER FIRST).
 
 WORK PACKAGE TITLES
 - Each MUST use a NOUN PHRASE (action noun), NOT an infinitive verb.
@@ -1160,7 +1185,7 @@ LUMP SUM COMPATIBILITY
 - If linked to lump sum payment: "This deliverable serves as a payment milestone. Evidence: [list]."
 
 C&D&E DISTINCTION RULE (COMMUNICATION, DISSEMINATION, EXPLOITATION)
-Within the last WP, every task must be labelled:
+Within the Dissemination WP, every task must be labelled:
 - (C) Communication Tasks – general public, media. Awareness. Examples: "Management of social media channels (C)", "Production of promotional video (C)".
 - (D) Dissemination Tasks – experts, policy-makers, practitioners. Knowledge transfer. Examples: "Presentation of results at conferences (D)", "Publication of policy brief (D)".
 - (E) Exploitation Tasks – concrete use/adoption/commercialisation after project. Sustainability. Examples: "Development of business plan (E)", "Negotiation of licensing agreements (E)".
@@ -1169,8 +1194,9 @@ Within the last WP, every task must be labelled:
 ─── 5C. RISK MANAGEMENT ───
 
 RISK REGISTER
-- ≥5 risks spanning ≥3 categories: Technical, Societal, Economic (+ Legal, Environmental, Political encouraged).
-- Each: ID (RISK1, RISK2…), Category, Title (≤10 words, noun phrase), Description (2–4 sentences), Probability (Low/Medium/High), Impact (Low/Medium/High), Mitigation Strategy (≥3 sentences for High risks).
+- ≥5 risks spanning ≥3 categories from: technical, social, economic, environmental (+ legal, political encouraged).
+- Risk category values MUST be lowercase: technical, social, economic, environmental.
+- Each: ID (RISK1, RISK2…), Category (lowercase), Title (≤10 words, noun phrase), Description (2–4 sentences), Probability (low/medium/high — lowercase), Impact (low/medium/high — lowercase), Mitigation Strategy (≥3 sentences for high risks).
 `,
 
     chapter6_results: `
@@ -1228,9 +1254,9 @@ IMPACT PATHWAY NARRATIVE
     description: "Minimum 3 complete, substantive sentences. Avoid vague generalities. Include specific details about methodology, scope, target groups, and expected outcomes. Use professional, analytical language suitable for EU evaluators. Include at least one citation from a real source where applicable.",
     indicator: "Must be quantitative or verifiably qualitative. Include a numeric target, a unit of measurement, and a timeframe. Example: 'Train 200 SME managers in digital skills by Month 18, verified through completion certificates.' Avoid vague indicators like 'improved awareness'.",
     milestone_date: "Format: YYYY-MM-DD. Must be a realistic date within the project timeline. Milestones should be distributed across the project duration – not all clustered in the final months.",
-    likelihood: "Exactly one of three values: 'Low', 'Medium', or 'High'. No other values, abbreviations, or scales are permitted.",
-    impact: "Exactly one of three values: 'Low', 'Medium', or 'High'. No other values, abbreviations, or scales are permitted.",
-    mitigation: "For risks rated 'High' in probability or impact: minimum 3 sentences describing both preventive actions (taken before the risk materialises) and corrective actions (taken if the risk materialises). For 'Low' or 'Medium' risks: minimum 2 sentences.",
+    likelihood: "Exactly one of three values: 'low', 'medium', or 'high'. No other values, abbreviations, or scales are permitted.",
+    impact: "Exactly one of three values: 'low', 'medium', or 'high'. No other values, abbreviations, or scales are permitted.",
+    mitigation: "For risks rated 'high' in probability or impact: minimum 3 sentences describing both preventive actions (taken before the risk materialises) and corrective actions (taken if the risk materialises). For 'low' or 'medium' risks: minimum 2 sentences.",
     exploitationStrategy: "Minimum 3 sentences. Must answer three questions: (1) WHO will exploit the result – specify the type of organisation or actor. (2) HOW will it be exploited – licensing, open access, commercialisation, policy integration, or further research. (3) WHEN – provide a realistic timeline for exploitation activities."
   },
 
