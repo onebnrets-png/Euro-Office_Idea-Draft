@@ -13,6 +13,10 @@
 //
 // RATE LIMITING: 2s delay between batches + exponential
 // backoff retry (up to 3 retries) on 429 errors.
+//
+// v3.4 — 2026-02-14 — FIX:
+//   - getTranslationRules() returns string OR string[].
+//     translateFieldBatch now handles both types safely.
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
@@ -197,6 +201,20 @@ const groupBySection = (fields: FieldEntry[]): Map<string, FieldEntry[]> => {
   return groups;
 };
 
+// ─── SAFE RULES FORMATTER (v3.4 FIX) ────────────────────────────
+// getTranslationRules() may return a string OR a string[].
+// This helper normalises it into a formatted string for the prompt.
+
+const formatRulesForPrompt = (rules: string | string[]): string => {
+  if (Array.isArray(rules)) {
+    return rules.join('\n- ');
+  }
+  if (typeof rules === 'string' && rules.trim().length > 0) {
+    return rules;
+  }
+  return 'Translate professionally, preserving JSON structure and EU terminology.';
+};
+
 // ─── TRANSLATE A BATCH OF FIELDS ─────────────────────────────────
 
 const translateFieldBatch = async (
@@ -208,6 +226,9 @@ const translateFieldBatch = async (
   // Read translation rules from the central Instructions.ts
   const translationRules = getTranslationRules(targetLanguage);
 
+  // v3.4 FIX: Use safe formatter instead of .join() directly
+  const formattedRules = formatRulesForPrompt(translationRules);
+
   // Build a simple key→value map for the AI
   const toTranslate: Record<string, string> = {};
   fields.forEach((f, i) => {
@@ -217,7 +238,7 @@ const translateFieldBatch = async (
   const prompt = [
     `You are a professional translator for EU Project Proposals.`,
     `Translate each value in the following JSON object into ${langName}.`,
-    `RULES:\n- ${translationRules.join('\n- ')}`,
+    `RULES:\n- ${formattedRules}`,
     `\nADDITIONAL:\n- Keep all keys exactly as they are (field_0, field_1, etc.).\n- Return ONLY valid JSON. No markdown, no explanation.`,
     `\nJSON:\n${JSON.stringify(toTranslate, null, 2)}`
   ].join('\n');
