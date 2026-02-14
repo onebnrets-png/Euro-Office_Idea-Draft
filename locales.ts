@@ -235,8 +235,12 @@ export const TEXT = {
         closeBtn: "Close",
         generationChoiceTitle: "Content Exists",
         generationChoiceMsg: "This section already contains some data. How would you like to proceed?",
+        enhanceExistingBtn: "Enhance Existing",
+        enhanceExistingDesc: "AI will professionally improve, deepen, and refine your existing content — adding citations, EU terminology, and analytical depth.",
         fillMissingBtn: "Fill Missing",
-        regenerateAllBtn: "Regenerate All"
+        fillMissingDesc: "AI will only generate content for empty fields. Your existing text remains completely untouched.",
+        regenerateAllBtn: "Regenerate All",
+        regenerateAllDesc: "AI will generate completely new content from scratch, replacing everything in this section."
     },
     auth: {
       loginTitle: "Login",
@@ -546,8 +550,12 @@ export const TEXT = {
         closeBtn: "Zapri",
         generationChoiceTitle: "Vsebina že obstaja",
         generationChoiceMsg: "To poglavje že vsebuje nekaj podatkov. Kako želite nadaljevati?",
+        enhanceExistingBtn: "Izboljšaj obstoječe",
+        enhanceExistingDesc: "UI bo strokovno izboljšal, poglobil in dodelal vašo obstoječo vsebino — dodal citate, EU terminologijo in analitično globino.",
         fillMissingBtn: "Dopolni manjkajoče",
-        regenerateAllBtn: "Ponovno generiraj vse"
+        fillMissingDesc: "UI bo generiral vsebino samo za prazna polja. Obstoječe besedilo ostane popolnoma nedotaknjeno.",
+        regenerateAllBtn: "Generiraj znova vse",
+        regenerateAllDesc: "UI bo generiral popolnoma novo vsebino iz nič in zamenjal vse obstoječe podatke v tem razdelku."
     },
     auth: {
       loginTitle: "Prijava",
