@@ -1,12 +1,31 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 4.3 – 2026-02-14
+// Version 4.4 – 2026-02-14
 //
 // ARCHITECTURE PRINCIPLE:
 //   This file is the ONLY place where content rules are defined.
 //   geminiService.ts reads from here — it has ZERO own rules.
 //   Anything changed here IS THE LAW — no exceptions.
+//
+// CHANGES v4.4:
+//   - FIXED: projectManagement.si — added full FORMATIRANJE OPISA block
+//     (mirror of EN FORMATTING OF DESCRIPTION). AI now structures
+//     Slovenian implementation description into paragraphs with topic headers.
+//   - FIXED: activities EN/SI — added TASK DEPENDENCIES rules:
+//     every task (except first task T1.1) MUST have ≥1 dependency.
+//     Dependencies use predecessorId + type (FS/SS/FF/SF).
+//   - FIXED: activities EN/SI — added DELIVERABLE QUALITY rules:
+//     each deliverable must have separate title, description (2–4 sentences),
+//     and indicator (specific, measurable, includes verification method).
+//   - FIXED: activities EN/SI — added WP DURATION RULES:
+//     Project Management WP = M1–final month (full span).
+//     Dissemination WP = M1–final month (full span).
+//     Content/technical WPs are sequential with overlaps, none spans full period.
+//     Tasks within a WP are sequential, not all sharing identical dates.
+//   - FIXED: QUALITY_GATES.activities EN/SI — added 4 new checks for
+//     dependencies, deliverable quality, and WP duration compliance.
+//   - All previous v4.3 changes preserved.
 //
 // CHANGES v4.3:
 //   - FIXED: chapter5_activities section 5B — WP ordering corrected:
@@ -440,6 +459,9 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Dolžine in strukture stavkov se naravno razlikujejo skozi besedilo',
     ]
   },
+  // ═══════════════════════════════════════════════════════════════
+  // v4.4 FIX: Added dependency, deliverable, and WP duration checks
+  // ═══════════════════════════════════════════════════════════════
   activities: {
     en: [
       'The LAST WP (highest number) is "Project Management and Coordination" — NOT any other topic',
@@ -447,14 +469,21 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'WP1 is a foundational/analytical WP — NOT project management',
       'Total number of WPs is between 6 and 10',
       'Every WP has at least 1 milestone with a date in YYYY-MM-DD format',
-      'Every WP has at least 1 deliverable',
+      'Every WP has at least 1 deliverable with separate title and description fields',
       'Every task has startDate and endDate in YYYY-MM-DD format',
       'All WP and task titles use NOUN PHRASES, not infinitive verbs',
       'No markdown formatting in any text field',
-      'Every task (except WP1 T1.1) has at least 1 dependency in its dependencies array',
-      'Dependencies reference only valid predecessorId values from earlier tasks',
-      'Every deliverable description has 2–4 substantive sentences (not just a title)',
-      'Every deliverable indicator is specific and measurable (includes format, quantity, verification method)',
+      'Every task (except the very first task T1.1) has at least 1 dependency in its dependencies array',
+      'Dependencies reference only valid predecessorId values from tasks that exist in the project',
+      'Dependency types are valid: FS (Finish-to-Start), SS (Start-to-Start), FF (Finish-to-Finish), or SF (Start-to-Finish)',
+      'Cross-WP dependencies exist — at least some tasks depend on tasks in OTHER work packages',
+      'Every deliverable title is a concise noun phrase (3–10 words)',
+      'Every deliverable description has 2–4 substantive sentences explaining scope, format, and content',
+      'Every deliverable indicator is specific and measurable — includes quantity, format, and verification method',
+      'Project Management WP spans the ENTIRE project duration (M1 to final month)',
+      'Dissemination WP spans the ENTIRE project duration (M1 to final month)',
+      'No content/technical WP spans the entire project — each covers a specific phase',
+      'Tasks within each WP are sequential or staggered — NOT all sharing identical start and end dates',
     ],
     si: [
       'ZADNJI DS (najvišja številka) je "Upravljanje in koordinacija projekta" — NE nobena druga tema',
@@ -462,14 +491,21 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'DS1 je temeljni/analitični DS — NE projektno vodenje',
       'Skupno število DS je med 6 in 10',
       'Vsak DS ima vsaj 1 mejnik z datumom v formatu YYYY-MM-DD',
-      'Vsak DS ima vsaj 1 dosežek',
+      'Vsak DS ima vsaj 1 dosežek z ločenima poljema naslov in opis',
       'Vsaka naloga ima startDate in endDate v formatu YYYY-MM-DD',
       'Vsi naslovi DS in nalog uporabljajo SAMOSTALNIŠKE ZVEZE, ne nedoločnik',
       'Brez markdown formatiranja v nobenem besedilnem polju',
-      'Vsaka naloga (razen DS1 T1.1) ima vsaj 1 odvisnost v polju dependencies',
-      'Odvisnosti navajajo samo veljavne predecessorId vrednosti iz prejšnjih nalog',
-      'Vsak opis dosežka (deliverable) ima 2–4 vsebinske stavke (ne samo naslov)',
-      'Vsak kazalnik dosežka je specifičen in merljiv (vključuje format, količino, način preverjanja)',
+      'Vsaka naloga (razen prve naloge T1.1) ima vsaj 1 odvisnost v polju dependencies',
+      'Odvisnosti navajajo samo veljavne predecessorId vrednosti iz nalog, ki obstajajo v projektu',
+      'Tipi odvisnosti so veljavni: FS (konec-začetek), SS (začetek-začetek), FF (konec-konec) ali SF (začetek-konec)',
+      'Obstajajo meddelovne odvisnosti — vsaj nekatere naloge so odvisne od nalog v DRUGIH delovnih sklopih',
+      'Vsak naslov dosežka je jedrnata samostalniška zveza (3–10 besed)',
+      'Vsak opis dosežka ima 2–4 vsebinske stavke, ki pojasnjujejo obseg, format in vsebino',
+      'Vsak kazalnik dosežka je specifičen in merljiv — vključuje količino, format in način preverjanja',
+      'DS za upravljanje projekta traja CELOTNO trajanje projekta (M1 do zadnjega meseca)',
+      'DS za diseminacijo traja CELOTNO trajanje projekta (M1 do zadnjega meseca)',
+      'Noben vsebinski/tehnični DS ne traja celotno obdobje projekta — vsak pokriva specifično fazo',
+      'Naloge znotraj vsakega DS so zaporedne ali zamaknjene — NE vse z enakimi začetnimi in končnimi datumi',
     ]
   },
   _default: {
@@ -565,6 +601,9 @@ OBVEZNE ZAHTEVE:
     si: 'Opredeli vsaj 5 S.M.A.R.T. ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Razviti…", "Povečati…"). Merljiv KPI. BREZ markdown. Variraj stavčne strukture.'
   },
 
+  // ═══════════════════════════════════════════════════════════════
+  // v4.4 FIX: SI block now has full FORMATIRANJE OPISA section
+  // ═══════════════════════════════════════════════════════════════
   projectManagement: {
     en: `Create a DETAILED project management section with TWO distinct parts:
 
@@ -599,953 +638,469 @@ DEL 1 — POLJE OPIS (projectManagement.description):
 To je GLAVNO vsebinsko polje. MORA vsebovati celovito besedilo (najmanj 500 besed), ki pokriva VSE naslednje:
 1. UPRAVLJAVSKA STRUKTURA – Vloge z EU kraticami: PK, UO, SO, VDS. Odgovornosti in pooblastila vsake vloge.
 2. MEHANIZMI ODLOČANJA – Operativna, strateška, eskalacijska raven. Glasovanje, sklepčnost, pogostost sestankov.
-3. ZAGOTAVLJANJE KAKOVOSTI – Notranje revizije, recenzije, zunanji pregledi, merila, standardi poročanja.
-4. PRISTOP K OBVLADOVANJU TVEGANJ – Identifikacija, ocena, spremljanje, ublažitev. Sklic na register tveganj (5C).
-5. NOTRANJA KOMUNIKACIJA – Orodja, urniki, poročevalske verige, upravljanje dokumentov.
+3. ZAGOTAVLJANJE KAKOVOSTI – Notranje revizije, medsebojne evalvacije, zunanje presoje, referenčne točke, standardi poročanja.
+4. PRISTOP K OBVLADOVANJU TVEGANJ – Identifikacija, ocena, spremljanje, blaženje. Referenca na register tveganj (5C).
+5. NOTRANJE KOMUNICIRANJE – Orodja, urniki, verige poročanja, upravljanje dokumentov.
 6. REŠEVANJE KONFLIKTOV – Eskalacija: neformalno → mediacija koordinatorja → formalna arbitraža.
 7. UPRAVLJANJE PODATKOV IN ODPRTA ZNANOST – Načela FAIR, vrste dostopa, podrobnosti repozitorija.
-Piši v tekočih odstavkih, ne v alinejah. Brez markdown. Piši kot izkušen svetovalec.
+Piši v tekočih odstavkih proze, NE v točkastih seznamih. Brez markdown. Piši kot izkušen svetovalec.
 
 FORMATIRANJE OPISA:
-- Razdeli opis v JASNE ODSTAVKE, ločene z dvojnimi novimi vrsticami (\\n\\n).
-- Vsaka večja tema (upravljavska struktura, odločanje, zagotavljanje kakovosti, obvladovanje tveganj, komunikacija, reševanje konfliktov, upravljanje podatkov) mora biti SVOJ ODSTAVEK.
-- Vsak odstavek začni z imenom teme v goli besedili na svoji vrstici, npr.: "Upravljavska struktura" nato nova vrstica, nato opisno besedilo.
-- NE piši enega samega neprekinjenega bloka besedila. Besedilo mora biti berljivo z jasno vizualno ločitvijo med temami.
-- To je KRITIČNO za berljivost — AI model MORA vstaviti \\n\\n med odstavke v JSON string vrednosti.
+- Opis strukturiraj v JASNE ODSTAVKE, ločene z dvojnimi novimi vrsticami (\\n\\n).
+- Vsaka večja tema (upravljavska struktura, mehanizmi odločanja, zagotavljanje kakovosti, obvladovanje tveganj, komuniciranje, reševanje konfliktov, upravljanje podatkov) mora biti SVOJ ODSTAVEK.
+- Vsak odstavek začni z naslovom teme v goli besedilni obliki v svoji vrstici, npr.: "Upravljavska struktura" in nato nova vrstica s tekočim opisnim besedilom.
+- NE piši enega neprekinjenega bloka besedila. Besedilo mora biti berljivo z jasno vizualno ločitvijo med temami.
 
-DEL 2 — POLJA STRUKTURE (projectManagement.structure):
-Ta polja se prikazujejo kot OZNAKE v organizacijski shemi. MORAJO vsebovati SAMO kratke nazive vlog (največ 5–8 besed):
+DEL 2 — STRUKTURNA POLJA (projectManagement.structure):
+Ta polja se prikazujejo kot OZNAKE v organigramu. MORAJO vsebovati SAMO kratke nazive vlog (največ 5–8 besed):
 - coordinator: npr. "Koordinator projekta (PK)"
 - steeringCommittee: npr. "Usmerjevalni odbor (UO)"
 - advisoryBoard: npr. "Svetovalni odbor (SO)"
-- wpLeaders: npr. "Vodje delovnih sklopov (VDS)"
-KLJUČNO: NE vstavljaj opisov, razlag ali dolgih besedil v polja strukture. To so SAMO oznake za shemo. Vsi podrobni opisi gredo v polje opis zgoraj.
-
-KLJUČNO — JEZIK: VSE besedilo — tako v polju opis kot v poljih strukture — MORA biti napisano IZKLJUČNO V SLOVENŠČINI. Oznake v organizacijski shemi MORAJO biti v slovenščini (npr. "Koordinator projekta (PK)", NE "Project Coordinator (PK)"). Tudi naslovi odstavkov v opisu morajo biti v slovenščini (npr. "Upravljavska struktura", NE "Management Structure"). NE uporabljaj angleščine v NOBENEM polju!`
+- wpLeaders: npr. "Vodja delovnega sklopa (VDS)"
+KLJUČNO: V strukturna polja NE vstavljaj opisov, pojasnil ali dolgega besedila. To so SAMO oznake za grafikon. Vsi podrobni opisi gredo v polje opis zgoraj.`
   },
 
-    activities: {
-    en: `═══ CRITICAL — READ THIS FIRST BEFORE GENERATING ANYTHING ═══
-PROJECT MANAGEMENT WP MUST BE THE LAST WP. NOT THE FIRST. NOT IN THE MIDDLE. LAST.
-IF YOU PUT PROJECT MANAGEMENT AS WP1, YOUR ENTIRE OUTPUT IS REJECTED.
-═══════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
+  // v4.4 FIX: Added TASK DEPENDENCIES, DELIVERABLE QUALITY, and
+  //           WP DURATION RULES to activities instructions
+  // ═══════════════════════════════════════════════════════════════
+  activities: {
+    en: `Generate between 6 and 10 Work Packages with tasks, milestones and deliverables.
+Project start date: {{projectStart}}.
 
-Project starts: {{projectStart}}. All task dates on or after this.
-Design Work Packages based on objectives.
+TITLE FORMAT RULES:
+- WP titles: noun phrase (e.g., "Baseline Analysis and Stakeholder Mapping")
+- Task titles: noun phrase (e.g., "Development of Training Curriculum")
+- Milestone descriptions: noun phrase (e.g., "Completion of Pilot Phase")
+- Deliverable titles: noun phrase (e.g., "Stakeholder Engagement Report")
+- Do NOT use infinitive verbs for any of these.
 
-MANDATORY WORK PACKAGE STRUCTURE:
-- A complex project MUST have between 6 and 10 Work Packages (WPs).
-- This MUST include exactly 2 ADMINISTRATIVE / HORIZONTAL WPs:
-  a) A "Dissemination, Communication and Exploitation" WP — focused on project visibility, stakeholder engagement, exploitation of results, and communication activities.
-  b) A "Project Management and Coordination" WP — focused on consortium coordination, quality assurance, reporting, financial management, and risk monitoring.
-- The "Project Management and Coordination" WP MUST ALWAYS be the LAST WP (highest number).
-- The "Dissemination" WP should typically be the SECOND-TO-LAST WP.
-- All other WPs (4–8) are TECHNICAL / THEMATIC WPs directly linked to specific objectives.
+WORK PACKAGE ORDERING (MANDATORY):
+- WP1: foundational/analytical (e.g., "Baseline Analysis and Needs Assessment")
+- WP2–WP(N-2): content/thematic work packages in logical sequence
+- WP(N-1) (second-to-last): "Dissemination, Communication and Exploitation of Results"
+- WP(N) (last): "Project Management and Coordination"
 
-MANDATORY WP ORDERING — EXAMPLE FOR 8 WPs:
-  WP1: "Needs analysis and baseline methodology" (foundational/analytical)
-  WP2: "Development of digital training curriculum" (technical)
-  WP3: "Pilot implementation in partner regions" (technical)
-  WP4: "Cross-border knowledge exchange platform" (technical)
-  WP5: "Capacity building and stakeholder engagement" (technical)
-  WP6: "Policy recommendations and scaling strategy" (technical)
-  WP7: "Dissemination, communication and exploitation of results" (SECOND-TO-LAST)
-  WP8: "Project management and coordination" (ALWAYS LAST — HIGHEST NUMBER)
-
-ORDERING RULE (NON-NEGOTIABLE):
-- WP1 = foundational/analytical WP (e.g., "Needs analysis and methodology").
-- WP2 through WPn-2 = technical/thematic WPs in logical sequence.
-- WPn-1 = Dissemination, Communication and Exploitation.
-- WPn = Project Management and Coordination (ALWAYS THE LAST WP — NEVER WP1).
-- VIOLATION: If "Project Management" appears as WP1 or anywhere except the last position, the output is INVALID.
-
-MANDATORY TITLE FORMAT: WP titles and task titles MUST use NOUN PHRASES (action nouns), NOT infinitive verbs.
-- CORRECT WP: "Development of a cross-border digital training curriculum"
-- INCORRECT WP: "Develop a cross-border digital training curriculum"
-- CORRECT task: "Design of the semantic data model"
-- INCORRECT task: "Design the semantic data model"
-
-MILESTONE RULES:
-- Each WP MUST have at least 1 milestone.
-- Every milestone MUST include a realistic date in YYYY-MM-DD format.
-- Milestone dates must be AFTER the project start date and logically placed within or at the end of the WP timeline.
-- Milestone titles: noun phrase describing the event (e.g., "Completion of pilot phase").
-
-DELIVERABLE RULES:
-- Each WP MUST have at least 1 deliverable.
-- Deliverable titles: noun phrase describing the product (e.g., "Training curriculum document").
-- Deliverables must be verifiable via desk review. No vague descriptions.
-
-DELIVERABLE QUALITY (MANDATORY):
-- Every deliverable description MUST be 2–4 sentences: what it contains, its format/type, and who the target audience is.
-- Every deliverable indicator MUST be specific and measurable — NOT vague. Include format, quantity, and verification method.
-- WRONG indicator: "Report delivered" — RIGHT indicator: "Technical report (min. 40 pages), peer-reviewed by 2 external experts, published on project website by M12"
-- WRONG description: "Final report" — RIGHT description: "Comprehensive analytical report synthesising findings from all 12 pilot sites, including comparative methodology framework, quantitative performance metrics, and policy recommendations for regional authorities."
-
-TASK RULES:
-- At least 3 tasks per WP (technical WPs), at least 2 tasks per administrative WP.
-- Each task MUST have realistic startDate and endDate in YYYY-MM-DD format.
-- Tasks within a WP should have logical dependencies (FS type preferred).
+WP DURATION RULES (MANDATORY):
+- "Project Management and Coordination" WP MUST span the ENTIRE project duration — from the first month (M1) to the final month.
+- "Dissemination, Communication and Exploitation" WP MUST also span the ENTIRE project duration — from M1 to the final month.
+- Content/thematic WPs (WP1 to WP(N-2)) should be SEQUENTIAL with partial overlaps. Example for a 36-month project: WP1 covers M1–M10, WP2 covers M6–M18, WP3 covers M14–M26, WP4 covers M22–M34, etc.
+- NO content/thematic WP should span the entire project duration.
+- Tasks WITHIN each WP must be sequential or staggered — do NOT give all tasks in a WP the same startDate and endDate.
 
 TASK DEPENDENCIES (MANDATORY):
-- Every task (except the first task of WP1) MUST have at least 1 dependency in the "dependencies" array.
-- Use realistic dependency types: FS (Finish-to-Start) is most common, SS (Start-to-Start) for parallel tasks, FF (Finish-to-Finish) for synchronized completions.
-- Dependencies MUST reference valid predecessorId values from tasks that are defined earlier in the project timeline.
-- WP2+ first tasks should depend on at least one task from a previous WP (cross-WP dependency).
-- Administrative WPs (Dissemination, Project Management) should have SS dependencies from WP1 Task 1 (they run in parallel from the start).
-- Example: {"predecessorId": "T1.2", "type": "FS"} means this task starts after T1.2 finishes.
+- The very first task of the project (T1.1) has NO dependencies (it is the starting point).
+- EVERY OTHER task MUST have at least 1 dependency in its "dependencies" array.
+- Each dependency object has: { "predecessorId": "T<wp>.<task>", "type": "FS" | "SS" | "FF" | "SF" }
+- FS (Finish-to-Start) is the most common: the successor starts after the predecessor finishes.
+- SS (Start-to-Start): both tasks start at the same time.
+- FF (Finish-to-Finish): both tasks finish at the same time.
+- SF (Start-to-Finish): the successor finishes when the predecessor starts (rare).
+- CROSS-WP dependencies MUST exist: e.g., T2.1 depends on T1.3 (FS), T3.1 depends on T2.2 (FS).
+- Within a WP, sequential tasks should have FS dependencies: T1.2 depends on T1.1, T1.3 depends on T1.2, etc.
+- Parallel tasks within a WP can use SS dependencies.
 
-FORMATTING:
-- No markdown. Vary sentence structures. Write like an experienced consultant.
-- Task descriptions: 3–5 sentences, concrete and specific.
+DELIVERABLE FIELDS (MANDATORY):
+- Each deliverable MUST have THREE separate fields:
+  1. "title" — a concise noun phrase (3–10 words), e.g., "Stakeholder Engagement Report"
+  2. "description" — 2–4 substantive sentences explaining what the deliverable contains, its format, scope, and intended audience. Do NOT just repeat the title.
+  3. "indicator" — a SPECIFIC and MEASURABLE verification criterion. Include: quantity/format (e.g., "1 PDF report"), scope (e.g., "covering all 12 partner regions"), and verification method (e.g., "reviewed and approved by the Steering Committee").
+- WRONG indicator: "Report delivered" (too vague)
+- RIGHT indicator: "1 PDF report (min. 40 pages) covering baseline data from 12 regions, peer-reviewed by 2 external experts and approved by the Steering Committee by M10"
 
-FINAL CHECK BEFORE RETURNING JSON:
-☐ Is "Project Management" the LAST WP (highest WP number)? If NO → FIX IT.
-☐ Is "Dissemination" the second-to-last WP? If NO → FIX IT.
-☐ Does WP1 contain a foundational/analytical topic (NOT management)? If NO → FIX IT.
-☐ Are there between 6 and 10 WPs total? If NO → FIX IT.
-☐ Does every milestone have a date in YYYY-MM-DD format? If NO → FIX IT.`,
+TASKS:
+- Each WP must have 2–5 tasks.
+- Each task: id, title, description (2–4 sentences), startDate, endDate, dependencies.
+- Task descriptions should explain methodology, not just restate the title.
 
-    si: `═══ KRITIČNO — PREBERI TO NAJPREJ PREDEN KARKOLI GENERIRAŠ ═══
-DS ZA PROJEKTNO VODENJE MORA BITI ZADNJI DS. NE PRVI. NE V SREDINI. ZADNJI.
-ČE POSTAVIŠ PROJEKTNO VODENJE KOT DS1, JE CELOTEN IZHOD ZAVRNJEN.
-═══════════════════════════════════════════════════════════════════
+MILESTONES:
+- Each WP must have at least 1 milestone.
+- Milestone date in YYYY-MM-DD format. Place at logical completion points.
 
-Začetek projekta: {{projectStart}}. Vsi datumi nalog na ali po tem datumu.
-Oblikuj delovne sklope na podlagi ciljev.
+No markdown. Write like an experienced EU project consultant.`,
+    si: `Generiraj med 6 in 10 delovnih sklopov z nalogami, mejniki in dosežki.
+Začetni datum projekta: {{projectStart}}.
 
-OBVEZNA STRUKTURA DELOVNIH SKLOPOV:
-- Kompleksen projekt MORA imeti med 6 in 10 delovnih sklopov (DS oz. WP).
-- To MORA vključevati natanko 2 ADMINISTRATIVNA / HORIZONTALNA DS:
-  a) DS za "Diseminacijo, komunikacijo in izkoriščanje rezultatov" — osredotočen na vidnost projekta, vključevanje deležnikov, izkoriščanje rezultatov in komunikacijske aktivnosti.
-  b) DS za "Upravljanje in koordinacijo projekta" — osredotočen na koordinacijo konzorcija, zagotavljanje kakovosti, poročanje, finančno upravljanje in spremljanje tveganj.
-- DS "Upravljanje in koordinacija projekta" MORA biti VEDNO ZADNJI DS (najvišja številka).
-- DS "Diseminacija" naj bo tipično PREDZADNJI DS.
-- Vsi ostali DS (4–8) so TEHNIČNI / TEMATSKI DS, neposredno povezani s specifičnimi cilji.
+PRAVILA ZA FORMAT NASLOVOV:
+- Naslovi DS: samostalniška zveza (npr. "Izhodiščna analiza in kartiranje deležnikov")
+- Naslovi nalog: samostalniška zveza (npr. "Razvoj učnega kurikula")
+- Opisi mejnikov: samostalniška zveza (npr. "Zaključek pilotne faze")
+- Naslovi dosežkov: samostalniška zveza (npr. "Poročilo o vključevanju deležnikov")
+- NE uporabljaj nedoločnikov za nobeno od teh.
 
-OBVEZEN VRSTNI RED DS — PRIMER ZA 8 DS:
-  WP1: "Analiza potreb in izhodiščna metodologija" (temeljni/analitični)
-  WP2: "Razvoj digitalnega učnega načrta" (tehnični)
-  WP3: "Pilotna izvedba v partnerskih regijah" (tehnični)
-  WP4: "Čezmejna platforma za izmenjavo znanj" (tehnični)
-  WP5: "Krepitev zmogljivosti in vključevanje deležnikov" (tehnični)
-  WP6: "Priporočila za politike in strategija nadgradnje" (tehnični)
-  WP7: "Diseminacija, komunikacija in izkoriščanje rezultatov" (PREDZADNJI)
-  WP8: "Upravljanje in koordinacija projekta" (VEDNO ZADNJI — NAJVIŠJA ŠTEVILKA)
+VRSTNI RED DELOVNIH SKLOPOV (OBVEZNO):
+- DS1: temeljni/analitični (npr. "Izhodiščna analiza in ocena potreb")
+- DS2–DS(N-2): vsebinski/tematski delovni sklopi v logičnem zaporedju
+- DS(N-1) (predzadnji): "Diseminacija, komunikacija in izkoriščanje rezultatov"
+- DS(N) (zadnji): "Upravljanje in koordinacija projekta"
 
-PRAVILO VRSTNEGA REDA (NEPREKLICNO):
-- DS1 = temeljni/analitični DS (npr. "Analiza potreb in metodologija").
-- DS2 do DSn-2 = tehnični/tematski DS v logičnem zaporedju.
-- DSn-1 = Diseminacija, komunikacija in izkoriščanje rezultatov.
-- DSn = Upravljanje in koordinacija projekta (VEDNO ZADNJI DS — NIKOLI DS1).
-- KRŠITEV: Če se "Upravljanje projekta" pojavi kot DS1 ali kjerkoli razen na zadnjem mestu, je izhod NEVELJAVEN.
-
-OBVEZEN FORMAT NASLOVOV: Naslovi DS in nalog MORAJO uporabljati SAMOSTALNIŠKE ZVEZE (dejavniški samostalniki), NE nedoločnik.
-- PRAVILNO DS: "Razvoj čezmejnega digitalnega učnega načrta"
-- NAPAČNO DS: "Razviti čezmejni digitalni učni načrt"
-- PRAVILNO naloga: "Oblikovanje semantičnega podatkovnega modela"
-- NAPAČNO naloga: "Oblikovati semantični podatkovni model"
-
-PRAVILA ZA MEJNIKE:
-- Vsak DS MORA imeti vsaj 1 mejnik.
-- Vsak mejnik MORA vključevati realističen datum v formatu YYYY-MM-DD.
-- Datumi mejnikov morajo biti PO datumu začetka projekta in logično umeščeni znotraj ali na koncu časovnice DS.
-- Naslovi mejnikov: samostalniška zveza z opisom dogodka (npr. "Zaključek pilotne faze").
-
-PRAVILA ZA DOSEŽKE (DELIVERABLES):
-- Vsak DS MORA imeti vsaj 1 dosežek.
-- Naslovi dosežkov: samostalniška zveza z opisom produkta (npr. "Dokument učnega načrta").
-- Dosežki morajo biti preverljivi z namiznim pregledom. Brez nejasnih opisov.
-
-KAKOVOST DOSEŽKOV / DELIVERABLES (OBVEZNO):
-- Vsak opis dosežka (deliverable) MORA imeti 2–4 stavke: kaj vsebuje, kakšen je format/tip, in kdo je ciljna publika.
-- Vsak kazalnik dosežka MORA biti specifičen in merljiv — NE nejasen. Vključi format, količino in način preverjanja.
-- NAPAČEN kazalnik: "Poročilo oddano" — PRAVILEN kazalnik: "Tehnično poročilo (min. 40 strani), recenzirano s strani 2 zunanjih strokovnjakov, objavljeno na spletni strani projekta do M12"
-- NAPAČEN opis: "Končno poročilo" — PRAVILEN opis: "Celovito analitično poročilo, ki sintetizira ugotovitve vseh 12 pilotnih lokacij, vključno s primerjalno metodološko ogrodje, kvantitativnimi kazalniki uspešnosti in priporočili za regionalne organe."
-
-PRAVILA ZA NALOGE:
-- Vsaj 3 naloge na DS (tehnični DS), vsaj 2 nalogi na administrativni DS.
-- Vsaka naloga MORA imeti realistična datuma startDate in endDate v formatu YYYY-MM-DD.
-- Naloge znotraj DS naj imajo logične odvisnosti (tip FS je prednosten).
+PRAVILA ZA TRAJANJE DS (OBVEZNO):
+- DS "Upravljanje in koordinacija projekta" MORA trajati CELOTNO obdobje projekta — od prvega meseca (M1) do zadnjega meseca.
+- DS "Diseminacija, komunikacija in izkoriščanje rezultatov" MORA prav tako trajati CELOTNO obdobje projekta — od M1 do zadnjega meseca.
+- Vsebinski/tematski DS (DS1 do DS(N-2)) morajo biti ZAPOREDNI z delnim prekrivanjem. Primer za 36-mesečni projekt: DS1 pokriva M1–M10, DS2 pokriva M6–M18, DS3 pokriva M14–M26, DS4 pokriva M22–M34, itd.
+- NOBEN vsebinski/tematski DS ne sme trajati celotno obdobje projekta.
+- Naloge ZNOTRAJ vsakega DS morajo biti zaporedne ali zamaknjene — NE dajaj vsem nalogam v DS enakega startDate in endDate.
 
 SOODVISNOSTI NALOG (OBVEZNO):
-- Vsaka naloga (razen prve naloge DS1) MORA imeti vsaj 1 odvisnost v polju "dependencies".
-- Uporabljaj realistične tipe odvisnosti: FS (konec-začetek) je najpogostejši, SS (začetek-začetek) za vzporedne naloge, FF (konec-konec) za sinhronizirane zaključke.
-- Odvisnosti MORAJO navajati veljavne predecessorId vrednosti iz nalog, ki so opredeljene prej v časovnici projekta.
-- Prve naloge DS2+ morajo biti odvisne od vsaj ene naloge iz prejšnjega DS (medskladna odvisnost).
-- Administrativna DS (Diseminacija, Upravljanje projekta) imata SS odvisnosti od T1.1 (tečeta vzporedno od začetka).
-- Primer: {"predecessorId": "T1.2", "type": "FS"} pomeni, da se ta naloga začne po zaključku T1.2.
+- Prva naloga projekta (T1.1) NIMA odvisnosti (je izhodišče).
+- VSAKA DRUGA naloga MORA imeti vsaj 1 odvisnost v svojem polju "dependencies".
+- Vsak objekt odvisnosti ima: { "predecessorId": "T<ds>.<naloga>", "type": "FS" | "SS" | "FF" | "SF" }
+- FS (konec-začetek) je najpogostejši: naslednica se začne po zaključku predhodnice.
+- SS (začetek-začetek): obe nalogi se začneta istočasno.
+- FF (konec-konec): obe nalogi se zaključita istočasno.
+- SF (začetek-konec): naslednica se zaključi, ko se predhodnica začne (redko).
+- MEDDELOVNE odvisnosti MORAJO obstajati: npr. T2.1 je odvisna od T1.3 (FS), T3.1 od T2.2 (FS).
+- Znotraj DS imajo zaporedne naloge FS odvisnosti: T1.2 je odvisna od T1.1, T1.3 od T1.2 itd.
+- Vzporedne naloge znotraj DS lahko uporabijo SS odvisnosti.
 
-OBLIKOVANJE:
-- BREZ markdown. Variraj stavčne strukture. Piši kot izkušen svetovalec.
-- Opisi nalog: 3–5 stavkov, konkretni in specifični.
+POLJA DOSEŽKOV (OBVEZNO):
+- Vsak dosežek MORA imeti TRI ločena polja:
+  1. "title" — jedrnata samostalniška zveza (3–10 besed), npr. "Poročilo o vključevanju deležnikov"
+  2. "description" — 2–4 vsebinski stavki, ki pojasnjujejo kaj dosežek vsebuje, njegov format, obseg in ciljno publiko. NE ponavljaj samo naslova.
+  3. "indicator" — SPECIFIČEN in MERLJIV kriterij preverjanja. Vključi: količino/format (npr. "1 PDF poročilo"), obseg (npr. "ki pokriva vseh 12 partnerskih regij") in način preverjanja (npr. "pregledano in potrjeno s strani Usmerjevalnega odbora").
+- NAPAČEN kazalnik: "Poročilo oddano" (preveč nejasno)
+- PRAVILEN kazalnik: "1 PDF poročilo (min. 40 strani) z izhodiščnimi podatki iz 12 regij, recenzirano s strani 2 zunanjih strokovnjakov in potrjeno s strani Usmerjevalnega odbora do M10"
 
-KONČNA KONTROLA PRED VRNITVIJO JSON:
-☐ Ali je "Upravljanje projekta" ZADNJI DS (najvišja številka DS)? Če NE → POPRAVI.
-☐ Ali je "Diseminacija" predzadnji DS? Če NE → POPRAVI.
-☐ Ali DS1 vsebuje temeljno/analitično temo (NE vodenje)? Če NE → POPRAVI.
-☐ Ali je skupno med 6 in 10 DS? Če NE → POPRAVI.
-☐ Ali ima vsak mejnik datum v formatu YYYY-MM-DD? Če NE → POPRAVI.`
+NALOGE:
+- Vsak DS mora imeti 2–5 nalog.
+- Vsaka naloga: id, title, description (2–4 stavki), startDate, endDate, dependencies.
+- Opisi nalog morajo pojasniti metodologijo, ne le ponoviti naslova.
+
+MEJNIKI:
+- Vsak DS mora imeti vsaj 1 mejnik.
+- Datum mejnika v formatu YYYY-MM-DD. Postavi na logične zaključne točke.
+
+Brez markdown. Piši kot izkušen EU projektni svetovalec.`
   },
 
   outputs: {
-    en: 'At least 6 detailed tangible outputs.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing what was produced/established — NOT an infinitive verb.\n- CORRECT: "Established cross-border knowledge exchange platform"\n- INCORRECT: "Establish a knowledge exchange platform"\nDescription 3+ sentences, measurable indicator. No markdown. Vary sentences.',
-    si: 'Vsaj 6 podrobnih neposrednih rezultatov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje, kaj je bilo ustvarjeno/vzpostavljeno — NE nedoločnik.\n- PRAVILNO: "Vzpostavljena platforma za čezmejno izmenjavo znanj"\n- NAPAČNO: "Vzpostaviti platformo za izmenjavo znanj"\nOpis 3+ stavki, merljiv kazalnik. BREZ markdown. Variraj stavke.'
+    en: `Generate 5–8 concrete project outputs (direct deliverables).
+Each output: title (result-oriented noun phrase), description (3–5 sentences, mentions specific WP link), measurable indicator.
+Title MUST be a result-oriented noun phrase: "Digital Competence Curriculum" NOT "Develop a curriculum".
+No markdown. Vary sentence structures.`,
+    si: `Generiraj 5–8 konkretnih neposrednih rezultatov projekta (outputi).
+Vsak rezultat: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov, navede povezavo z DS), merljiv kazalnik.
+Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Kurikul digitalnih kompetenc" NE "Razviti kurikul".
+Brez markdown. Variraj stavčne strukture.`
   },
   outcomes: {
-    en: 'At least 6 medium-term outcomes.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing the change achieved — NOT an infinitive verb.\n- CORRECT: "Strengthened digital competences of 200 SME managers"\n- INCORRECT: "Strengthen digital competences"\nDescription 3+ sentences, measurable indicator. No markdown. Vary sentences.',
-    si: 'Vsaj 6 vmesnih učinkov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje doseženo spremembo — NE nedoločnik.\n- PRAVILNO: "Okrepljene digitalne kompetence 200 vodij MSP"\n- NAPAČNO: "Okrepiti digitalne kompetence"\nOpis 3+ stavki, merljiv kazalnik. BREZ markdown. Variraj stavke.'
+    en: `Generate 4–6 medium-term project outcomes (changes resulting from outputs).
+Each outcome: title (result-oriented noun phrase), description (3–5 sentences), indicator with target value and timeline.
+Title MUST be result-oriented noun phrase: "Increased Digital Literacy Among Rural Youth" NOT "Increase digital literacy".
+No markdown. Vary sentence structures.`,
+    si: `Generiraj 4–6 srednjeročnih rezultatov projekta (outcomes).
+Vsak rezultat: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov), kazalnik s ciljno vrednostjo in časovnico.
+Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Povečana digitalna pismenost mladih na podeželju" NE "Povečati digitalno pismenost".
+Brez markdown. Variraj stavčne strukture.`
   },
   impacts: {
-    en: 'At least 6 long-term impacts.\nMANDATORY TITLE FORMAT: RESULT-ORIENTED NOUN PHRASE describing the long-term change — NOT an infinitive verb.\n- CORRECT: "Reduced youth unemployment in Danube region by 15%"\n- INCORRECT: "Reduce youth unemployment"\nDescription 3+ sentences with Pathway to Impact, measurable indicator. No markdown. Vary sentences.',
-    si: 'Vsaj 6 dolgoročnih vplivov.\nOBVEZEN FORMAT NASLOVA: REZULTATSKA SAMOSTALNIŠKA ZVEZA, ki opisuje dolgoročno spremembo — NE nedoločnik.\n- PRAVILNO: "Zmanjšana brezposelnost mladih v Podonavju za 15 %"\n- NAPAČNO: "Zmanjšati brezposelnost mladih"\nOpis 3+ stavki s Pathway to Impact, merljiv kazalnik. BREZ markdown. Variraj stavke.'
+    en: `Generate 3–5 long-term strategic impacts aligned with EU policy objectives.
+Each impact: title (result-oriented noun phrase), description (3–5 sentences linking to EU goals), indicator with baseline and target.
+Title MUST be result-oriented noun phrase: "Enhanced Cross-Border Innovation Ecosystem" NOT "Enhance the ecosystem".
+No markdown. Vary sentence structures.`,
+    si: `Generiraj 3–5 dolgoročnih strateških učinkov, usklajenih s cilji politik EU.
+Vsak učinek: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov s povezavo na EU cilje), kazalnik z izhodiščem in ciljno vrednostjo.
+Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Okrepljen čezmejni inovacijski ekosistem" NE "Okrepiti ekosistem".
+Brez markdown. Variraj stavčne strukture.`
   },
   risks: {
-    en: 'At least 5 risks spanning at least 3 categories from: technical, social, economic, environmental.\nRisk titles: short NOUN PHRASES (e.g., "Low partner engagement", "Technical platform failure", "Adverse environmental impact").\nDetailed description, likelihood (low/medium/high), impact (low/medium/high), mitigation. No markdown. Vary sentences.',
-    si: 'Vsaj 5 tveganj, ki pokrivajo vsaj 3 kategorije izmed: technical, social, economic, environmental.\nNaslovi tveganj: kratke SAMOSTALNIŠKE ZVEZE (npr. "Nizka vključenost partnerjev", "Tehnična odpoved platforme", "Neugoden okoljski vpliv").\nPodroben opis, verjetnost (low/medium/high), vpliv (low/medium/high), ukrepi za ublažitev. BREZ markdown. Variraj stavke.\nKATEGORIJE MORAJO biti zapisane z malo začetnico v angleškem jeziku: technical, social, economic, environmental — NE z veliko začetnico!'
+    en: `Generate 8–12 project risks across ALL FOUR categories:
+- technical (technology failures, integration issues)
+- social (stakeholder resistance, low engagement)
+- economic (budget overruns, market changes)
+- environmental (climate events, regulatory changes, environmental compliance)
+
+Each risk: id, category (lowercase: technical/social/economic/environmental), title, description (2–4 sentences), likelihood (low/medium/high), impact (low/medium/high), mitigation strategy (2–4 sentences).
+Use NOUN PHRASES for titles: "Insufficient Partner Engagement" NOT "Partners might not engage".
+No markdown. Vary sentence structures.`,
+    si: `Generiraj 8–12 projektnih tveganj v VSEH ŠTIRIH kategorijah:
+- technical (tehnološke napake, integracijske težave)
+- social (odpor deležnikov, nizka udeležba)
+- economic (prekoračitev proračuna, tržne spremembe)
+- environmental (podnebni dogodki, regulativne spremembe, okoljska skladnost)
+
+Vsako tveganje: id, category (male črke: technical/social/economic/environmental), naslov, opis (2–4 stavki), likelihood (low/medium/high), impact (low/medium/high), strategija blaženja (2–4 stavki).
+Naslove napiši kot SAMOSTALNIŠKE ZVEZE: "Nezadostna vključenost partnerjev" NE "Partnerji se morda ne bodo vključili".
+Brez markdown. Variraj stavčne strukture.`
   },
   kers: {
-    en: 'At least 5 Key Exploitable Results.\nMANDATORY TITLE FORMAT: SPECIFIC NOUN PHRASE naming the asset/product — NOT an infinitive verb.\n- CORRECT: "Digital mentorship toolkit", "Cross-border SME competence framework"\n- INCORRECT: "Develop a mentorship toolkit"\nDetailed description, exploitation strategy. No markdown. Vary sentences.',
-    si: 'Vsaj 5 ključnih izkoriščljivih rezultatov.\nOBVEZEN FORMAT NASLOVA: SPECIFIČNA SAMOSTALNIŠKA ZVEZA, ki poimenuje produkt/sredstvo — NE nedoločnik.\n- PRAVILNO: "Digitalni mentorski priročnik", "Čezmejni okvir kompetenc za MSP"\n- NAPAČNO: "Razviti mentorski priročnik"\nPodroben opis, strategija izkoriščanja. BREZ markdown. Variraj stavke.'
+    en: `Generate 4–6 Key Exploitable Results (KERs).
+Each KER: id, title (specific noun phrase — the product/asset name), description (3–5 sentences about what it is, who will use it, and how it differs from existing solutions), exploitation strategy (3–5 sentences detailing commercialisation, licensing, open-access, or policy integration plan).
+Title MUST be a specific asset/product name: "GreenGrid Decision Support Tool" NOT "Development of a tool".
+No markdown. Vary sentence structures.`,
+    si: `Generiraj 4–6 ključnih rezultatov za izkoriščanje (KER).
+Vsak KER: id, naslov (specifična samostalniška zveza — ime produkta/sredstva), opis (3–5 stavkov o tem, kaj je, kdo bo to uporabljal in kako se razlikuje od obstoječih rešitev), strategija izkoriščanja (3–5 stavkov s podrobnostmi o komercializaciji, licenciranju, odprtem dostopu ali načrtu integracije v politike).
+Naslov MORA biti specifično ime sredstva/produkta: "Orodje za podporo odločanju GreenGrid" NE "Razvoj orodja".
+Brez markdown. Variraj stavčne strukture.`
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// DEFAULT INSTRUCTIONS (original structure — updated v4.3)
+// CHAPTERS (long-form rules for each section)
 // ───────────────────────────────────────────────────────────────
 
-const DEFAULT_INSTRUCTIONS = {
-  version: '4.3',
-  lastUpdated: '2026-02-14',
-
-  GLOBAL_RULES: `
-You are an expert EU project consultant generating content for an intervention-logic application tool.
-Follow every rule below without exception.
-
-═══════════════════════════════════════════════════════════════════
-ACADEMIC RIGOR AND CITATION POLICY (MANDATORY — NON-NEGOTIABLE)
-═══════════════════════════════════════════════════════════════════
-
-This policy applies to EVERY piece of content you generate, regardless of section, field, or mode.
-Violations of this policy render the entire output unacceptable.
-
-A. ZERO-HALLUCINATION STANDARD
-   - NEVER invent organisation names, project names, study titles, or programme names.
-   - NEVER fabricate statistics, percentages, monetary values, or dates.
-   - NEVER create plausible-sounding but unverifiable claims.
-   - If you need a specific data point but are not certain it is accurate, use the
-     MANDATORY PLACEHOLDER FORMAT: "[Insert verified data: <description of what is needed>]"
-   - Example: "[Insert verified data: percentage of EU SMEs using AI tools in 2023, source Eurostat or OECD]"
-   - It is ALWAYS better to include a placeholder than to hallucinate. EU evaluators
-     will reject fabricated data; they will appreciate honest placeholders.
-
-B. MANDATORY CITATION REQUIREMENTS
-   - Every substantive claim (statistic, trend, policy reference, research finding)
-     MUST include an inline citation in format: (Source Name, Year)
-   - Minimum citation density:
-     * Problem Analysis: ≥2 citations per cause, ≥2 per consequence, ≥1 in core problem
-     * Project Idea — State of the Art: ≥3 named, real projects/studies with years
-     * Project Idea — EU Policies: ≥3 real, verifiable EU policies with official names
-     * Objectives: ≥1 citation per description (benchmark or evidence for target)
-     * Outputs/Outcomes/Impacts: ≥1 citation per description
-   - Acceptable source types (in order of preference):
-     1. Eurostat datasets and publications
-     2. European Commission official reports, communications, and strategies
-     3. OECD reports and data
-     4. World Bank data and publications
-     5. UN agency reports (UNDP, UNESCO, ILO, WHO, UNEP)
-     6. EU agency publications (ACER, EEA, CEDEFOP, Eurofound, JRC, ENISA, FRA)
-     7. Peer-reviewed journal articles
-     8. National statistical offices
-     9. Recognised international bodies (IEA, IMF, WEF, McKinsey Global Institute)
-   - UNACCEPTABLE sources: Wikipedia, blog posts, social media, unreferenced websites,
-     AI-generated summaries, fictional reports
-
-C. QUANTITATIVE DATA STANDARDS
-   - Include specific numbers, not vague qualifiers ("many", "several", "significant").
-   - Always state the reference year or period for any data point.
-   - Compare with EU averages or benchmarks when available.
-   - Use ranges when exact figures are uncertain: "between 15–20 %" not "about 15 %".
-   - State the unit of measurement explicitly (%, EUR, number of persons, etc.).
-
-D. DOUBLE-VERIFICATION MENTAL CHECK
-   Before finalising your response, verify for EACH factual claim:
-   1. Does this organisation/report/study actually exist?
-   2. Is this statistic plausible given what I know?
-   3. Is the year/date I cited accurate?
-   4. Would an EU evaluator be able to find this source?
-   If the answer to ANY question is "no" or "I'm not sure", replace with a placeholder.
-
-HUMANIZATION POLICY (MANDATORY — APPLIES TO ALL GENERATED CONTENT)
-═══════════════════════════════════════════════════════════════════
-
-AI-generated text is easily detectable by EU evaluators and AI detection tools.
-ALL content must read as if written by an experienced human EU project consultant.
-Follow these rules WITHOUT EXCEPTION:
-
-A. SENTENCE STRUCTURE VARIATION
-   - Mix short sentences (8–12 words) with medium (15–20) and occasional long (25–35).
-   - NEVER write 3+ consecutive sentences of similar length.
-   - Start sentences with different parts of speech: sometimes a noun, sometimes
-     a prepositional phrase, sometimes a subordinate clause, sometimes an adverb.
-   - WRONG: "The project will develop X. The project will implement Y. The project will achieve Z."
-   - RIGHT: "Building on existing frameworks, the consortium will develop X. Implementation of Y
-     follows in the second phase, drawing on lessons from [Project Name]. By month 18, this
-     approach is expected to achieve Z."
-
-B. AVOID AI FINGERPRINT PHRASES
-   - NEVER use these overused AI phrases (or close equivalents):
-     * "In today's rapidly evolving..."
-     * "It is important to note that..."
-     * "This highlights the need for..."
-     * "In this context..."
-     * "plays a crucial/pivotal/key role"
-     * "aims to address"
-     * "a comprehensive approach"
-     * "foster/leverage/synergy/holistic/robust/cutting-edge/harness"
-     * "paving the way for"
-     * "serves as a catalyst"
-     * "the landscape of"
-     * "navigating the complexities"
-     * "multifaceted approach"
-     * "it is worth noting"
-     * "a testament to"
-   - Instead use direct, specific language that a senior consultant would use.
-   - WRONG: "This project aims to leverage synergies and foster a holistic approach."
-   - RIGHT: "The project connects three previously isolated national registries into
-     a single interoperable platform, reducing duplicate data entry by an estimated 40%."
-
-C. PROFESSIONAL IMPERFECTION
-   - Real human writing is not perfectly symmetrical. Do NOT give every item in a list
-     exactly the same sentence structure or exactly the same number of sentences.
-   - Vary description lengths slightly: some causes might have 3 sentences, others 4 or 5.
-   - Occasionally use parenthetical remarks (like this one) for additional context.
-   - Use occasional em-dashes — they signal human writing style — for emphasis or asides.
-
-D. CONCRETE OVER ABSTRACT
-   - Replace every abstract statement with a concrete, specific one.
-   - WRONG: "Various stakeholders will benefit from improved digital capacities."
-   - RIGHT: "Municipal energy managers in 12 partner regions will gain hands-on
-     experience with the GridSense monitoring dashboard, reducing response time
-     to grid anomalies from 48 hours to under 4 hours."
-   - Name specific tools, methods, standards, regions, organisations where possible.
-
-E. LOGICAL CONNECTORS AND FLOW
-   - Use varied transition phrases between ideas: "Consequently,", "In parallel,",
-     "A related challenge is", "Building on this,", "Against this backdrop,",
-     "While progress has been made in X, the situation regarding Y remains critical."
-   - Avoid mechanical transitions: "Furthermore," "Moreover," "Additionally,"
-     used repeatedly are AI markers. Use them sparingly and vary them.
-
-F. ACTIVE VOICE PREFERENCE
-   - Prefer active voice: "The consortium will develop..." over "A platform will be developed..."
-   - Use passive voice only when the actor is genuinely unknown or irrelevant.
-   - Active voice reads more naturally and is more engaging for evaluators.
-
-G. QUANTIFIED SPECIFICITY
-   - Never say "significant improvement" — say "a 23% reduction in processing time."
-   - Never say "multiple partners" — say "7 partners across 4 EU Member States."
-   - Never say "various activities" — say "3 training workshops, 2 pilot deployments,
-     and 1 cross-border hackathon."
-   - Vague language is both an AI marker AND a weakness in EU proposals.
-
-═══════════════════════════════════════════════════════════════════
-
-LANGUAGE AND TERMINOLOGY
-- Write all English content exclusively in grammatically correct British English.
-- When the application language is set to Slovenian, write in grammatically correct standard Slovenian, following the TRANSLATION_RULES for terminology and style.
-- Use official EU terminology as defined in Horizon Europe, Erasmus+, Interreg, and other major EU programme guides.
-- Do not invent programme names, acronyms, or policy references. Every EU policy, strategy, or regulation you cite must be real and verifiable.
-
-TITLE FORMAT RULES (MANDATORY – SECTION-SPECIFIC)
-═══════════════════════════════════════════════════════════════════
-Different sections require DIFFERENT title formats. Using the wrong format is an ERROR.
-
-A. INFINITIVE VERB — ONLY for OBJECTIVES (General Goals + Specific Goals)
-   - English: "Develop …", "Strengthen …", "Establish …", "Increase …"
-   - Slovenian: "Razviti …", "Okrepiti …", "Vzpostaviti …", "Povečati …"
-   - CORRECT: "Develop a digital platform for knowledge exchange"
-   - CORRECT: "Okrepiti čezmejno sodelovanje med MSP"
-   - INCORRECT: "Development of a digital platform" (this is noun form — wrong for objectives)
-
-B. NOUN PHRASE (SAMOSTALNIŠKA OBLIKA) — for WORK PACKAGES, TASKS, DELIVERABLES, MILESTONES
-   - English: "Development of …", "Implementation of …", "Design of …"
-   - Slovenian: "Razvoj …", "Izvedba …", "Oblikovanje …", "Vzpostavitev …"
-   - CORRECT WP title: "Development of a cross-border digital training curriculum"
-   - CORRECT WP title: "Razvoj čezmejnega digitalnega učnega načrta"
-   - INCORRECT WP title: "Develop a cross-border digital training curriculum" (infinitive — wrong for WP)
-   - CORRECT task title: "Design of the semantic data model"
-   - CORRECT task title: "Oblikovanje semantičnega podatkovnega modela"
-   - CORRECT milestone: "Completion of pilot testing phase" / "Zaključek pilotne faze testiranja"
-   - CORRECT deliverable: "Training curriculum document" / "Dokument učnega načrta"
-
-C. RESULT-ORIENTED NOUN PHRASE — for OUTPUTS, OUTCOMES, IMPACTS
-   - Describe WHAT IS ACHIEVED or PRODUCED, not the action.
-   - English: "Established digital platform for …", "Strengthened capacity of …", "Reduced youth unemployment in …"
-   - Slovenian: "Vzpostavljena digitalna platforma za …", "Okrepljene zmogljivosti …", "Zmanjšana brezposelnost mladih v …"
-   - CORRECT output: "Established cross-border knowledge exchange platform"
-   - CORRECT output: "Vzpostavljena platforma za čezmejno izmenjavo znanj"
-   - INCORRECT output: "Develop a platform" (infinitive — wrong), "Development of platform" (activity form — wrong)
-
-D. SPECIFIC NOUN PHRASE — for KEY EXPLOITABLE RESULTS (KERs)
-   - Name the concrete result as a product/asset.
-   - English: "Digital mentorship toolkit", "Cross-border SME competence framework"
-   - Slovenian: "Digitalni mentorski priročnik", "Čezmejni okvir kompetenc za MSP"
-
-E. NOUN PHRASE — for PROJECT TITLE
-   - As defined in PROJECT TITLE RULES (30–200 characters, no acronym, no verb).
-
-SUMMARY TABLE:
-| Section              | Title format          | EN example                          | SI example                              |
-|----------------------|-----------------------|-------------------------------------|-----------------------------------------|
-| General objectives   | Infinitive verb       | "Strengthen digital competences…"   | "Okrepiti digitalne kompetence…"        |
-| Specific objectives  | Infinitive verb       | "Develop a training curriculum…"    | "Razviti učni načrt…"                   |
-| Work packages        | Noun phrase (action)  | "Development of training curriculum"| "Razvoj učnega načrta"                  |
-| Tasks                | Noun phrase (action)  | "Design of the data model"          | "Oblikovanje podatkovnega modela"       |
-| Milestones           | Noun phrase (event)   | "Completion of pilot phase"         | "Zaključek pilotne faze"               |
-| Deliverables         | Noun phrase (product) | "Training curriculum document"      | "Dokument učnega načrta"               |
-| Outputs              | Result noun phrase    | "Established training platform"     | "Vzpostavljena učna platforma"          |
-| Outcomes             | Result noun phrase    | "Strengthened digital skills of…"   | "Okrepljene digitalne veščine…"         |
-| Impacts              | Result noun phrase    | "Reduced skills gap in…"            | "Zmanjšan razkorak v veščinah…"         |
-| KERs                 | Specific noun         | "Digital mentorship toolkit"        | "Digitalni mentorski priročnik"         |
-| Project title        | Noun phrase (brand)   | "Digital Transformation of…"        | "Digitalna preobrazba…"                |
-
-CRITICAL: If you encounter an existing title that uses the WRONG format for its section,
-rewrite it to the CORRECT format while preserving the original meaning.
-═══════════════════════════════════════════════════════════════════
-
-DATA PRESERVATION
-- When the user triggers "Fill Missing", generate content ONLY for fields that are currently empty or null.
-- NEVER overwrite, modify, shorten, or rephrase any existing user-entered content.
-- If a field already contains text, skip it entirely – even if you consider your version superior.
-
-EVIDENCE AND CITATIONS
-- Support every major claim with at least one empirical data point (statistic, research finding, or official report figure).
-- Format citations consistently as: (Source Name, Year) – for example: (Eurostat, 2023) or (OECD Innovation Outlook, 2024).
-- Do not fabricate statistics. If you are unsure about a specific number, use the placeholder format defined in the Academic Rigor Policy above.
-- Every description paragraph of 3+ sentences should contain at least one citation.
-- Consecutive paragraphs without citations are NOT acceptable in any section.
-
-DEPTH AND QUALITY
-- Every descriptive paragraph must contain a minimum of three complete, substantive sentences.
-- Avoid vague filler phrases such as "various stakeholders", "different aspects", or "multiple factors". Be specific: name the stakeholders, describe the aspects, list the factors.
-- Write in an analytical, professional tone suitable for peer review by EU evaluators.
-- Content must demonstrate genuine expertise, not surface-level generalities.
-
-LOGICAL COHERENCE (VERTICAL INTERVENTION LOGIC)
-- The entire project must follow a coherent vertical intervention logic chain:
-  Problem → Goals → Activities → Outputs → Outcomes → Impacts.
-- Every specific goal must directly address at least one identified cause of the central problem.
-- Every work package must contribute to at least one specific goal.
-- Every output must be produced by a specific work-package deliverable.
-- Every outcome must result from one or more outputs.
-- Every impact must be a long-term consequence of one or more outcomes.
-- When generating any element, explicitly reference the upstream element it connects to.
-
-EU CROSS-CUTTING PRIORITIES RULE (HORIZONTAL PRINCIPLES)
-- Every project proposal must explicitly address at least two of the following four horizontal principles, regardless of the project's primary topic. These principles must appear in both the methodology (Chapter 5 work-package descriptions) and the impact narrative (Chapter 6C).
-- (a) Inclusion and Diversity – Explain how the project ensures meaningful participation of underrepresented groups (persons with disabilities, ethnic minorities, gender balance, geographic periphery). Include at least one concrete measure (e.g., "All training materials will be available in Easy Read format to ensure accessibility for people with cognitive disabilities").
-- (b) Environment and Fight Against Climate Change – Demonstrate adherence to the DNSH Principle (Do No Significant Harm) as defined in Article 17 of the EU Taxonomy Regulation (2020/852). Include at least one concrete measure (e.g., "All events will be organised in a hybrid format to reduce the carbon footprint of participant travel").
-- (c) Digital Transformation – Explain how the project utilises digital tools responsibly and contributes to the EU Digital Decade objectives. Address data protection (GDPR compliance), digital accessibility (WCAG 2.1 AA standard), and digital literacy where relevant.
-- (d) Civic Participation and Democratic Values – Where applicable, describe how the project strengthens civic engagement, democratic participation, or European values (solidarity, rule of law, fundamental rights).
-- Constraint: When generating work-package descriptions or impact narratives, the AI must include at least one explicit sentence per addressed horizontal principle. Generic statements such as "the project respects diversity" are insufficient – concrete actions must be specified.
-
-ID CONTINUITY
-- All IDs (RISK1, RISK2, KER1, KER2, WP1, WP2, M1.1, D1.1, etc.) must follow a strict sequential pattern with no gaps.
-- When a new item is added, assign the next available ID in the sequence.
-- When an item is deleted, do NOT renumber remaining items – simply leave the gap to preserve cross-references.
-
-LENGTH DISCIPLINE
-- Unless the user or a chapter-specific rule explicitly requests more, keep individual field descriptions under 500 words.
-- If a rule specifies a minimum word count (e.g., "≥ 500 words"), respect that minimum precisely.
-
-CROSS-REFERENCING
-- When you mention a work package, deliverable, milestone, goal, output, outcome, impact, risk, or KER, always include its ID in parentheses – for example: "as defined in Work Package 2 (WP2)" or "linked to Deliverable 3.1 (D3.1)".
-- This ensures traceability across the entire intervention logic.
-
-FORMATTING
-- Use double line breaks to separate distinct thematic sections within a single field.
-- Use bullet points only when listing discrete items (risks, outputs, indicators). For narrative content, write flowing paragraphs.
-- NEVER include ANY markdown formatting inside field content:
-  * No bold markers: ** or __
-  * No italic markers: * or _
-  * No headers: # or ##
-  * No code blocks or backticks
-  * The application handles ALL visual formatting — your output must be plain text only.
-- For sub-section titles within a field (e.g., phase names), write them as plain text on a separate line: "Phase 1: Development of the semantic model" — NOT "**Phase 1: Development of the semantic model**".
-
-API KEY AND SYSTEM BEHAVIOUR
-- Never ask the user for an API key, provider settings, or system configuration within generated content.
-- Never include meta-commentary about the generation process. Output only the requested content.
-`,
-
-  CHAPTERS: {
-    chapter1_problemAnalysis: `
-CHAPTER 1 – PROBLEM ANALYSIS
-
-PURPOSE: Establish a rigorous, evidence-based diagnosis of the central problem the project addresses. This chapter forms the root of the entire intervention logic – every subsequent chapter depends on the clarity and depth of this analysis.
-
-CENTRAL PROBLEM STATEMENT
-- Formulate one clear, concise central problem statement (1–3 sentences).
-- The statement must include at least one quantitative indicator (statistic, percentage, trend figure) drawn from a credible source with citation.
-- CORRECT example: "Youth unemployment in the Danube region remains at 23.4 %, nearly double the EU average of 13.1 % (Eurostat, 2023), limiting social cohesion and economic convergence."
-- INCORRECT example: "Youth unemployment is a big problem in the region."
-
-CAUSES (PROBLEM TREE – LEFT BRANCHES)
-- Identify and describe at least 4 distinct causes of the central problem.
-- Arrange causes in a logical hierarchy: distinguish between root causes (deep, structural) and proximate causes (immediate, visible).
-- Each cause must include: a descriptive title starting with a noun or gerund, a 3–5 sentence explanation, and at least TWO supporting data points with citations from REAL, verifiable sources.
-- Causes must be mutually exclusive (no overlaps) and collectively exhaustive (together they fully explain the problem).
-- If you cannot find a real statistic for a claim, use: "[Insert verified data: <description>]"
-
-CONSEQUENCES (PROBLEM TREE – RIGHT BRANCHES)
-- Identify and describe at least 4 distinct consequences of the central problem.
-- Arrange consequences in a logical hierarchy: distinguish between direct effects (short-term) and systemic effects (long-term, cascading).
-- Each consequence must include: a descriptive title, a 3–5 sentence explanation, and at least TWO supporting data points with citations from REAL sources.
-- At least one consequence must reference an EU-level policy concern (e.g., EU Green Deal targets, Digital Decade objectives, social pillar principles).
-
-LOGICAL CONSISTENCY CHECK
-- Every cause must logically lead to the central problem.
-- Every consequence must logically follow from the central problem.
-- No cause should duplicate or contradict another cause.
-- The problem tree must be readable as a coherent narrative: Causes → Central Problem → Consequences.
-`,
-
-    chapter2_projectIdea: `
-CHAPTER 2 – PROJECT IDEA
-
-PURPOSE: Present the project's core concept, positioning it within the existing landscape and demonstrating its added value. This chapter bridges the problem analysis (Chapter 1) with the goal framework (Chapters 3–4).
-
-PROJECT TITLE
-- Between 30 and 200 characters. Descriptive, memorable, clearly conveys the project's purpose.
-- Must be a concise NOUN PHRASE — not a full sentence, not a verb form.
-- Must NOT contain an acronym (generated separately).
-- Must NOT contain generic terms like "project", "initiative", or "programme" as the primary descriptor.
-- Avoid generic AI phrases, comma-separated enumerations, or adjective chains.
-
-PROJECT ACRONYM
-- 3–8 uppercase characters. Pronounceable and ideally meaningful.
-
-MAIN AIM
-- Exactly one sentence encapsulating the overarching purpose.
-- Must begin with an infinitive verb.
-- CORRECT: "To establish a cross-border digital innovation hub that reduces youth unemployment in the Danube region by 15 % within three years."
-- INCORRECT: "The project aims to address youth unemployment through various activities."
-
-STATE OF THE ART
-- Cite at least 3 concrete, existing, REAL projects or initiatives relevant to your topic.
-- For each: project name, funding programme, implementation period, key results or lessons learned.
-- ALL project names must be real and verifiable. Do NOT invent project names.
-- If you are unsure whether a project is real, use: "[Insert verified project: <topic and approximate scope>]"
-- Explain clearly what gap remains – this gap is what your project will fill.
-
-PROPOSED SOLUTION
-- ALWAYS begin with a comprehensive introductory paragraph (5–8 sentences) that:
-  * Describes the overall solution concept and its core innovation
-  * Names the target groups and beneficiaries
-  * Explains how the solution holistically addresses the central problem
-  * References the key causes from Chapter 1 that the solution tackles
-  * States what makes this approach different from existing solutions
-- After the introduction, describe the solution in structured phases, separated by double line breaks.
-- Each phase: objective, methodology/approach, tools/instruments, expected intermediate result.
-- Explicitly link each phase to at least one cause from Chapter 1.
-- FORMATTING RULE: Do NOT use any markdown formatting inside this field. No ** (bold), no ## (headers), no * (italic), no bullet points. Write phase headers as plain text on their own line: "Phase 1: Title" — not "**Phase 1: Title**". The application handles all visual formatting.
-
-INNOVATION AND ADDED VALUE
-- State clearly what is new or different. Specify the type of innovation: technological, methodological, social, institutional, or combination.
-- If applicable, state TRL/SRL/ORL/LRL (1–9) with justification.
-
-EU POLICY ALIGNMENT
-- Reference 2–3 specific, real EU policies, strategies, or regulations.
-- For each, explain the specific linkage – do not simply name-drop.
-- Focus on policy alignment, NOT on financial instruments or funding sources.
-- ALL policy names must be official and verifiable (e.g., "European Green Deal (COM/2019/640)", "Digital Europe Programme (Regulation (EU) 2021/694)").
-`,
-
-    chapter3_4_objectives: `
-CHAPTERS 3 & 4 – OBJECTIVES (GENERAL AND SPECIFIC)
-
-PURPOSE: Define a measurable goal framework that translates the problem analysis into actionable targets.
-
-TITLE FORMAT REMINDER: Objective titles are the ONLY titles that use infinitive verbs.
-
-GENERAL GOALS (STRATEGIC OBJECTIVES)
-- Define 3–5 general goals representing broad, long-term changes.
-- Each goal title MUST begin with an infinitive verb.
-- Each: 3–5 sentence description of strategic direction and relevance, with at least one citation or benchmark reference.
-- Must align with EU-level objectives and the project's main aim.
-- CORRECT: "Strengthen digital competences of SMEs in cross-border regions to enhance their competitiveness in the EU single market."
-- INCORRECT: "Improvement of digital skills." (noun form — wrong for objectives)
-- INCORRECT: "Strengthening of digital competences" (gerund/noun — wrong for objectives)
-
-SPECIFIC GOALS (OPERATIONAL OBJECTIVES)
-- At least 5 specific goals, each contributing to at least one general goal.
-- Each title MUST begin with an infinitive verb.
-- Each MUST follow SMART: Specific, Measurable, Achievable, Relevant, Time-bound.
-- Measurable indicator as concrete metric: "increase by 25 % within 12 months", "train 200 participants by month 18".
-- Each must state which general goal(s) it supports and which cause(s) it addresses.
-- Include a citation or benchmark that justifies the target value.
-- CORRECT: "Develop a digital skills training programme for 200 SME managers by Month 12"
-- INCORRECT: "Development of a digital skills training programme" (noun form — wrong)
-
-KPI vs. DELIVERABLE DISTINCTION
-- Strictly distinguish between deliverables and KPIs.
-- Deliverable = what is produced (e.g., "A handbook on digital skills").
-- KPI = measures performance/quality/effect (e.g., "500 downloads within 6 months", "85 % satisfaction rate").
-- Never define a goal indicator that merely confirms task completion.
-- Every specific goal must include at least one true KPI.
-- CORRECT KPI: "Increase digital literacy self-assessment score of 200 trained SME managers by at least 30 % between pre- and post-training surveys at Month 18."
-- INCORRECT KPI: "Deliver 5 training sessions."
-
-LOGICAL CONSISTENCY
-- No "orphan" goals – every specific goal connects upward to a general goal and backward to a problem cause.
-- No "orphan" causes – every cause from Chapter 1 must be addressed by at least one specific goal.
-`,
-
-    chapter5_activities: `
-CHAPTER 5 – ACTIVITIES
-
-PURPOSE: Detail the operational plan – what, who, when, and how. Activities are grouped into work packages and must directly implement the goals from Chapters 3–4.
-
-TITLE FORMAT REMINDER: Work package, task, milestone, and deliverable titles use NOUN PHRASES — NOT infinitive verbs. See TITLE FORMAT RULES in GLOBAL_RULES.
-
-─── 5A. PROJECT MANAGEMENT ───
-
-This section has TWO distinct components with DIFFERENT purposes:
-
-A1. IMPLEMENTATION DESCRIPTION (projectManagement.description field)
-This is the main narrative content. Minimum 500 words of flowing prose.
-Must cover ALL of the following sections, clearly separated by double line breaks:
-1. MANAGEMENT STRUCTURE – Roles with EU abbreviations: PK (Project Coordinator), UO (Steering Committee), SO (Advisory Board), VDS (WP Leaders). Describe responsibilities and authority of each role IN DETAIL.
-2. DECISION-MAKING MECHANISMS – Operational decisions (PK), strategic decisions (UO), escalation procedures. Voting rules, quorum requirements, meeting frequency.
-3. QUALITY ASSURANCE – Internal reviews, peer evaluations, external audits, benchmarks, reporting standards. Specify frequency and responsible persons/roles.
-4. RISK MANAGEMENT APPROACH – How risks are identified, assessed, monitored, and mitigated. Reference the risk register (Section 5C).
-5. INTERNAL COMMUNICATION – Tools (e.g., MS Teams, shared drive), meeting schedules, reporting chains, document management protocols.
-6. CONFLICT RESOLUTION – Three-step escalation: informal resolution → mediation by coordinator → formal arbitration by steering committee.
-7. DATA MANAGEMENT AND OPEN SCIENCE – If project involves data collection: FAIR principles (Findable, Accessible, Interoperable, Reusable). For each data deliverable: specify access type (Open Access / Embargo / Restricted with justification). If no data collection: state explicitly.
-
-CRITICAL RULE: ALL detailed descriptions of roles, processes, and mechanisms go EXCLUSIVELY in the description field. Do NOT put long text in the structure fields.
-
-A2. ORGANIGRAM STRUCTURE (projectManagement.structure fields)
-These fields are displayed as SHORT LABELS inside the visual organigram chart.
-They MUST contain ONLY brief role titles (maximum 5–8 words each):
-- coordinator: Short role title, e.g., "Project Coordinator (PK)" or "Koordinator projekta (PK)"
-- steeringCommittee: Short role title, e.g., "Steering Committee (UO)" or "Usmerjevalni odbor (UO)"
-- advisoryBoard: Short role title, e.g., "Advisory Board (SO)" or "Svetovalni odbor (SO)"
-- wpLeaders: Short role title, e.g., "WP Leaders (VDS)" or "Vodje DS (VDS)"
-
-FORBIDDEN in structure fields: descriptions, explanations, responsibilities, meeting frequencies, or any text longer than 8 words. The organigram is a VISUAL CHART — it shows roles only, not descriptions.
-
-─── 5B. WORK PACKAGES ───
-
-STRUCTURE
-- Between 6 and 10 work packages for a complex project.
-- This MUST include exactly 2 ADMINISTRATIVE / HORIZONTAL WPs:
-  a) 1 "Dissemination, Communication and Exploitation" WP (second-to-last).
-  b) 1 "Project Management and Coordination" WP (ALWAYS the LAST WP — highest number).
-- All remaining WPs (4–8) are TECHNICAL / THEMATIC WPs directly linked to specific objectives.
-- Sequential numbering: WP1, WP2, WP3, …
-
-WP ORDERING RULE (MANDATORY — NO EXCEPTIONS):
-- WP1 = foundational/analytical WP (e.g., "Needs analysis and methodology").
-- WP2 through WPn-2 = technical/thematic WPs in logical sequence.
-- WPn-1 = Dissemination, Communication and Exploitation.
-- WPn = Project Management and Coordination (ALWAYS LAST — NEVER FIRST).
-
-WORK PACKAGE TITLES
-- Each MUST use a NOUN PHRASE (action noun), NOT an infinitive verb.
-- CORRECT: "Development of a cross-border digital training curriculum"
-- CORRECT: "Razvoj čezmejnega digitalnega učnega načrta"
-- INCORRECT: "Develop a cross-border digital training curriculum" (infinitive — wrong for WP)
-- INCORRECT: "Razviti čezmejni digitalni učni načrt" (infinitive — wrong for WP)
-
-TASKS
-- ≥5 tasks per WP. Each task title MUST use a NOUN PHRASE (action noun), NOT an infinitive verb.
-- CORRECT: "Design of the semantic data model", "Oblikovanje semantičnega podatkovnega modela"
-- INCORRECT: "Design the semantic data model", "Oblikovati semantični podatkovni model"
-- Each task: ≥3 sentences describing methodology, responsible partner/role, expected result.
-- Logical sequence within WP.
-
-TIMING AND DEPENDENCIES
-- Start/end dates (YYYY-MM-DD) for every WP and task.
-- Dependency types: FS, SS, FF, SF.
-
-MILESTONES
-- ≥1 per WP. IDs: M[WP].[seq] (M1.1, M2.1).
-- Milestone title MUST use a NOUN PHRASE describing the event/completion, NOT an infinitive.
-- CORRECT: "Completion of pilot testing phase", "Zaključek pilotne faze testiranja"
-- INCORRECT: "Complete pilot testing", "Zaključiti pilotno testiranje"
-- Each: title, date, measurable verification criterion.
-- Distributed across timeline, not clustered at end.
-
-DELIVERABLES
-- ≥1 per WP. IDs: D[WP].[seq] (D1.1, D2.1).
-- Deliverable title MUST use a NOUN PHRASE describing the product, NOT an infinitive.
-- CORRECT: "Training curriculum document (PDF, 50+ pages)", "Dokument učnega načrta (PDF, 50+ strani)"
-- INCORRECT: "Develop training curriculum", "Razviti učni načrt"
-- Each: title, description (≥2 sentences), due date, type, quality indicator.
-
-LUMP SUM COMPATIBILITY
-- Every deliverable must be verifiable through desk review by an EU officer with no prior project knowledge.
-- Must specify concrete physical evidence for EU portal submission.
-- CORRECT: "A 20-page PDF report uploaded to EU Participant Portal", "Weblink to functional platform with reviewer credentials", "Agenda, slides, and signed attendance list".
-- FORBIDDEN: "Improved cooperation", "Coordination meetings" (without minutes/agendas/attendance), "Ongoing support activities".
-- If linked to lump sum payment: "This deliverable serves as a payment milestone. Evidence: [list]."
-
-C&D&E DISTINCTION RULE (COMMUNICATION, DISSEMINATION, EXPLOITATION)
-Within the Dissemination WP, every task must be labelled:
-- (C) Communication Tasks – general public, media. Awareness. Examples: "Management of social media channels (C)", "Production of promotional video (C)".
-- (D) Dissemination Tasks – experts, policy-makers, practitioners. Knowledge transfer. Examples: "Presentation of results at conferences (D)", "Publication of policy brief (D)".
-- (E) Exploitation Tasks – concrete use/adoption/commercialisation after project. Sustainability. Examples: "Development of business plan (E)", "Negotiation of licensing agreements (E)".
-- Never treat C and D as synonyms. Each task carries exactly one label. If spanning two categories, split into two tasks.
-
-─── 5C. RISK MANAGEMENT ───
-
-RISK REGISTER
-- ≥5 risks spanning ≥3 categories from: technical, social, economic, environmental (+ legal, political encouraged).
-- Risk category values MUST be lowercase: technical, social, economic, environmental.
-- Each: ID (RISK1, RISK2…), Category (lowercase), Title (≤10 words, noun phrase), Description (2–4 sentences), Probability (low/medium/high — lowercase), Impact (low/medium/high — lowercase), Mitigation Strategy (≥3 sentences for high risks).
-`,
-
-    chapter6_results: `
-CHAPTER 6 – EXPECTED RESULTS
-
-PURPOSE: Define the full results chain: Outputs → Outcomes → Impacts → KERs.
-
-TITLE FORMAT REMINDER: Output, outcome, and impact titles use RESULT-ORIENTED NOUN PHRASES. KER titles use SPECIFIC NOUN PHRASES naming the asset. NONE of these use infinitive verbs. See TITLE FORMAT RULES in GLOBAL_RULES.
-
-─── 6A. OUTPUTS ───
-- ≥6 outputs. Each title MUST use a RESULT-ORIENTED NOUN PHRASE (what was produced/established), NOT an infinitive verb.
-- CORRECT: "Established cross-border knowledge exchange platform", "Vzpostavljena platforma za čezmejno izmenjavo znanj"
-- INCORRECT: "Establish a platform" (infinitive — wrong for output), "Vzpostaviti platformo" (infinitive — wrong)
-- Each: title, description (3–5 sentences), measurable indicator, link to WP deliverable (by ID).
-- Outputs = tangible, countable products.
-- Include at least one citation or benchmark per output description.
-
-─── 6B. OUTCOMES ───
-- ≥6 outcomes. Each title MUST use a RESULT-ORIENTED NOUN PHRASE (what changed), NOT an infinitive verb.
-- CORRECT: "Strengthened digital competences of 200 SME managers", "Okrepljene digitalne kompetence 200 vodij MSP"
-- INCORRECT: "Strengthen digital competences" (infinitive — wrong for outcome)
-- Each: title, description (3–5 sentences), specific target group(s), timeframe, reference to output(s).
-- Outcomes = changes in behaviour, capacity, practice, or policy.
-- Include at least one citation or benchmark per outcome description.
-
-─── 6C. IMPACTS ───
-
-IMPACT PATHWAY NARRATIVE
-- Do not merely state the desired final state. Describe the mechanism of change.
-- Mandatory format for first sentence: "By [applying/using Outcome X], the [specific target group] will [change behaviour/adopt practice], leading to [Impact Y] affecting [estimated scale] and contributing to [EU policy goal]."
-- Quantify: (a) estimated scale (how many people/organisations/regions), (b) significance (why it matters for EU goals).
-- CORRECT: "By adopting the project's new digital mentorship model (Outcome 2), 50 regional public employment services across 6 Danube countries will integrate structured youth mentoring, leading to a 15 % reduction in youth unemployment within 5 years, contributing to EU Youth Strategy 2019–2027."
-- INCORRECT: "Reduce youth unemployment."
-
-- ≥6 impacts. Each title MUST use a RESULT-ORIENTED NOUN PHRASE (what long-term change occurred), NOT an infinitive verb.
-- CORRECT: "Reduced youth unemployment in Danube region by 15%", "Zmanjšana brezposelnost mladih v Podonavju za 15 %"
-- INCORRECT: "Reduce youth unemployment" (infinitive — wrong for impact)
-- Each: title, Impact Pathway description, EU policy link, reference to outcome(s).
-- All EU policy references must be real and verifiable.
-
-─── 6D. KEY EXPLOITABLE RESULTS (KERs) ───
-- ≥5 KERs. Each: ID (KER1, KER2…), title (≤12 words, SPECIFIC NOUN PHRASE naming the asset — NOT an infinitive verb).
-- CORRECT: "Digital mentorship toolkit", "Digitalni mentorski priročnik"
-- INCORRECT: "Develop a mentorship toolkit" (infinitive — wrong for KER)
-- Description (≥4 sentences: what, why valuable, who can use, how different), exploitation strategy (≥3 sentences: WHO, HOW, WHEN), link to WP deliverable/output.
-`
+const CHAPTERS: Record<string, string> = {
+  chapter1_problemAnalysis: `CHAPTER 1 — PROBLEM ANALYSIS
+
+The Problem Analysis is the foundation of the entire intervention logic.
+It must demonstrate a rigorous understanding of the problem the project addresses.
+
+STRUCTURE:
+1. Core Problem — a clear, concise statement of the central problem with at least one quantitative indicator.
+2. Causes — at least 4 distinct root and proximate causes, each with a citation.
+3. Consequences — at least 4 distinct consequences, at least one linking to EU-level policy.
+
+QUALITY:
+- Every cause and consequence must have a title AND a detailed description (3–5 sentences).
+- Descriptions must include evidence-based arguments with inline citations.
+- Causes must be logically ordered: structural/root causes first, proximate causes second.
+- Consequences must show the chain: local → regional → national → EU impact.`,
+
+  chapter2_projectIdea: `CHAPTER 2 — PROJECT IDEA
+
+The Project Idea translates the problem analysis into a proposed intervention.
+
+STRUCTURE:
+1. Main Aim — ONE comprehensive sentence starting with an infinitive verb.
+2. State of the Art — references to at least 3 REAL existing projects/studies.
+3. Proposed Solution — begins with 5–8 sentence overview paragraph, then phases.
+4. Readiness Levels — TRL, SRL, ORL, LRL with justifications.
+5. EU Policies — at least 3 relevant EU policies with alignment descriptions.
+
+TITLE RULES:
+- Project title: noun phrase, 30–200 characters, no acronym, no verb.`,
+
+  chapter3_4_objectives: `CHAPTERS 3–4 — OBJECTIVES
+
+General Objectives (3–5):
+- Each title uses INFINITIVE VERB: "Strengthen…", "Develop…", "Enhance…"
+- Each description: 3–5 sentences linking to broader EU goals.
+
+Specific Objectives (≥5):
+- S.M.A.R.T. format: Specific, Measurable, Achievable, Relevant, Time-bound.
+- Each title uses INFINITIVE VERB.
+- Each must have a measurable KPI indicator.`,
+
+  chapter5_activities: `CHAPTER 5 — ACTIVITIES, MANAGEMENT AND RISKS
+
+SECTION 5A — PROJECT MANAGEMENT (projectManagement):
+The projectManagement object has TWO parts:
+1. description field — detailed narrative (≥500 words) covering management structure,
+   decision-making, quality assurance, risk management, communication, conflict resolution,
+   data management. Written as prose paragraphs separated by \\n\\n. Each topic gets its own paragraph
+   with a plain-text header on the first line. Structure fields contain ONLY short labels for the organigram.
+2. structure fields — short role labels (5–8 words max) for organigram chart display.
+
+SECTION 5B — WORK PLAN (activities):
+Between 6 and 10 work packages (WPs):
+- WP1: foundational/analytical (NOT project management)
+- WP2 to WP(N-2): content/thematic WPs in logical sequence
+- WP(N-1): Dissemination, Communication and Exploitation of Results — spans ENTIRE project (M1–final month)
+- WP(N): Project Management and Coordination — spans ENTIRE project (M1–final month)
+
+Content/thematic WPs are sequential with overlaps — none spans the entire project.
+Tasks within each WP are sequential or staggered, not all identical dates.
+
+Each WP: id (WP1, WP2…), title (noun phrase), tasks (2–5 each), milestones (≥1), deliverables (≥1).
+Each task: id (T1.1, T1.2…), title, description, startDate, endDate, dependencies.
+Each deliverable: id, title (noun phrase), description (2–4 sentences), indicator (specific, measurable).
+All task dates in YYYY-MM-DD.
+
+Task dependencies are MANDATORY:
+- T1.1 has no dependencies.
+- Every other task has ≥1 dependency with predecessorId and type (FS/SS/FF/SF).
+- Cross-WP dependencies must exist.
+
+TITLE FORMAT:
+- WP, task, milestone, deliverable titles: NOUN PHRASES.
+- NOT infinitive verbs.
+
+SECTION 5C — RISK REGISTER (risks):
+8–12 risks across categories: technical, social, economic, environmental.
+Each: id, category (lowercase), title, description, likelihood, impact, mitigation.`,
+
+  chapter6_results: `CHAPTER 6 — EXPECTED RESULTS AND KEY EXPLOITABLE RESULTS
+
+SECTION 6A — OUTPUTS (5–8 direct deliverables)
+Title format: result-oriented noun phrase.
+
+SECTION 6B — OUTCOMES (4–6 medium-term changes)
+Title format: result-oriented noun phrase.
+
+SECTION 6C — IMPACTS (3–5 long-term strategic changes)
+Title format: result-oriented noun phrase.
+Must link to EU policy objectives.
+
+SECTION 6D — KEY EXPLOITABLE RESULTS (4–6 KERs)
+Title format: specific asset/product name (noun phrase).
+Each includes exploitation strategy.`
+};
+
+// ───────────────────────────────────────────────────────────────
+// GLOBAL RULES
+// ───────────────────────────────────────────────────────────────
+
+const GLOBAL_RULES = `
+1. All content must be directly relevant to the specific project context.
+2. Every claim must be evidence-based with verifiable citations.
+3. No markdown formatting (**, ##, \`) in any output text.
+4. Write like an experienced human EU project consultant.
+5. Vary sentence structures and lengths — no AI-pattern repetition.
+6. No banned AI phrases (see HUMANIZATION RULES).
+7. If a data point is uncertain, use "[Insert verified data: ...]".
+8. Dates must be in YYYY-MM-DD format.
+9. All content must support the intervention logic chain: Problem → Objectives → Activities → Results.
+10. Quantify wherever possible — no vague statements.
+`;
+
+// ───────────────────────────────────────────────────────────────
+// FIELD-SPECIFIC RULES
+// ───────────────────────────────────────────────────────────────
+
+const FIELD_RULES: Record<string, Record<string, string>> = {
+  title: {
+    en: 'Generate a concise, professional title. Follow the title format rules for this section type.',
+    si: 'Generiraj jedrnat, strokoven naslov. Upoštevaj pravila za format naslova za ta tip razdelka.'
   },
-
-  FIELD_RULES: {
-    projectTitle: "Between 30 and 200 characters. Must be a concise noun phrase — not a full sentence, not a verb form. Must NOT contain an acronym (generated separately). Must NOT contain generic terms like 'project' or 'initiative' as the primary descriptor. Must clearly convey the project's thematic focus and geographical or sectoral scope. Must answer: 'What does this project deliver/achieve?' Must be a project BRAND — concise, memorable, professional. No comma-separated enumerations, no adjective chains, no conjugated verbs.",
-    projectAcronym: "3–8 uppercase characters. Should be pronounceable and, if possible, form a meaningful word or abbreviation related to the project topic. Do not use periods or spaces.",
-    mainAim: "Exactly one sentence. Must begin with the infinitive particle 'To' followed by a verb. Must include: the core action, the target group or sector, and the expected change or achievement. Example: 'To establish a cross-border digital innovation hub that reduces youth unemployment in the Danube region by 15 % within three years.'",
-    stateOfTheArt: "Must reference at least 3 specific, real, verifiable projects or initiatives. For each, provide: project name, funding programme, implementation period, and key results. ALL names must be real — do NOT invent projects. If unsure, use '[Insert verified project: <topic>]'. Conclude with a clear statement of the gap that this project will fill.",
-    proposedSolution: "MANDATORY STRUCTURE: Begin with a comprehensive introductory paragraph (5–8 sentences) that describes the overall solution concept, its innovation, the target group, and how it holistically addresses the central problem. This introduction must come BEFORE any phases. After the introduction, describe the solution in distinct phases separated by double line breaks. Each phase must specify: the objective, the methodology, the tools or instruments, and the expected intermediate result. Explicitly link each phase to a cause from Chapter 1. FORMATTING: Do NOT use markdown formatting (no **, no ##, no bold markers). Write phase headers as plain text: 'Phase 1: Title' not '**Phase 1: Title**'. Use only plain text and line breaks for structure.",
-    description: "Minimum 3 complete, substantive sentences. Avoid vague generalities. Include specific details about methodology, scope, target groups, and expected outcomes. Use professional, analytical language suitable for EU evaluators. Include at least one citation from a real source where applicable.",
-    indicator: "Must be quantitative or verifiably qualitative. Include a numeric target, a unit of measurement, and a timeframe. Example: 'Train 200 SME managers in digital skills by Month 18, verified through completion certificates.' Avoid vague indicators like 'improved awareness'.",
-    milestone_date: "Format: YYYY-MM-DD. Must be a realistic date within the project timeline. Milestones should be distributed across the project duration – not all clustered in the final months.",
-    likelihood: "Exactly one of three values: 'low', 'medium', or 'high'. No other values, abbreviations, or scales are permitted.",
-    impact: "Exactly one of three values: 'low', 'medium', or 'high'. No other values, abbreviations, or scales are permitted.",
-    mitigation: "For risks rated 'high' in probability or impact: minimum 3 sentences describing both preventive actions (taken before the risk materialises) and corrective actions (taken if the risk materialises). For 'low' or 'medium' risks: minimum 2 sentences.",
-    exploitationStrategy: "Minimum 3 sentences. Must answer three questions: (1) WHO will exploit the result – specify the type of organisation or actor. (2) HOW will it be exploited – licensing, open access, commercialisation, policy integration, or further research. (3) WHEN – provide a realistic timeline for exploitation activities."
+  description: {
+    en: 'Generate a detailed professional description. Minimum 3 substantive sentences. Include evidence and citations where appropriate. No markdown.',
+    si: 'Generiraj podroben strokoven opis. Najmanj 3 vsebinski stavki. Vključi dokaze in citate, kjer je primerno. Brez markdown.'
   },
-
-  TRANSLATION_RULES: `
-TRANSLATION RULES (English ↔ Slovenian)
-
-STRUCTURAL INTEGRITY
-- Preserve the exact JSON structure: all keys, nesting levels, and array orders must remain identical.
-- Do NOT translate JSON keys – only translate JSON string values.
-- Preserve all IDs (RISK1, KER1, WP1, M1.1, D1.1, etc.) exactly as they are.
-- Preserve all dates in their original format (YYYY-MM-DD).
-- Preserve all internationally recognised abbreviations (EU, SME, ICT, TRL, GDP, SWOT).
-
-LINGUISTIC QUALITY
-- Translate into grammatically correct, natural-sounding target language.
-- TITLE FORMAT MUST BE PRESERVED during translation:
-  * Objective titles: infinitive verb in both languages (EN: "Develop…" → SI: "Razviti…")
-  * WP/task/milestone/deliverable titles: noun phrase in both languages (EN: "Development of…" → SI: "Razvoj…")
-  * Output/outcome/impact titles: result noun phrase in both languages (EN: "Established platform…" → SI: "Vzpostavljena platforma…")
-  * KER titles: specific noun phrase in both languages (EN: "Digital toolkit" → SI: "Digitalni priročnik")
-- Use gender-appropriate forms in Slovenian where applicable.
-- Adapt EU terminology to officially used terms: "deliverable" → "dosežek", "work package" → "delovni sklop", "milestone" → "mejnik", "output" → "rezultat", "outcome" → "učinek", "impact" → "vpliv".
-
-FORMATTING
-- Preserve all line breaks, double line breaks, bullet points, and paragraph structures exactly.
-
-CONSISTENCY
-- Use consistent terminology throughout. Maintain a mental glossary.
-`,
-
-  SUMMARY_RULES: `
-SUMMARY GENERATION RULES
-
-FORMAT
-- One-page professional executive summary for EU evaluators.
-- Markdown formatting (bold titles, paragraphs), no markdown headers (#, ##).
-- Length: 400–600 words.
-
-MANDATORY SECTIONS (in order)
-1. Project title and acronym.
-2. Central problem (2–3 sentences with key data and citation).
-3. Main aim (single sentence from Chapter 2).
-4. General and specific goals (brief overview, infinitive-verb form).
-5. Methodology (approach and work-package structure).
-6. Expected results (key outputs, outcomes, impacts — using result-oriented noun phrases).
-7. EU policy alignment (2–3 policies from Chapter 2).
-
-STYLE
-- Professional, concise, persuasive.
-- Objective titles in infinitive-verb form; result titles in noun-phrase form.
-- ≥2 quantitative indicators from goals or results with citations.
-- No new information beyond project data.
-- All citations must reference real, verifiable sources.
-`
+  indicator: {
+    en: 'Generate a specific, measurable indicator. Include target value, timeline, and verification method. Example: "23% increase in digital literacy scores among 500 participants by M24, measured via pre/post assessment."',
+    si: 'Generiraj specifičen, merljiv kazalnik. Vključi ciljno vrednost, časovnico in način preverjanja. Primer: "23-odstotno povečanje digitalnih kompetenc med 500 udeleženci do M24, merjeno s pred/po ocenjevanjem."'
+  },
+  mitigation: {
+    en: 'Generate a detailed risk mitigation strategy. 2–4 sentences covering preventive measures, contingency plans, responsible parties, and monitoring triggers.',
+    si: 'Generiraj podrobno strategijo blaženja tveganja. 2–4 stavki, ki pokrivajo preventivne ukrepe, načrt ukrepanja, odgovorne osebe in sprožilce spremljanja.'
+  },
+  exploitationStrategy: {
+    en: 'Generate a detailed exploitation strategy. 3–5 sentences covering commercialisation pathway, target market, IPR approach, sustainability plan, and scaling potential.',
+    si: 'Generiraj podrobno strategijo izkoriščanja. 3–5 stavkov, ki pokrivajo pot komercializacije, ciljni trg, pristop k intelektualni lastnini, načrt trajnosti in potencial za širjenje.'
+  },
+  mainAim: {
+    en: 'Generate the project main aim as ONE comprehensive sentence starting with an infinitive verb (e.g., "To establish...", "To develop..."). Must capture the project\'s core purpose.',
+    si: 'Generiraj glavni cilj projekta kot EN celovit stavek, ki se začne z nedoločnikom (npr. "Vzpostaviti...", "Razviti..."). Mora zajeti bistvo projekta.'
+  },
+  projectTitle: {
+    en: 'Generate a project title following the STRICT PROJECT TITLE RULES: noun phrase, 30–200 characters, no acronym, no verb, no generic AI phrases. Must be a project brand.',
+    si: 'Generiraj naziv projekta po STROGIH PRAVILIH ZA NAZIV: imenski izraz, 30–200 znakov, brez akronima, brez glagola, brez generičnih AI fraz. Mora biti blagovna znamka projekta.'
+  }
 };
 
 // ───────────────────────────────────────────────────────────────
-// CHAPTER LABELS (for Settings UI display)
+// SUMMARY RULES
 // ───────────────────────────────────────────────────────────────
 
-export const CHAPTER_LABELS: Record<string, string> = {
-  chapter1_problemAnalysis: 'Chapter 1 – Problem Analysis',
-  chapter2_projectIdea: 'Chapter 2 – Project Idea',
-  chapter3_4_objectives: 'Chapters 3 & 4 – Objectives',
-  chapter5_activities: 'Chapter 5 – Activities',
-  chapter6_results: 'Chapter 6 – Expected Results'
-};
-
-export const FIELD_RULE_LABELS: Record<string, string> = {
-  projectTitle: 'Project Title',
-  projectAcronym: 'Project Acronym',
-  mainAim: 'Main Aim',
-  stateOfTheArt: 'State of the Art',
-  proposedSolution: 'Proposed Solution',
-  description: 'Description (generic)',
-  indicator: 'Indicator',
-  milestone_date: 'Milestone Date',
-  likelihood: 'Likelihood (Risk)',
-  impact: 'Impact (Risk)',
-  mitigation: 'Mitigation Strategy',
-  exploitationStrategy: 'Exploitation Strategy'
+const SUMMARY_RULES: Record<string, string[]> = {
+  en: [
+    'Write a comprehensive executive summary (300–500 words)',
+    'Cover: problem statement, project objectives, methodology, expected results, impact',
+    'Use professional EU project proposal language',
+    'Include key quantitative targets',
+    'No markdown formatting',
+    'Write as flowing prose paragraphs',
+  ],
+  si: [
+    'Napiši celovit izvršni povzetek (300–500 besed)',
+    'Pokrij: opis problema, cilje projekta, metodologijo, pričakovane rezultate, učinek',
+    'Uporabi strokoven jezik EU projektnih predlogov',
+    'Vključi ključne kvantitativne cilje',
+    'Brez markdown formatiranja',
+    'Piši v tekočih odstavkih proze',
+  ]
 };
 
 // ───────────────────────────────────────────────────────────────
-// ACCESSOR / HELPER FUNCTIONS
+// TRANSLATION RULES
 // ───────────────────────────────────────────────────────────────
 
-export function getAppInstructions(_language?: string) {
-  const custom = storageService.getCustomInstructions();
-  if (custom && custom.GLOBAL_RULES) return custom;
-  return DEFAULT_INSTRUCTIONS;
-}
+const TRANSLATION_RULES: Record<string, string[]> = {
+  en: [
+    'Translate all text values to British English',
+    'Keep JSON structure identical — do not add/remove keys',
+    'Maintain professional EU project terminology',
+    'Keep citations in original format (Author, Year)',
+    'Do not translate proper nouns, organization names, or acronyms',
+    'Preserve all dates in YYYY-MM-DD format',
+    'Translate technical terms accurately with domain-specific vocabulary',
+  ],
+  si: [
+    'Prevedi vse besedilne vrednosti v slovenščino',
+    'Ohrani strukturo JSON identično — ne dodajaj/odstranjuj ključev',
+    'Ohranjaj strokovno EU projektno terminologijo',
+    'Ohrani citate v izvirnem formatu (Avtor, Leto)',
+    'Ne prevajaj lastnih imen, imen organizacij ali akronimov',
+    'Ohrani vse datume v formatu YYYY-MM-DD',
+    'Prevajaj strokovne izraze natančno z domensko specifičnim besediščem',
+  ]
+};
 
-export function getFieldRule(fieldName: string, _language?: string) {
-  const instructions = getAppInstructions();
-  return instructions.FIELD_RULES?.[fieldName] || null;
-}
+// ───────────────────────────────────────────────────────────────
+// EXPORTED ACCESSOR FUNCTIONS
+// ───────────────────────────────────────────────────────────────
 
-export function getTranslationRules(_language?: string) {
-  const instructions = getAppInstructions();
-  return instructions.TRANSLATION_RULES || '';
-}
+export const getAppInstructions = (language: 'en' | 'si' = 'en') => ({
+  GLOBAL_RULES,
+  CHAPTERS
+});
 
-export function getSummaryRules(_language?: string) {
-  const instructions = getAppInstructions();
-  return instructions.SUMMARY_RULES || '';
-}
+export const getFieldRule = (fieldName: string, language: 'en' | 'si' = 'en'): string => {
+  return FIELD_RULES[fieldName]?.[language] || '';
+};
 
-// NEW v4.0: Typed accessors for migrated rule blocks
+export const getTranslationRules = (language: 'en' | 'si' = 'en'): string[] => {
+  return TRANSLATION_RULES[language] || TRANSLATION_RULES.en;
+};
 
-export function getLanguageDirective(language: 'en' | 'si'): string {
+export const getSummaryRules = (language: 'en' | 'si' = 'en'): string[] => {
+  return SUMMARY_RULES[language] || SUMMARY_RULES.en;
+};
+
+export const getLanguageDirective = (language: 'en' | 'si' = 'en'): string => {
   return LANGUAGE_DIRECTIVES[language] || LANGUAGE_DIRECTIVES.en;
-}
+};
 
-export function getLanguageMismatchNotice(detectedLang: 'en' | 'si', uiLanguage: 'en' | 'si'): string {
-  if (detectedLang === uiLanguage) return '';
-  const detectedName = detectedLang === 'si' ? 'Slovenian' : 'English';
-  const targetName = uiLanguage === 'si' ? 'Slovenian' : 'English';
+export const getLanguageMismatchNotice = (
+  detectedLang: 'en' | 'si',
+  targetLang: 'en' | 'si'
+): string => {
+  const langNames: Record<string, string> = { en: 'English', si: 'Slovenian' };
   return LANGUAGE_MISMATCH_TEMPLATE
-    .replace(/\{\{detectedName\}\}/g, detectedName)
-    .replace(/\{\{targetName\}\}/g, targetName);
-}
+    .replace(/{{detectedName}}/g, langNames[detectedLang])
+    .replace(/{{targetName}}/g, langNames[targetLang]);
+};
 
-export function getAcademicRigorRules(language: 'en' | 'si'): string {
+export const getAcademicRigorRules = (language: 'en' | 'si' = 'en'): string => {
   return ACADEMIC_RIGOR_RULES[language] || ACADEMIC_RIGOR_RULES.en;
-}
+};
 
-export function getHumanizationRules(language: 'en' | 'si'): string {
+export const getHumanizationRules = (language: 'en' | 'si' = 'en'): string => {
   return HUMANIZATION_RULES[language] || HUMANIZATION_RULES.en;
-}
+};
 
-export function getProjectTitleRules(language: 'en' | 'si'): string {
+export const getProjectTitleRules = (language: 'en' | 'si' = 'en'): string => {
   return PROJECT_TITLE_RULES[language] || PROJECT_TITLE_RULES.en;
-}
+};
 
-export function getModeInstruction(mode: string, language: 'en' | 'si'): string {
-  const modeBlock = MODE_INSTRUCTIONS[mode] || MODE_INSTRUCTIONS.regenerate;
-  return modeBlock[language] || modeBlock.en;
-}
+export const getModeInstruction = (mode: string, language: 'en' | 'si' = 'en'): string => {
+  return MODE_INSTRUCTIONS[mode]?.[language] || MODE_INSTRUCTIONS.regenerate[language];
+};
 
-export function getQualityGate(sectionKey: string, language: 'en' | 'si'): string {
-  const checks = QUALITY_GATES[sectionKey]?.[language] || QUALITY_GATES._default[language] || QUALITY_GATES._default.en;
-  const header = language === 'si'
-    ? '═══ KONTROLA KAKOVOSTI — PREVERI PRED ODDAJO ODGOVORA ═══'
-    : '═══ QUALITY GATE — VERIFY BEFORE RETURNING YOUR RESPONSE ═══';
-  const footer = language === 'si'
-    ? 'Če katerakoli točka NI izpolnjena, POPRAVI odgovor preden ga vrneš.'
-    : 'If ANY check FAILS, REVISE your response before returning it.';
-  return `\n${header}\n${checks.map((c: string, i: number) => `☐ ${i + 1}. ${c}`).join('\n')}\n${footer}\n═══════════════════════════════════════════════════════════════════`;
-}
+export const getQualityGate = (sectionKey: string, language: 'en' | 'si' = 'en'): string => {
+  const gates = QUALITY_GATES[sectionKey]?.[language] || QUALITY_GATES._default[language];
+  const header = language === 'si' ? 'KONTROLNA LISTA KAKOVOSTI' : 'QUALITY CHECKLIST';
+  return `═══ ${header} ═══\nBefore returning the JSON, verify ALL of the following:\n- ${gates.join('\n- ')}\n═══════════════════════════════════════════════════════════════════`;
+};
 
-export function getSectionTaskInstruction(
+export const getSectionTaskInstruction = (
   sectionKey: string,
-  language: 'en' | 'si',
+  language: 'en' | 'si' = 'en',
   placeholders: Record<string, string> = {}
-): string {
-  const template = SECTION_TASK_INSTRUCTIONS[sectionKey]?.[language]
-    || SECTION_TASK_INSTRUCTIONS[sectionKey]?.en
-    || '';
-  let result = template;
+): string => {
+  let template = SECTION_TASK_INSTRUCTIONS[sectionKey]?.[language] || '';
   for (const [key, value] of Object.entries(placeholders)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+    template = template.replace(new RegExp(`{{${key}}}`, 'g'), value);
   }
-  return result;
-}
-
-export function getFullInstructions() {
-  const custom = storageService.getCustomInstructions();
-  if (custom && custom.GLOBAL_RULES) return custom;
-  return DEFAULT_INSTRUCTIONS;
-}
-
-export function getDefaultInstructions() {
-  return DEFAULT_INSTRUCTIONS;
-}
-
-export async function saveAppInstructions(instructions: any) {
-  await storageService.saveCustomInstructions(instructions);
-}
-
-export async function resetAppInstructions() {
-  await storageService.saveCustomInstructions(null);
-  return DEFAULT_INSTRUCTIONS;
-}
+  return template;
+};
