@@ -1,20 +1,3 @@
-// components/ProjectDisplay.tsx
-// ═══════════════════════════════════════════════════════════════
-// v4.7 — 2026-02-14
-// CHANGES v4.7:
-//   - FIX: Deliverables now have a separate "title" TextArea field
-//     above description and indicator. Matches geminiService.ts v4.4
-//     schema and Instructions.ts v4.4 DELIVERABLE FIELDS rules.
-//   - FIX: Default deliverable object in onAdd includes title: ''
-//   - All previous v4.6 changes preserved.
-//
-// CHANGES v4.6:
-//   - FIX: Added 'environmental' risk category to dropdown
-//   - FIX: Lowercase option values to match RiskCategory type
-//   - FIX: trafficColors keys include both lowercase (new) and
-//     uppercase (legacy fallback) for backward compatibility
-// ═══════════════════════════════════════════════════════════════
-
 import React, { useRef, useEffect, useCallback } from 'react';
 import { ICONS, getReadinessLevelsDefinitions, getSteps } from '../constants.tsx';
 import { TEXT } from '../locales.ts';
@@ -82,6 +65,8 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         }
     }, []);
     
+    // PRIMARY FIX: runs on EVERY value change including first async load
+    // Uses requestAnimationFrame to ensure browser has finished layout
     useEffect(() => {
         adjustHeight();
         const rafId = requestAnimationFrame(() => {
@@ -90,6 +75,8 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         return () => cancelAnimationFrame(rafId);
     }, [value, adjustHeight]);
 
+    // SECONDARY FIX: ResizeObserver catches container width changes
+    // (CSS grid/flex reflows) that affect scrollHeight
     useEffect(() => {
         const el = textAreaRef.current;
         if (!el) return;
@@ -100,6 +87,7 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         return () => observer.disconnect();
     }, [adjustHeight]);
 
+    // Also re-adjust when the window is resized
     useEffect(() => {
         const handleResize = () => adjustHeight();
         window.addEventListener('resize', handleResize);
@@ -229,7 +217,7 @@ const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependenc
                 {(task.dependencies || []).map((dep, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-slate-200 text-xs shadow-sm">
                         <span className="text-slate-700">{t.predecessor}: <strong className="text-sky-700">{dep.predecessorId}</strong> <span className="text-slate-400">({dep.type})</span></span>
-                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1">×</button>
+                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1"></button>
                     </div>
                 ))}
             </div>
@@ -402,9 +390,9 @@ const renderObjectives = (props, sectionKey) => {
             ))}
         </div>
     );
-};
+}
 
-// --- RENDER PROJECT MANAGEMENT (v4.5 — Fixed duplicate title) ---
+// --- RENDER PROJECT MANAGEMENT (Updated v3.5.2 — Implementation + Organigram) ---
 const renderProjectManagement = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, isLoading, language, missingApiKey } = props;
     const { projectManagement } = projectData;
@@ -412,21 +400,25 @@ const renderProjectManagement = (props) => {
     const pmPath = ['projectManagement'];
 
     return (
-        <div className="mb-10 pb-8">
-            {/* IMPLEMENTACIJA — en sam naslov */}
-            <div id="implementation" className="mb-10">
-                <SectionHeader title={t.management.implementation || t.management.title}>
-                    <GenerateButton 
-                        onClick={() => onGenerateSection('projectManagement')} 
-                        isLoading={isLoading === `${t.generating} projectManagement...`} 
-                        title={t.generateSection} 
-                        text={t.generateAI} 
-                        missingApiKey={missingApiKey} 
-                    />
-                </SectionHeader>
-                
-                <p className="text-sm text-slate-500 mb-4 -mt-2">{t.management.implementationDesc || t.management.desc}</p>
+        <div id="quality-efficiency" className="mb-10 pb-8">
+            <SectionHeader title={t.management.title}>
+                <GenerateButton 
+                    onClick={() => onGenerateSection('projectManagement')} 
+                    isLoading={isLoading === `${t.generating} projectManagement...`} 
+                    title={t.generateSection} 
+                    text={t.generateAI} 
+                    missingApiKey={missingApiKey} 
+                />
+            </SectionHeader>
+            
+            <p className="text-sm text-slate-500 mb-6 -mt-2">{t.management.desc}</p>
 
+            {/* ── IMPLEMENTACIJA ── */}
+            <div className="mb-8">
+                <div className="mb-3 border-b border-slate-200 pb-2">
+                    <h4 className="text-lg font-bold text-slate-700">{t.management.implementation}</h4>
+                    <p className="text-sm text-slate-500 mt-0.5">{t.management.implementationDesc}</p>
+                </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <TextArea 
                         label={t.description} 
@@ -442,10 +434,11 @@ const renderProjectManagement = (props) => {
                 </div>
             </div>
 
-            {/* ORGANIZACIJSKA STRUKTURA (ORGANIGRAM) */}
-            <div id="organigram">
-                <SectionHeader title={t.management.organigram} />
-
+            {/* ── ORGANIZACIJSKA STRUKTURA (ORGANIGRAM) ── */}
+            <div>
+                <div className="mb-3 border-b border-slate-200 pb-2">
+                    <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
+                </div>
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/50">
                     <Organigram 
                         structure={projectManagement?.structure} 
@@ -459,19 +452,14 @@ const renderProjectManagement = (props) => {
     );
 };
 
-// --- RENDER RISKS (v4.6 — Added environmental, lowercase values, backward compat) ---
+// --- RENDER RISKS (Sub-Component of Activities) ---
 const renderRisks = (props) => {
     const { projectData, onUpdateData, onGenerateField, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const { risks } = projectData;
     const path = ['risks'];
     const t = TEXT[language] || TEXT['en'];
 
-    // v4.6: lowercase keys matching types.ts + uppercase fallbacks for legacy saved data
-    const trafficColors: Record<string, string> = {
-        low: 'bg-green-100 border-green-300 text-green-800',
-        medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-        high: 'bg-red-100 border-red-300 text-red-800',
-        // Legacy uppercase fallbacks
+    const trafficColors = {
         Low: 'bg-green-100 border-green-300 text-green-800',
         Medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
         High: 'bg-red-100 border-red-300 text-red-800'
@@ -479,19 +467,7 @@ const renderRisks = (props) => {
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader 
-                title={t.subSteps.riskMitigation} 
-                onAdd={() => onAddItem(path, { 
-                    id: `RISK${risks.length + 1}`, 
-                    category: 'technical', 
-                    title: '', 
-                    description: '', 
-                    likelihood: 'low', 
-                    impact: 'low', 
-                    mitigation: '' 
-                })} 
-                addText={t.add} 
-            />
+            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${risks.length + 1}`, category: 'Technical', title: '', description: '', likelihood: 'Low', impact: 'Low', mitigation: '' })} addText={t.add} />
             {(risks || []).map((risk, index) => {
                 const likelihoodLoading = isLoading === `${t.generating} likelihood...`;
                 const impactLoading = isLoading === `${t.generating} impact...`;
@@ -513,14 +489,13 @@ const renderRisks = (props) => {
                         <div className="w-48">
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.category}</label>
                             <select
-                                value={risk.category || 'technical'}
+                                value={risk.category || 'Technical'}
                                 onChange={(e) => onUpdateData([...path, index, 'category'], e.target.value)}
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-base"
                             >
-                                <option value="technical">{t.risks.categories.technical}</option>
-                                <option value="social">{t.risks.categories.social}</option>
-                                <option value="economic">{t.risks.categories.economic}</option>
-                                <option value="environmental">{t.risks.categories.environmental}</option>
+                                <option value="Technical">{t.risks.categories.technical}</option>
+                                <option value="Social">{t.risks.categories.social}</option>
+                                <option value="Economic">{t.risks.categories.economic}</option>
                             </select>
                         </div>
                         <div className="flex-1 min-w-[200px]">
@@ -559,11 +534,11 @@ const renderRisks = (props) => {
                                 <select
                                     value={risk.likelihood}
                                     onChange={(e) => onUpdateData([...path, index, 'likelihood'], e.target.value)}
-                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.likelihood] || ''} pr-10 appearance-none transition-colors cursor-pointer text-base`}
+                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.likelihood]} pr-10 appearance-none transition-colors cursor-pointer text-base`}
                                 >
-                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
+                                    <option value="Low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
+                                    <option value="Medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
+                                    <option value="High" className="bg-white text-slate-800">{t.risks.levels.high}</option>
                                 </select>
                                 <div className="absolute top-1.5 right-1.5">
                                     <GenerateButton onClick={() => onGenerateField([...path, index, 'likelihood'])} isLoading={likelihoodLoading} isField title={t.generateAI} missingApiKey={missingApiKey} />
@@ -576,11 +551,11 @@ const renderRisks = (props) => {
                                 <select
                                     value={risk.impact}
                                     onChange={(e) => onUpdateData([...path, index, 'impact'], e.target.value)}
-                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.impact] || ''} pr-10 appearance-none transition-colors cursor-pointer text-base`}
+                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.impact]} pr-10 appearance-none transition-colors cursor-pointer text-base`}
                                 >
-                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
+                                    <option value="Low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
+                                    <option value="Medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
+                                    <option value="High" className="bg-white text-slate-800">{t.risks.levels.high}</option>
                                 </select>
                                 <div className="absolute top-1.5 right-1.5">
                                     <GenerateButton onClick={() => onGenerateField([...path, index, 'impact'])} isLoading={impactLoading} isField title={t.generateAI} missingApiKey={missingApiKey} />
@@ -655,9 +630,6 @@ const renderKERs = (props) => {
     );
 };
 
-// ═══════════════════════════════════════════════════════════════
-// v4.7: renderActivities — deliverables now have title field
-// ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const { activities } = projectData;
@@ -707,7 +679,6 @@ const renderActivities = (props) => {
                         </div>
                         <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         
-                        {/* ── TASKS ── */}
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
                             <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
@@ -744,100 +715,76 @@ const renderActivities = (props) => {
                                         allTasks={allTasks}
                                         language={language}
                                         onAddDependency={(dep) => {
-                                            const deps = [...(task.dependencies || []), dep];
-                                            onUpdateData([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps);
+                                            const deps = task.dependencies || [];
+                                            handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], [...deps, dep]);
                                         }}
                                         onRemoveDependency={(depIdx) => {
-                                            const deps = [...(task.dependencies || [])];
-                                            deps.splice(depIdx, 1);
-                                            onUpdateData([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps);
+                                            const deps = task.dependencies || [];
+                                            handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx));
                                         }}
                                     />
                                 </div>
                             ))}
                         </div>
 
-                        {/* ── MILESTONES ── */}
                         <div className="mt-6 pl-4 border-l-4 border-amber-100">
                             <SectionHeader title={t.milestones} onAdd={() => onAddItem([...path, wpIndex, 'milestones'], { id: `M${wpIndex + 1}.${(wp.milestones || []).length + 1}`, description: '', date: '' })} addText={t.add} />
-                            {(wp.milestones || []).map((ms, msIndex) => (
-                                <div key={msIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-amber-50/30 relative group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-3.5 h-3.5 bg-black transform rotate-45 flex-shrink-0" />
-                                        <span className="text-sm font-bold text-slate-600">{ms.id}</span>
-                                    </div>
-                                    <TextArea label={t.milestoneDesc} path={[...path, wpIndex, 'milestones', msIndex, 'description']} value={ms.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.milestoneDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <div className="mt-2">
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.milestoneDate}</label>
-                                        <div className="flex gap-2 items-center">
-                                            <input
-                                                type="date"
-                                                value={ms.date || ''}
-                                                onChange={(e) => onUpdateData([...path, wpIndex, 'milestones', msIndex, 'date'], e.target.value)}
-                                                className="w-full md:w-1/3 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                                            />
-                                            <GenerateButton onClick={() => onGenerateField([...path, wpIndex, 'milestones', msIndex, 'date'])} isLoading={isLoading === `${t.generating} date...`} isField title={`${t.generateField} ${t.milestoneDate}`} missingApiKey={missingApiKey} />
+                            {(wp.milestones || []).map((milestone, msIndex) => {
+                                const enGen = TEXT.en.generating;
+                                const siGen = TEXT.si.generating;
+                                const dateLoading = isLoading === `${enGen} date...` || isLoading === `${siGen} date...`;
+
+                                return (
+                                    <div key={msIndex} className="relative mb-3 bg-amber-50/50 p-4 rounded-lg border border-amber-100 group">
+                                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
+                                        <div className="flex flex-col md:flex-row gap-4">
+                                            <div className="flex-1">
+                                                <TextArea 
+                                                    label={`Milestone ${milestone.id}`} 
+                                                    path={[...path, wpIndex, 'milestones', msIndex, 'description']} 
+                                                    value={milestone.description} 
+                                                    onUpdate={onUpdateData} 
+                                                    onGenerate={onGenerateField} 
+                                                    isLoading={isLoading} 
+                                                    rows={1} 
+                                                    placeholder={t.milestonePlaceholder} 
+                                                    generateTitle={`${t.generateField} ${t.description}`} 
+                                                    missingApiKey={missingApiKey}
+                                                    className="w-full group"
+                                                />
+                                            </div>
+                                            <div className="w-full md:w-48">
+                                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.dates}</label>
+                                                <div className="flex gap-1 items-end">
+                                                    <input 
+                                                        type="date"
+                                                        value={milestone.date || ''}
+                                                        onChange={(e) => onUpdateData([...path, wpIndex, 'milestones', msIndex, 'date'], e.target.value)}
+                                                        className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base flex-1"
+                                                    />
+                                                    <GenerateButton 
+                                                        onClick={() => onGenerateField([...path, wpIndex, 'milestones', msIndex, 'date'])} 
+                                                        isLoading={dateLoading} 
+                                                        isField 
+                                                        title={t.generateAI} 
+                                                        missingApiKey={missingApiKey} 
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
-                        {/* ── DELIVERABLES — v4.7: added title field ── */}
-                        <div className="mt-6 pl-4 border-l-4 border-emerald-100">
-                            <SectionHeader 
-                                title={t.deliverables} 
-                                onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { 
-                                    id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, 
-                                    title: '',        // ← v4.7 NEW
-                                    description: '', 
-                                    indicator: '' 
-                                })} 
-                                addText={t.add} 
-                            />
-                            {(wp.deliverables || []).map((del, delIndex) => (
-                                <div key={delIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-emerald-50/30 relative group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], delIndex)} text={t.remove} /></div>
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs font-bold">{del.id}</span>
-                                    </div>
-                                    {/* v4.7: Separate title field for deliverable */}
-                                    <TextArea 
-                                        label={t.deliverableTitle || t.title} 
-                                        path={[...path, wpIndex, 'deliverables', delIndex, 'title']} 
-                                        value={del.title || ''} 
-                                        onUpdate={onUpdateData} 
-                                        onGenerate={onGenerateField} 
-                                        isLoading={isLoading} 
-                                        rows={1} 
-                                        placeholder={t.deliverableTitlePlaceholder || t.enterTitle} 
-                                        generateTitle={`${t.generateField} ${t.title}`} 
-                                        missingApiKey={missingApiKey} 
-                                    />
-                                    <TextArea 
-                                        label={t.description} 
-                                        path={[...path, wpIndex, 'deliverables', delIndex, 'description']} 
-                                        value={del.description} 
-                                        onUpdate={onUpdateData} 
-                                        onGenerate={onGenerateField} 
-                                        isLoading={isLoading} 
-                                        placeholder={t.deliverableDescPlaceholder || t.enterDesc} 
-                                        generateTitle={`${t.generateField} ${t.description}`} 
-                                        missingApiKey={missingApiKey} 
-                                    />
-                                    <TextArea 
-                                        label={t.indicator} 
-                                        path={[...path, wpIndex, 'deliverables', delIndex, 'indicator']} 
-                                        value={del.indicator} 
-                                        onUpdate={onUpdateData} 
-                                        onGenerate={onGenerateField} 
-                                        isLoading={isLoading} 
-                                        rows={1} 
-                                        placeholder={t.indicatorPlaceholder} 
-                                        generateTitle={`${t.generateField} ${t.indicator}`} 
-                                        missingApiKey={missingApiKey} 
-                                    />
+                        <div className="mt-6 pl-4 border-l-4 border-indigo-100">
+                            <SectionHeader title={t.deliverables} onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, description: '', indicator: '' })} addText={t.add} />
+                            {(wp.deliverables || []).map((deliverable, dIndex) => (
+                                <div key={dIndex} className="relative mb-4 bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 group">
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], dIndex)} text={t.remove} /></div>
+                                    <h5 className="font-semibold text-slate-700 mb-3">{deliverable.id}</h5>
+                                    <TextArea label={t.description} path={[...path, wpIndex, 'deliverables', dIndex, 'description']} value={deliverable.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.deliverableDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                                    <TextArea label={t.indicator} path={[...path, wpIndex, 'deliverables', dIndex, 'indicator']} value={deliverable.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
                                 </div>
                             ))}
                         </div>
@@ -845,127 +792,81 @@ const renderActivities = (props) => {
                 ))}
             </div>
 
-            {/* ── GANTT CHART ── */}
-            <GanttChart activities={activities} language={language} id="gantt-chart-content" />
+            <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
+                 <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
+                <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
+            </div>
 
-            {/* ── PERT CHART ── */}
-            <PERTChart activities={activities} language={language} id="pert-chart-content" />
+            <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
+                 <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
+                <PERTChart activities={activities} language={language} />
+            </div>
 
-            {/* ── RISKS ── */}
             {renderRisks(props)}
+        </>
+    );
+};
 
-            {/* ── KERs ── */}
+const renderExpectedResults = (props) => {
+    return (
+        <>
+            {renderGenericResults(props, 'outputs')}
+            {renderGenericResults(props, 'outcomes')}
+            {renderGenericResults(props, 'impacts')}
             {renderKERs(props)}
         </>
     );
 };
 
-// ═══════════════════════════════════════════════════════════════
-// MAIN EXPORT — v4.7
-// ═══════════════════════════════════════════════════════════════
+const ProjectDisplay = (props) => {
+  const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey } = props;
+  const STEPS = getSteps(language);
+  const activeStep = STEPS.find(step => step.id === activeStepId);
+  const t = TEXT[language] || TEXT['en'];
 
-const ProjectDisplay = ({ projectData, activeStepId, language, onUpdateData, onGenerateSection, onGenerateCompositeSection, onGenerateField, onAddItem, onRemoveItem, isLoading, error, missingApiKey }) => {
-    const STEPS = getSteps(language);
-    const t = TEXT[language] || TEXT['en'];
-    const currentStepObj = STEPS.find(s => s.id === activeStepId);
-    const stepKey = currentStepObj?.key;
+  if (!activeStep) return <div className="p-8 text-center text-red-500">Error: Invalid Step Selected</div>;
 
-    const sharedProps = { projectData, onUpdateData, onGenerateSection, onGenerateCompositeSection, onGenerateField, onAddItem, onRemoveItem, isLoading, error, language, missingApiKey };
+  const sectionKey = activeStep.key;
 
-    // Section-level AI generate button (shown above each main section)
-    const SectionAIButtons = ({ sectionKey, compositeKey = null }) => {
-        const genLabel = t.generateAI || 'Generate AI';
-        const fillLabel = t.fillMissing || 'Fill Missing';
-        const enhanceLabel = t.enhance || 'Enhance';
-        const regenLabel = t.regenerate || 'Regenerate';
-        const sectionLoading = isLoading === `${t.generating} ${sectionKey}...`;
+  const renderContent = () => {
+    switch (sectionKey) {
+        case 'problemAnalysis': return renderProblemAnalysis(props);
+        case 'projectIdea': return renderProjectIdea(props);
+        case 'generalObjectives': return renderObjectives(props, 'generalObjectives');
+        case 'specificObjectives': return renderObjectives(props, 'specificObjectives');
+        case 'activities': return renderActivities(props);
+        case 'expectedResults': return renderExpectedResults(props);
+      default: return <div className="p-8 text-center text-slate-500">{t.selectStep}</div>;
+    }
+  };
 
-        return (
-            <div className="flex flex-wrap gap-2 mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <GenerateButton
-                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'fill') : onGenerateSection(sectionKey, 'fill')}
-                    isLoading={sectionLoading}
-                    title={fillLabel}
-                    text={fillLabel}
-                    missingApiKey={missingApiKey}
-                />
-                <GenerateButton
-                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'enhance') : onGenerateSection(sectionKey, 'enhance')}
-                    isLoading={sectionLoading}
-                    title={enhanceLabel}
-                    text={enhanceLabel}
-                    missingApiKey={missingApiKey}
-                />
-                <GenerateButton
-                    onClick={() => compositeKey ? onGenerateCompositeSection(compositeKey, 'regenerate') : onGenerateSection(sectionKey, 'regenerate')}
-                    isLoading={sectionLoading}
-                    title={regenLabel}
-                    text={regenLabel}
-                    missingApiKey={missingApiKey}
-                />
-            </div>
-        );
-    };
+  const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
 
-    const renderContent = () => {
-        switch (stepKey) {
-            case 'problemAnalysis':
-                return (
-                    <>
-                        <SectionAIButtons sectionKey="problemAnalysis" />
-                        {renderProblemAnalysis(sharedProps)}
-                    </>
-                );
-            case 'projectIdea':
-                return (
-                    <>
-                        <SectionAIButtons sectionKey="projectIdea" />
-                        {renderProjectIdea(sharedProps)}
-                    </>
-                );
-            case 'generalObjectives':
-                return (
-                    <>
-                        <SectionAIButtons sectionKey="generalObjectives" />
-                        {renderObjectives(sharedProps, 'generalObjectives')}
-                    </>
-                );
-            case 'specificObjectives':
-                return (
-                    <>
-                        <SectionAIButtons sectionKey="specificObjectives" />
-                        {renderObjectives(sharedProps, 'specificObjectives')}
-                    </>
-                );
-            case 'activities':
-                return renderActivities(sharedProps);
-            case 'expectedResults':
-                return (
-                    <>
-                        <SectionAIButtons compositeKey="expectedResults" sectionKey="outputs" />
-                        {renderGenericResults(sharedProps, 'outputs')}
-                        {renderGenericResults(sharedProps, 'outcomes')}
-                        {renderGenericResults(sharedProps, 'impacts')}
-                        {renderKERs(sharedProps)}
-                    </>
-                );
-            default:
-                return null;
-        }
-    };
+  return (
+    <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
+      <header className="bg-white border-b border-slate-200 px-6 py-5 flex justify-between items-center flex-shrink-0 sticky top-0 z-20 shadow-sm">
+          <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
+          </div>
+          <div className="flex items-center gap-4">
+              {showGenerateButton && (
+                  <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+              )}
+          </div>
+      </header>
 
-    return (
-        <div id="main-scroll-container" className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-6 py-8">
-                {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                        {error}
-                    </div>
-                )}
-                {renderContent()}
-            </div>
+      {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 m-6 rounded-r shadow-sm" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
+      
+      {isLoading && <div className="p-4 m-6 text-center text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">{typeof isLoading === 'string' ? isLoading : t.loading}</div>}
+
+      <div id="main-scroll-container" className="flex-1 overflow-y-auto p-6 scroll-smooth relative">
+        <div className="max-w-5xl mx-auto pb-20">
+          {renderContent()}
         </div>
-    );
+      </div>
+    </main>
+  );
 };
 
 export default ProjectDisplay;
