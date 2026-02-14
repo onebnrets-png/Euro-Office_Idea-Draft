@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ICONS } from '../constants.tsx';
 import { TEXT } from '../locales.ts';
@@ -6,12 +5,13 @@ import { TEXT } from '../locales.ts';
 const ProjectListModal = ({ isOpen, onClose, projects, onSelectProject, onCreateProject, onDeleteProject, currentProjectId, language }) => {
   if (!isOpen) return null;
 
-  const t = TEXT[language].projects;
-  const tCommon = TEXT[language];
+  const tLang = TEXT[language] || TEXT['en'];
+  const t = tLang.projects;
+  const tCommon = tLang;
 
   const formatDate = (isoString) => {
       try {
-          return new Date(isoString).toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return new Date(isoString).toLocaleDateString(language === 'si' ? 'sl-SI' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       } catch (e) {
           return isoString;
       }
