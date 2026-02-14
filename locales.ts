@@ -1,10 +1,14 @@
 // locales.ts
 // ═══════════════════════════════════════════════════════════════
 // UI text strings — English (en) & Slovenian (si)
-// v4.3 — 2026-02-14 — CHANGES:
+// v4.4 — 2026-02-14 — CHANGES:
 //   - Added environmental risk category translations
 //   - Added implementation / organigram sub-step translations
 //   - Fixed all Slovene diacritics (č, š, ž)
+//   - FIXED: Added missing 'implementation' and 'organigram' keys
+//     in subSteps (required by constants.tsx getSubSteps)
+//   - FIXED: Added missing 'implementation' and 'implementationDesc'
+//     keys in management (required by ProjectDisplay.tsx)
 // ═══════════════════════════════════════════════════════════════
 
 export const TEXT = {
@@ -144,7 +148,8 @@ export const TEXT = {
         categories: {
             technical: "Technical",
             social: "Social",
-            economic: "Economic"
+            economic: "Economic",
+            environmental: "Environmental"
         },
         descPlaceholder: "Describe the potential risk...",
         titlePlaceholder: "Summary title (e.g. Low participation in survey)...",
@@ -161,6 +166,8 @@ export const TEXT = {
     },
     management: {
         title: "Quality and Efficiency of the Implementation",
+        implementation: "Quality and Efficiency of the Implementation",
+        implementationDesc: "Describe the project management structure, decision-making processes, and quality assurance mechanisms.",
         desc: "Describe the project management structure, decision-making processes, and quality assurance mechanisms.",
         placeholder: "Describe how the project will be managed (e.g., Steering Committee, WP Leaders, conflict resolution, quality control)...",
         organigram: "Organizational Structure (Organigram)",
@@ -194,6 +201,8 @@ export const TEXT = {
       proposedSolution: "Proposed Solution",
       readinessLevels: "Readiness Levels",
       euPolicies: "EU Policies",
+      implementation: "Quality & Efficiency of Implementation",
+      organigram: "Organizational Structure",
       qualityEfficiency: "Quality & Efficiency",
       workplan: "Workplan",
       ganttChart: "Gantt Chart",
@@ -381,7 +390,7 @@ export const TEXT = {
     policyPlaceholder: "Vnesite uradno ime politike EU...",
     policyDescPlaceholder: "Opišite, kako se projekt usklajuje s to politiko...",
     coreProblem: "Glavni problem",
-    coreProblemDesc: "Opredelite osrednji problem, ki ga bo vaš projekt reševat.",
+    coreProblemDesc: "Opredelite osrednji problem, ki ga bo vaš projekt reševal.",
     coreProblemTitlePlaceholder: "Vnesite naziv glavnega problema...",
     coreProblemDescPlaceholder: "Podrobno opišite glavni problem...",
     causes: "Vzroki",
@@ -459,7 +468,8 @@ export const TEXT = {
         categories: {
             technical: "Tehnično",
             social: "Družbeno",
-            economic: "Ekonomsko"
+            economic: "Ekonomsko",
+            environmental: "Okoljsko"
         },
         descPlaceholder: "Opišite potencialno tveganje...",
         titlePlaceholder: "Povzetek naziva (npr. Nizka udeležba v anketi)...",
@@ -476,6 +486,8 @@ export const TEXT = {
     },
     management: {
         title: "Kakovost in učinkovitost izvedbe",
+        implementation: "Kakovost in učinkovitost izvedbe",
+        implementationDesc: "Opišite strukturo vodenja projekta, procese odločanja in mehanizme zagotavljanja kakovosti.",
         desc: "Opišite strukturo vodenja projekta, procese odločanja in mehanizme zagotavljanja kakovosti.",
         placeholder: "Opišite, kako bo projekt voden (npr. usmerjevalni odbor, vodje DS, reševanje konfliktov, nadzor kakovosti)...",
         organigram: "Organizacijska struktura (Organigram)",
@@ -509,6 +521,8 @@ export const TEXT = {
       proposedSolution: "Predlagana rešitev",
       readinessLevels: "Stopnje pripravljenosti",
       euPolicies: "Politike EU",
+      implementation: "Kakovost in učinkovitost izvedbe",
+      organigram: "Organizacijska struktura",
       qualityEfficiency: "Kakovost in učinkovitost",
       workplan: "Načrt dela (WP)",
       ganttChart: "Ganttov diagram",
