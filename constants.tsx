@@ -2,9 +2,7 @@ import React from 'react';
 import { TEXT } from './locales.ts';
 
 // --- BRANDING ASSETS ---
-// NAVODILO: Da se prikaže vaš logotip, shranite vašo sliko kot 'logo.png' v mapo public.
 export const BRAND_ASSETS = {
-  // Uporabljamo samo tekstovni logotip (Infinita)
   logoText: "/logo.png" 
 };
 
@@ -88,7 +86,8 @@ export const getSubSteps = (lang = 'en') => ({
   generalObjectives: [],
   specificObjectives: [],
   activities: [
-      { id: 'quality-efficiency', title: TEXT[lang].subSteps.qualityEfficiency },
+      { id: 'implementation', title: TEXT[lang].subSteps.implementation },
+      { id: 'organigram', title: TEXT[lang].subSteps.organigram },
       { id: 'workplan', title: TEXT[lang].subSteps.workplan },
       { id: 'gantt-chart', title: TEXT[lang].subSteps.ganttChart },
       { id: 'pert-chart', title: TEXT[lang].subSteps.pertChart },
