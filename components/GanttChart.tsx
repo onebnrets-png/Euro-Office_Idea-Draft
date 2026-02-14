@@ -1,8 +1,16 @@
 // components/GanttChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// Gantt Chart Component – v4.5 (2026-02-14)
+// Gantt Chart Component – v4.6 (2026-02-14)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v4.6 – FIX: Multiple overflow prevention measures for "Project" view:
+//         1. SVG gets explicit width=chartWidth + overflow="hidden"
+//         2. Marker label filter tightened (chartWidth - 60)
+//         3. Task labels in project view never use 'right' position
+//            if they would overflow — forced to 'inside-truncate'
+//         4. Container div gets maxWidth:100% + boxSizing:border-box
+//         5. Inner chart div gets overflow:hidden in project view
+//         6. Milestone labels clipped when exceeding chartWidth
 // v4.5 – FIX: "Project" view no longer overflows container.
 //         chartWidth capped to availableWidth; scrollable div uses
 //         overflow:hidden + height:auto for project view.
@@ -159,7 +167,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / ONE_DAY_MS) + 1;
 
     // 3. Calculate Pixels Per Day
-    // FIX v4.5: For "project" view, cap chart to available container width minus padding
+    // v4.5+v4.6: For "project" view, cap chart to available container width minus padding
     let pixelsPerDay: number;
     let chartWidth: number;
 
@@ -286,41 +294,50 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
 
     // --- Orthogonal Dependency Path Logic ---
+    // v4.6: Clamp path coordinates to [0, chartWidth] in project view
+    const clampX = (x: number): number => {
+        if (!isProjectView) return x;
+        return Math.max(0, Math.min(x, chartWidth));
+    };
+
     const getOrthogonalPath = (startX: number, startY: number, endX: number, endY: number, type: string): string => {
         const gap = 15;
-        let path = `M ${startX} ${startY}`;
+        // v4.6: Clamp all X coordinates in project view to prevent SVG overflow
+        const sX = clampX(startX);
+        const eX = clampX(endX);
+        let path = `M ${sX} ${startY}`;
 
         if (type === 'FS') {
-            const p1X = startX + gap;
-            if (endX < p1X) {
+            const p1X = clampX(sX + gap);
+            if (eX < p1X) {
                 path += ` L ${p1X} ${startY}`;
                 const safeY = endY - 10;
                 path += ` L ${p1X} ${safeY}`;
-                path += ` L ${endX - gap} ${safeY}`;
-                path += ` L ${endX - gap} ${endY}`;
-                path += ` L ${endX} ${endY}`;
+                path += ` L ${clampX(eX - gap)} ${safeY}`;
+                path += ` L ${clampX(eX - gap)} ${endY}`;
+                path += ` L ${eX} ${endY}`;
             } else {
                 path += ` L ${p1X} ${startY}`;
                 path += ` L ${p1X} ${endY}`;
-                path += ` L ${endX} ${endY}`;
+                path += ` L ${eX} ${endY}`;
             }
         } else if (type === 'SS') {
-            const p1X = startX - gap;
+            const p1X = clampX(sX - gap);
             path += ` L ${p1X} ${startY}`;
             path += ` L ${p1X} ${endY}`;
-            path += ` L ${endX} ${endY}`;
+            path += ` L ${eX} ${endY}`;
         } else if (type === 'FF') {
-            const p1X = Math.max(startX, endX) + gap;
+            const p1X = clampX(Math.max(sX, eX) + gap);
             path += ` L ${p1X} ${startY}`;
             path += ` L ${p1X} ${endY}`;
-            path += ` L ${endX} ${endY}`;
+            path += ` L ${eX} ${endY}`;
         } else if (type === 'SF') {
-            const p1X = startX - gap;
+            const p1X = clampX(sX - gap);
             path += ` L ${p1X} ${startY}`;
             path += ` L ${p1X} ${endY}`;
-            path += ` L ${endX} ${endY}`;
+            path += ` L ${eX} ${endY}`;
         } else {
-            path += ` L ${endX} ${endY}`;
+            path += ` L ${eX} ${endY}`;
         }
 
         return path;
@@ -430,6 +447,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
             ref={containerRef}
             id={id}
             className="mt-8 border border-slate-200 rounded-xl bg-white shadow-sm font-sans print:border-none print:shadow-none overflow-hidden"
+            style={{ maxWidth: '100%', boxSizing: 'border-box' }}
         >
             {/* Toolbar */}
             {!forceViewMode && (
@@ -466,7 +484,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 className="custom-scrollbar relative w-full bg-white"
                 ref={chartRef}
                 style={{
-                    // FIX v4.5: project view → no horizontal scroll, chart fits inside
+                    // v4.5+v4.6: project view → no horizontal scroll, chart fits inside
                     overflowX: isProjectView ? 'hidden' : 'auto',
                     overflowY: isProjectView ? 'visible' : 'auto',
                     maxHeight: isProjectView ? 'none' : '700px',
@@ -476,17 +494,20 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 <div
                     style={{
                         width: isProjectView ? '100%' : `${Math.max(chartWidth, 100)}px`,
+                        maxWidth: isProjectView ? '100%' : undefined,
                         minWidth: isProjectView ? undefined : '100%',
-                        height: `${chartHeight}px`
+                        height: `${chartHeight}px`,
+                        overflow: isProjectView ? 'hidden' : undefined
                     }}
                     className="relative bg-white"
                 >
-                    {/* SVG Layer for Dependencies */}
+                    {/* SVG Layer for Dependencies — v4.6: explicit width + overflow hidden */}
                     <svg
                         className="absolute inset-0 pointer-events-none z-10"
-                        width="100%"
+                        width={isProjectView ? chartWidth : '100%'}
                         height={chartHeight}
-                        style={{ minHeight: '100%' }}
+                        style={{ minHeight: '100%', overflow: 'hidden' }}
+                        overflow="hidden"
                     >
                         <defs>
                             <marker id={`arrowhead-right-${id}`} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -499,14 +520,15 @@ const GanttChart: React.FC<GanttChartProps> = ({
                         {renderDependencies()}
                     </svg>
 
-                    {/* Header: Time Markers */}
+                    {/* Header: Time Markers — v4.6: tighter filter */}
                     <div
                         className="border-b border-slate-200 bg-slate-50 sticky top-0 z-20 flex text-xs font-semibold text-slate-500 overflow-hidden"
                         style={{ height: `${HEADER_HEIGHT}px` }}
                     >
                         {markers.map((m, i) => {
                             const left = getLeft(m);
-                            if (left > chartWidth - 40) return null;
+                            // v4.6: tighter cutoff to prevent label overflow
+                            if (left > chartWidth - 60) return null;
 
                             return (
                                 <div
@@ -514,7 +536,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                     className="absolute border-l border-slate-300 pl-2 h-full flex items-center whitespace-nowrap overflow-hidden text-ellipsis"
                                     style={{
                                         left: `${left}px`,
-                                        maxWidth: '100px'
+                                        maxWidth: isProjectView ? `${Math.max(chartWidth - left - 5, 30)}px` : '100px'
                                     }}
                                 >
                                     {getMarkerLabel(m)}
@@ -609,17 +631,20 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                                         title={`${item.id}: ${item.description}`}
                                                     />
 
-                                                    {/* Label */}
-                                                    <div
-                                                        className="absolute text-[11px] font-bold text-slate-800 whitespace-nowrap px-2 pointer-events-none flex items-center"
-                                                        style={{
-                                                            left: `${left + 10}px`,
-                                                            height: '100%',
-                                                            top: 0
-                                                        }}
-                                                    >
-                                                        {item.id}
-                                                    </div>
+                                                    {/* Label — v4.6: clip if exceeds chartWidth */}
+                                                    {(left + 10 < chartWidth - 20) && (
+                                                        <div
+                                                            className="absolute text-[11px] font-bold text-slate-800 whitespace-nowrap px-2 pointer-events-none flex items-center overflow-hidden"
+                                                            style={{
+                                                                left: `${left + 10}px`,
+                                                                maxWidth: isProjectView ? `${Math.max(chartWidth - left - 15, 20)}px` : undefined,
+                                                                height: '100%',
+                                                                top: 0
+                                                            }}
+                                                        >
+                                                            {item.id}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         } else {
@@ -635,7 +660,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                             const fitsRight = (left + width + textWidth + 5) <= chartWidth;
                                             const fitsLeft = (left - textWidth - 5) >= 0;
 
-                                            let labelPos = fitsInside ? 'inside' : (fitsRight ? 'right' : (fitsLeft ? 'left' : 'inside-truncate'));
+                                            // v4.6: In project view, never use 'right' if it would overflow
+                                            let labelPos = fitsInside 
+                                                ? 'inside' 
+                                                : (fitsRight && !isProjectView ? 'right' : (fitsLeft ? 'left' : 'inside-truncate'));
 
                                             return (
                                                 <div
@@ -647,7 +675,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                                         className={`absolute rounded-md shadow-sm cursor-pointer transition-all duration-200 flex items-center ${labelPos.startsWith('inside') ? 'justify-start pl-2' : 'justify-center'} ${isHovered ? 'bg-indigo-500 z-20' : 'bg-indigo-400'}`}
                                                         style={{
                                                             left: `${left}px`,
-                                                            width: `${width}px`,
+                                                            width: `${Math.min(width, chartWidth - left)}px`,
                                                             height: `${BAR_HEIGHT}px`,
                                                             top: `${BAR_OFFSET_Y}px`
                                                         }}
