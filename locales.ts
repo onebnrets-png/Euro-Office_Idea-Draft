@@ -154,6 +154,8 @@ export const TEXT = {
         title: "Quality and Efficiency of the Implementation",
         desc: "Describe the project management structure, decision-making processes, and quality assurance mechanisms.",
         placeholder: "Describe how the project will be managed (e.g., Steering Committee, WP Leaders, conflict resolution, quality control)...",
+        implementation: "Implementation",
+        implementationDesc: "Detailed description of the project management approach: coordination, decision-making, quality assurance, risk management, communication, conflict resolution, and data management.",
         organigram: "Organizational Structure (Organigram)",
         roles: {
             coordinator: "Project Coordinator",
@@ -469,6 +471,8 @@ export const TEXT = {
         title: "Kakovost in učinkovitost izvedbe",
         desc: "Opišite strukturo vodenja projekta, procese odločanja in mehanizme zagotavljanja kakovosti.",
         placeholder: "Opišite, kako bo projekt voden (npr. usmerjevalni odbor, vodje DS, reševanje konfliktov, nadzor kakovosti)...",
+        implementation: "Implementacija",
+        implementationDesc: "Podroben opis pristopa k upravljanju projekta: koordinacija, odločanje, zagotavljanje kakovosti, obvladovanje tveganj, komunikacija, reševanje konfliktov in upravljanje podatkov.",
         organigram: "Organizacijska struktura (Organigram)",
         roles: {
             coordinator: "Projektni koordinator",
