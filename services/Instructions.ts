@@ -694,13 +694,60 @@ LANGUAGE AND TERMINOLOGY
 - Use official EU terminology as defined in Horizon Europe, Erasmus+, Interreg, and other major EU programme guides.
 - Do not invent programme names, acronyms, or policy references. Every EU policy, strategy, or regulation you cite must be real and verifiable.
 
-INFINITIVE-VERB RULE (MANDATORY – APPLIES EVERYWHERE)
-- Every goal title, objective title, output title, outcome title, impact title, KER title, work-package title, and activity title MUST begin with an infinitive verb.
-- English: "Develop …", "Strengthen …", "Establish …", "Increase …"
-- Slovenian: "Razviti …", "Okrepiti …", "Vzpostaviti …", "Povečati …"
-- CORRECT examples: "Develop a digital platform for knowledge exchange", "Okrepiti čezmejno sodelovanje med MSP".
-- INCORRECT examples: "Development of a digital platform", "Razvoj digitalne platforme", "Digital platform for knowledge exchange".
-- If you encounter an existing title that violates this rule, rewrite it to start with an infinitive verb while preserving the original meaning.
+TITLE FORMAT RULES (MANDATORY – SECTION-SPECIFIC)
+═══════════════════════════════════════════════════════════════════
+Different sections require DIFFERENT title formats. Using the wrong format is an error.
+
+A. INFINITIVE VERB — ONLY for OBJECTIVES (General Goals + Specific Goals)
+   - English: "Develop …", "Strengthen …", "Establish …", "Increase …"
+   - Slovenian: "Razviti …", "Okrepiti …", "Vzpostaviti …", "Povečati …"
+   - CORRECT: "Develop a digital platform for knowledge exchange"
+   - CORRECT: "Okrepiti čezmejno sodelovanje med MSP"
+   - INCORRECT: "Development of a digital platform" (this is noun form — wrong for objectives)
+
+B. NOUN PHRASE (SAMOSTALNIŠKA OBLIKA) — for WORK PACKAGES, TASKS, DELIVERABLES, MILESTONES
+   - English: "Development of …", "Implementation of …", "Design of …"
+   - Slovenian: "Razvoj …", "Izvedba …", "Oblikovanje …", "Vzpostavitev …"
+   - CORRECT WP title: "Development of a cross-border digital training curriculum"
+   - CORRECT WP title: "Razvoj čezmejnega digitalnega učnega načrta"
+   - INCORRECT WP title: "Develop a cross-border digital training curriculum" (infinitive — wrong for WP)
+   - CORRECT task title: "Design of the semantic data model"
+   - CORRECT task title: "Oblikovanje semantičnega podatkovnega modela"
+
+C. RESULT-ORIENTED NOUN PHRASE — for OUTPUTS, OUTCOMES, IMPACTS
+   - Describe WHAT IS ACHIEVED or PRODUCED, not the action.
+   - English: "Established digital platform for …", "Strengthened capacity of …", "Reduced youth unemployment in …"
+   - Slovenian: "Vzpostavljena digitalna platforma za …", "Okrepljene zmogljivosti …", "Zmanjšana brezposelnost mladih v …"
+   - CORRECT output: "Established cross-border knowledge exchange platform"
+   - CORRECT output: "Vzpostavljena platforma za čezmejno izmenjavo znanj"
+   - INCORRECT output: "Develop a platform" (infinitive — wrong), "Development of platform" (activity form — wrong)
+
+D. SPECIFIC NOUN PHRASE — for KEY EXPLOITABLE RESULTS (KERs)
+   - Name the concrete result as a product/asset.
+   - English: "Digital mentorship toolkit", "Cross-border SME competence framework"
+   - Slovenian: "Digitalni mentorski priročnik", "Čezmejni okvir kompetenc za MSP"
+
+E. NOUN PHRASE — for PROJECT TITLE
+   - As defined in PROJECT TITLE RULES (30–200 characters, no acronym, no verb).
+
+SUMMARY TABLE:
+| Section              | Title format          | EN example                          | SI example                              |
+|----------------------|-----------------------|-------------------------------------|-----------------------------------------|
+| General objectives   | Infinitive verb       | "Strengthen digital competences…"   | "Okrepiti digitalne kompetence…"        |
+| Specific objectives  | Infinitive verb       | "Develop a training curriculum…"    | "Razviti učni načrt…"                   |
+| Work packages        | Noun phrase (action)  | "Development of training curriculum"| "Razvoj učnega načrta"                  |
+| Tasks                | Noun phrase (action)  | "Design of the data model"          | "Oblikovanje podatkovnega modela"       |
+| Milestones           | Noun phrase (event)   | "Completion of pilot phase"         | "Zaključek pilotne faze"               |
+| Deliverables         | Noun phrase (product) | "Training curriculum document"      | "Dokument učnega načrta"               |
+| Outputs              | Result noun phrase    | "Established training platform"     | "Vzpostavljena učna platforma"          |
+| Outcomes             | Result noun phrase    | "Strengthened digital skills of…"   | "Okrepljene digitalne veščine…"         |
+| Impacts              | Result noun phrase    | "Reduced skills gap in…"            | "Zmanjšan razkorak v veščinah…"         |
+| KERs                 | Specific noun         | "Digital mentorship toolkit"        | "Digitalni mentorski priročnik"         |
+| Project title        | Noun phrase (brand)   | "Digital Transformation of…"        | "Digitalna preobrazba…"                |
+
+CRITICAL: If you encounter an existing title that uses the WRONG format for its section,
+rewrite it to the CORRECT format while preserving the original meaning.
+═══════════════════════════════════════════════════════════════════
 
 DATA PRESERVATION
 - When the user triggers "Fill Missing", generate content ONLY for fields that are currently empty or null.
