@@ -10,6 +10,13 @@
 //  - Calling the AI provider
 //  - Post-processing (JSON parsing, sanitization, merging)
 //
+// v4.5 — 2026-02-14 — DYNAMIC MAX_TOKENS
+//   - FIXED: All generateContent() calls now pass sectionKey so that
+//     aiProvider.ts can set appropriate max_tokens per section for
+//     OpenRouter. Prevents 402 "insufficient credits" errors.
+//     Affected functions: generateSectionContent, generateFieldContent,
+//     generateProjectSummary, translateProjectContent.
+//
 // v4.4 — 2026-02-14 — DELIVERABLE TITLE SCHEMA
 //   - FIXED: schemas.activities → deliverables now include "title"
 //     field (Type.STRING) alongside description and indicator.
@@ -388,11 +395,11 @@ const schemas: Record<string, any> = {
             type: Type.OBJECT,
             properties: {
               id: { type: Type.STRING },
-              title: { type: Type.STRING },        // ← v4.4 NEW
+              title: { type: Type.STRING },
               description: { type: Type.STRING },
               indicator: { type: Type.STRING }
             },
-            required: ['id', 'title', 'description', 'indicator']  // ← v4.4 UPDATED
+            required: ['id', 'title', 'description', 'indicator']
           }
         }
       },
@@ -595,25 +602,6 @@ const buildTaskInstruction = (
 
 // ═══════════════════════════════════════════════════════════════
 // PROMPT BUILDER (v4.3 — REORDERED: task instruction FIRST)
-//
-// AI models pay most attention to the BEGINNING and END of prompts.
-// The middle gets "lost in the middle" (Liu et al., 2023).
-//
-// NEW ORDER:
-//   1. langDirective (mandatory — overrides everything)
-//   2. langMismatchNotice (if applicable)
-//   3. taskInstruction (SPECIFIC section rules — WP ordering etc.)
-//   4. qualityGate (checklist — at the end of "important stuff")
-//   5. textSchema (JSON structure)
-//   6. context (existing project data)
-//   7. modeInstruction (fill/enhance/regenerate)
-//   8. academicRules (general)
-//   9. humanRules (general)
-//   10. titleRules (if applicable)
-//   11. globalRules (very long — goes to the "forgotten middle")
-//   12. sectionRules (chapter text — also long)
-//
-// This ensures AI reads the SPECIFIC instructions FIRST.
 // ═══════════════════════════════════════════════════════════════
 
 const getPromptAndSchemaForSection = (
@@ -636,14 +624,12 @@ const getPromptAndSchemaForSection = (
   const needsTextSchema = config.provider !== 'gemini';
   const textSchema = needsTextSchema ? schemaToTextInstruction(schema) : '';
 
-  // ALL rule blocks from Instructions.ts
   const langDirective = getLanguageDirective(language);
   const langMismatchNotice = detectInputLanguageMismatch(projectData, language);
   const academicRules = getAcademicRigorRules(language);
   const humanRules = getHumanizationRules(language);
   const titleRules = sectionKey === 'projectIdea' ? getProjectTitleRules(language) : '';
 
-  // Mode instruction from Instructions.ts + existing data injection
   let modeInstruction = getModeInstruction(mode, language);
   if ((mode === 'fill' || mode === 'enhance') && currentSectionData) {
     const dataHeader = language === 'si' ? 'Obstoječi podatki' : 'Existing data';
@@ -654,20 +640,19 @@ const getPromptAndSchemaForSection = (
   const taskInstruction = buildTaskInstruction(sectionKey, projectData, language);
   const qualityGate = getQualityGate(sectionKey, language);
 
-  // ═══ v4.3 REORDERED PROMPT ASSEMBLY ═══
   const prompt = [
-    langDirective,                              // 1. LANGUAGE (mandatory override)
-    langMismatchNotice,                         // 2. Language mismatch warning
-    taskInstruction,                            // 3. ★ SPECIFIC TASK RULES (WP ordering, formats, etc.)
-    textSchema,                                 // 4. JSON schema constraint
-    qualityGate,                                // 5. ★ QUALITY CHECKLIST (end of "important" block)
-    context,                                    // 6. Project data context
-    modeInstruction,                            // 7. Fill/enhance/regenerate mode
-    titleRules,                                 // 8. Title rules (if applicable)
-    academicRules,                              // 9. Academic rigor (general)
-    humanRules,                                 // 10. Humanization (general)
-    `${globalRulesHeader}:\n${globalRules}`,    // 11. Global rules (long — "forgotten middle")
-    sectionRules,                               // 12. Chapter rules (long)
+    langDirective,
+    langMismatchNotice,
+    taskInstruction,
+    textSchema,
+    qualityGate,
+    context,
+    modeInstruction,
+    titleRules,
+    academicRules,
+    humanRules,
+    `${globalRulesHeader}:\n${globalRules}`,
+    sectionRules,
   ].filter(Boolean).join('\n\n');
 
   return { prompt, schema };
@@ -689,10 +674,12 @@ export const generateSectionContent = async (
   const config = getProviderConfig();
   const useNativeSchema = config.provider === 'gemini';
 
+  // ★ FIX v4.5: Pass sectionKey so aiProvider can set appropriate max_tokens
   const result = await generateContent({
     prompt,
     jsonSchema: useNativeSchema ? schema : undefined,
     jsonMode: !useNativeSchema,
+    sectionKey: sectionKey,
   });
 
   const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
@@ -715,7 +702,6 @@ export const generateSectionContent = async (
     parsedData.proposedSolution = text;
   }
 
-  // Sanitize project title
   if (sectionKey === 'projectIdea' && parsedData.projectTitle) {
     parsedData.projectTitle = sanitizeProjectTitle(parsedData.projectTitle);
   }
@@ -724,10 +710,8 @@ export const generateSectionContent = async (
     parsedData = smartMerge(currentSectionData, parsedData);
   }
 
-  // Strip markdown from all string values
   parsedData = stripMarkdown(parsedData);
 
-  // Re-sanitize title after stripMarkdown
   if (sectionKey === 'projectIdea' && parsedData.projectTitle) {
     parsedData.projectTitle = sanitizeProjectTitle(parsedData.projectTitle);
   }
@@ -750,7 +734,6 @@ export const generateFieldContent = async (
   const globalRules = formatRules(instructions.GLOBAL_RULES);
   const globalRulesHeader = language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES';
 
-  // ALL rule blocks from Instructions.ts
   const langDirective = getLanguageDirective(language);
   const langMismatchNotice = detectInputLanguageMismatch(projectData, language);
   const academicRules = getAcademicRigorRules(language);
@@ -766,7 +749,6 @@ export const generateFieldContent = async (
 
   const titleRules = isProjectTitle ? getProjectTitleRules(language) : '';
 
-  // v4.1: Include chapter rules for field-level generation too
   const sectionRules = getRulesForSection(sectionName, language);
 
   let siblingContext = '';
@@ -859,7 +841,11 @@ export const generateFieldContent = async (
     taskLine
   ].filter(Boolean).join('\n\n');
 
-  const result = await generateContent({ prompt });
+  // ★ FIX v4.5: Pass sectionKey 'field' for appropriate max_tokens
+  const result = await generateContent({
+    prompt,
+    sectionKey: 'field',
+  });
 
   let text = result.text;
   text = text
@@ -895,7 +881,11 @@ export const generateProjectSummary = async (
     `${summaryRulesHeader}:\n- ${formattedSummaryRules}`
   ].join('\n\n');
 
-  const result = await generateContent({ prompt });
+  // ★ FIX v4.5: Pass sectionKey 'summary' for appropriate max_tokens
+  const result = await generateContent({
+    prompt,
+    sectionKey: 'summary',
+  });
   return result.text;
 };
 
@@ -915,7 +905,12 @@ export const translateProjectContent = async (
     `\nJSON to Translate:\n${JSON.stringify(projectData)}`
   ].join('\n');
 
-  const result = await generateContent({ prompt, jsonMode: true });
+  // ★ FIX v4.5: Pass sectionKey 'translation' for appropriate max_tokens
+  const result = await generateContent({
+    prompt,
+    jsonMode: true,
+    sectionKey: 'translation',
+  });
   const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
   return JSON.parse(jsonStr);
 };
