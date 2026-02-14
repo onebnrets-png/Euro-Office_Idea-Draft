@@ -1,3 +1,13 @@
+// components/ProjectDisplay.tsx
+// ═══════════════════════════════════════════════════════════════
+// v4.6 — 2026-02-14
+// CHANGES v4.6:
+//   - FIX: Added 'environmental' risk category to dropdown
+//   - FIX: Lowercase option values to match RiskCategory type
+//   - FIX: trafficColors keys include both lowercase (new) and
+//     uppercase (legacy fallback) for backward compatibility
+// ═══════════════════════════════════════════════════════════════
+
 import React, { useRef, useEffect, useCallback } from 'react';
 import { ICONS, getReadinessLevelsDefinitions, getSteps } from '../constants.tsx';
 import { TEXT } from '../locales.ts';
@@ -65,8 +75,6 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         }
     }, []);
     
-    // PRIMARY FIX: runs on EVERY value change including first async load
-    // Uses requestAnimationFrame to ensure browser has finished layout
     useEffect(() => {
         adjustHeight();
         const rafId = requestAnimationFrame(() => {
@@ -75,8 +83,6 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         return () => cancelAnimationFrame(rafId);
     }, [value, adjustHeight]);
 
-    // SECONDARY FIX: ResizeObserver catches container width changes
-    // (CSS grid/flex reflows) that affect scrollHeight
     useEffect(() => {
         const el = textAreaRef.current;
         if (!el) return;
@@ -87,7 +93,6 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         return () => observer.disconnect();
     }, [adjustHeight]);
 
-    // Also re-adjust when the window is resized
     useEffect(() => {
         const handleResize = () => adjustHeight();
         window.addEventListener('resize', handleResize);
@@ -217,7 +222,7 @@ const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependenc
                 {(task.dependencies || []).map((dep, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-slate-200 text-xs shadow-sm">
                         <span className="text-slate-700">{t.predecessor}: <strong className="text-sky-700">{dep.predecessorId}</strong> <span className="text-slate-400">({dep.type})</span></span>
-                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1"></button>
+                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1">×</button>
                     </div>
                 ))}
             </div>
@@ -390,7 +395,7 @@ const renderObjectives = (props, sectionKey) => {
             ))}
         </div>
     );
-}
+};
 
 // --- RENDER PROJECT MANAGEMENT (v4.5 — Fixed duplicate title) ---
 const renderProjectManagement = (props) => {
@@ -401,7 +406,7 @@ const renderProjectManagement = (props) => {
 
     return (
         <div className="mb-10 pb-8">
-            {/*  IMPLEMENTACIJA — en sam naslov  */}
+            {/* IMPLEMENTACIJA — en sam naslov */}
             <div id="implementation" className="mb-10">
                 <SectionHeader title={t.management.implementation || t.management.title}>
                     <GenerateButton 
@@ -430,7 +435,7 @@ const renderProjectManagement = (props) => {
                 </div>
             </div>
 
-            {/*  ORGANIZACIJSKA STRUKTURA (ORGANIGRAM)  */}
+            {/* ORGANIZACIJSKA STRUKTURA (ORGANIGRAM) */}
             <div id="organigram">
                 <SectionHeader title={t.management.organigram} />
 
@@ -446,14 +451,20 @@ const renderProjectManagement = (props) => {
         </div>
     );
 };
-// --- RENDER RISKS (Sub-Component of Activities) ---
+
+// --- RENDER RISKS (v4.6 — Added environmental, lowercase values, backward compat) ---
 const renderRisks = (props) => {
     const { projectData, onUpdateData, onGenerateField, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const { risks } = projectData;
     const path = ['risks'];
     const t = TEXT[language] || TEXT['en'];
 
-    const trafficColors = {
+    // v4.6: lowercase keys matching types.ts + uppercase fallbacks for legacy saved data
+    const trafficColors: Record<string, string> = {
+        low: 'bg-green-100 border-green-300 text-green-800',
+        medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
+        high: 'bg-red-100 border-red-300 text-red-800',
+        // Legacy uppercase fallbacks
         Low: 'bg-green-100 border-green-300 text-green-800',
         Medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
         High: 'bg-red-100 border-red-300 text-red-800'
@@ -461,7 +472,19 @@ const renderRisks = (props) => {
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${risks.length + 1}`, category: 'Technical', title: '', description: '', likelihood: 'Low', impact: 'Low', mitigation: '' })} addText={t.add} />
+            <SectionHeader 
+                title={t.subSteps.riskMitigation} 
+                onAdd={() => onAddItem(path, { 
+                    id: `RISK${risks.length + 1}`, 
+                    category: 'technical', 
+                    title: '', 
+                    description: '', 
+                    likelihood: 'low', 
+                    impact: 'low', 
+                    mitigation: '' 
+                })} 
+                addText={t.add} 
+            />
             {(risks || []).map((risk, index) => {
                 const likelihoodLoading = isLoading === `${t.generating} likelihood...`;
                 const impactLoading = isLoading === `${t.generating} impact...`;
@@ -483,13 +506,14 @@ const renderRisks = (props) => {
                         <div className="w-48">
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.category}</label>
                             <select
-                                value={risk.category || 'Technical'}
+                                value={risk.category || 'technical'}
                                 onChange={(e) => onUpdateData([...path, index, 'category'], e.target.value)}
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-base"
                             >
-                                <option value="Technical">{t.risks.categories.technical}</option>
-                                <option value="Social">{t.risks.categories.social}</option>
-                                <option value="Economic">{t.risks.categories.economic}</option>
+                                <option value="technical">{t.risks.categories.technical}</option>
+                                <option value="social">{t.risks.categories.social}</option>
+                                <option value="economic">{t.risks.categories.economic}</option>
+                                <option value="environmental">{t.risks.categories.environmental}</option>
                             </select>
                         </div>
                         <div className="flex-1 min-w-[200px]">
@@ -528,11 +552,11 @@ const renderRisks = (props) => {
                                 <select
                                     value={risk.likelihood}
                                     onChange={(e) => onUpdateData([...path, index, 'likelihood'], e.target.value)}
-                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.likelihood]} pr-10 appearance-none transition-colors cursor-pointer text-base`}
+                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.likelihood] || ''} pr-10 appearance-none transition-colors cursor-pointer text-base`}
                                 >
-                                    <option value="Low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="Medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="High" className="bg-white text-slate-800">{t.risks.levels.high}</option>
+                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
+                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
+                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
                                 </select>
                                 <div className="absolute top-1.5 right-1.5">
                                     <GenerateButton onClick={() => onGenerateField([...path, index, 'likelihood'])} isLoading={likelihoodLoading} isField title={t.generateAI} missingApiKey={missingApiKey} />
@@ -545,11 +569,11 @@ const renderRisks = (props) => {
                                 <select
                                     value={risk.impact}
                                     onChange={(e) => onUpdateData([...path, index, 'impact'], e.target.value)}
-                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.impact]} pr-10 appearance-none transition-colors cursor-pointer text-base`}
+                                    className={`w-full p-2.5 border rounded-lg font-bold ${trafficColors[risk.impact] || ''} pr-10 appearance-none transition-colors cursor-pointer text-base`}
                                 >
-                                    <option value="Low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="Medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="High" className="bg-white text-slate-800">{t.risks.levels.high}</option>
+                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
+                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
+                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
                                 </select>
                                 <div className="absolute top-1.5 right-1.5">
                                     <GenerateButton onClick={() => onGenerateField([...path, index, 'impact'])} isLoading={impactLoading} isField title={t.generateAI} missingApiKey={missingApiKey} />
