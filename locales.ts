@@ -85,6 +85,8 @@ export const TEXT = {
     taskDescPlaceholder: "Describe the task...",
     milestonePlaceholder: "Describe the milestone...",
     deliverableDescPlaceholder: "Describe the deliverable...",
+    deliverableTitle: "Deliverable Title",
+    deliverableTitlePlaceholder: "Enter deliverable title...",
     indicatorPlaceholder: "Enter a measurable indicator...",
     enterTitle: "Enter title...",
     enterDesc: "Enter description...",
