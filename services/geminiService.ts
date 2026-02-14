@@ -355,9 +355,10 @@ const schemas: Record<string, any> = {
             type: Type.OBJECT,
             properties: {
               id: { type: Type.STRING },
-              description: { type: Type.STRING }
+              description: { type: Type.STRING },
+              date: { type: Type.STRING }
             },
-            required: ['id', 'description']
+            required: ['id', 'description', 'date']
           }
         },
         deliverables: {
@@ -376,6 +377,7 @@ const schemas: Record<string, any> = {
       required: ['id', 'title', 'tasks', 'milestones', 'deliverables']
     }
   },
+
   results: {
     type: Type.ARRAY,
     items: {
