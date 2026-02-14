@@ -2,12 +2,19 @@
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
 // 
-// SMART 3-LEVEL LOGIC for "Generate with AI" button:
-//   1. Check if OTHER language version has content for this section
-//      → If YES: offer "Translate from SI/EN" or "Generate new"
-//   2. Check if CURRENT language already has content
-//      → If YES: offer "Regenerate all" or "Fill missing only"
-//   3. If nothing exists → generate without asking
+// v3.3 — 2026-02-14 — CHANGES:
+//   - 3-option modal: Enhance Existing / Fill Missing / Regenerate All
+//   - Applied to both single-section and composite-section generation
+//   - 'enhance' mode passed to geminiService for professional deepening
+//
+// SMART 4-LEVEL LOGIC for "Generate with AI" button:
+//   1. Check if OTHER language has content, CURRENT is empty
+//      → Offer "Translate from SI/EN" or "Generate new"
+//   2. Check if BOTH languages have content
+//      → Offer "Translate" or 3-option (Enhance/Fill/Regenerate)
+//   3. Check if CURRENT language already has content
+//      → 3-option modal: Enhance / Fill / Regenerate
+//   4. If nothing exists → generate without asking
 //
 // Errors are handled gracefully with user-friendly modals.
 // ═══════════════════════════════════════════════════════════════
@@ -35,7 +42,6 @@ interface UseGenerationProps {
   checkSectionHasContent: (sectionKey: string) => boolean;
   setModalConfig: (config: any) => void;
   closeModal: () => void;
-  // NEW: needed for translation from other version
   currentProjectId: string | null;
   projectVersions: { en: any; si: any };
   setLanguage: (lang: 'en' | 'si') => void;
@@ -181,7 +187,7 @@ export const useGeneration = ({
         const { translatedData, stats } = await smartTranslateProject(
           otherLangData,
           language,
-          projectData, // existing target = current data (preserve what we have)
+          projectData,
           currentProjectId!
         );
 
@@ -264,7 +270,39 @@ export const useGeneration = ({
     [projectData, language, t, closeModal, setProjectData, setHasUnsavedTranslationChanges, handleAIError]
   );
 
-  // ─── SMART Handle generate (3-level logic) ─────────────────────
+  // ─── 3-option generation modal helper (v3.3) ──────────────────
+  // Reusable function that shows Enhance / Fill / Regenerate modal
+
+  const show3OptionModal = useCallback(
+    (onEnhance: () => void, onFill: () => void, onRegenerate: () => void) => {
+      setModalConfig({
+        isOpen: true,
+        title: t.modals.generationChoiceTitle,
+        message: t.modals.generationChoiceMsg,
+
+        // Option 1: Enhance Existing (green — primary)
+        confirmText: t.modals.enhanceExistingBtn,
+        confirmDesc: t.modals.enhanceExistingDesc,
+        onConfirm: onEnhance,
+
+        // Option 2: Fill Missing (blue — secondary)
+        secondaryText: t.modals.fillMissingBtn,
+        secondaryDesc: t.modals.fillMissingDesc,
+        onSecondary: onFill,
+
+        // Option 3: Regenerate All (amber — tertiary)
+        tertiaryText: t.modals.regenerateAllBtn,
+        tertiaryDesc: t.modals.regenerateAllDesc,
+        onTertiary: onRegenerate,
+
+        cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
+        onCancel: closeModal,
+      });
+    },
+    [t, language, setModalConfig, closeModal]
+  );
+
+  // ─── SMART Handle generate (4-level logic — v3.3) ─────────────
 
   const handleGenerateSection = useCallback(
     async (sectionKey: string) => {
@@ -276,7 +314,7 @@ export const useGeneration = ({
       const otherLang = language === 'en' ? 'SI' : 'EN';
       const currentHasContent = checkSectionHasContent(sectionKey);
 
-      // LEVEL 1: Check if other language has content → offer translate
+      // LEVEL 1: Check if other language has content
       const otherLangData = await checkOtherLanguageHasContent(sectionKey);
 
       if (otherLangData && !currentHasContent) {
@@ -295,7 +333,7 @@ export const useGeneration = ({
           secondaryText: language === 'si'
             ? 'Generiraj novo'
             : 'Generate new',
-          cancelText: t.modals.cancel,
+          cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
           onSecondary: () => executeGeneration(sectionKey, 'regenerate'),
           onCancel: closeModal,
@@ -304,48 +342,55 @@ export const useGeneration = ({
       }
 
       if (otherLangData && currentHasContent) {
-        // Both languages have content → translate, regenerate, or fill?
+        // LEVEL 2: Both languages have content → translate or 3-option?
         setModalConfig({
           isOpen: true,
           title: language === 'si'
             ? `Vsebina obstaja v obeh jezikih`
             : `Content exists in both languages`,
           message: language === 'si'
-            ? `To poglavje ima vsebino v obeh jezikih. Želite prevesti iz ${otherLang}, generirati vse na novo, ali samo dopolniti prazna polja?`
-            : `This section has content in both languages. Would you like to translate from ${otherLang}, regenerate everything, or just fill missing fields?`,
+            ? `To poglavje ima vsebino v obeh jezikih. Želite prevesti iz ${otherLang} ali delati s trenutno vsebino?`
+            : `This section has content in both languages. Would you like to translate from ${otherLang} or work with current content?`,
           confirmText: language === 'si'
             ? `Prevedi iz ${otherLang}`
             : `Translate from ${otherLang}`,
-          secondaryText: t.modals.fillMissingBtn,
-          cancelText: t.modals.cancel,
+          secondaryText: language === 'si'
+            ? 'Uporabi trenutno vsebino'
+            : 'Work with current content',
+          cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
-          onSecondary: () => executeGeneration(sectionKey, 'fill'),
+          onSecondary: () => {
+            // Close this modal and show the 3-option modal
+            closeModal();
+            setTimeout(() => {
+              show3OptionModal(
+                () => executeGeneration(sectionKey, 'enhance'),
+                () => executeGeneration(sectionKey, 'fill'),
+                () => executeGeneration(sectionKey, 'regenerate')
+              );
+            }, 100);
+          },
           onCancel: closeModal,
         });
         return;
       }
 
-      // LEVEL 2: Only current language has content → regenerate or fill?
+      // LEVEL 3: Only current language has content → 3-option modal
       if (currentHasContent) {
-        setModalConfig({
-          isOpen: true,
-          title: t.modals.generationChoiceTitle,
-          message: t.modals.generationChoiceMsg,
-          confirmText: t.modals.regenerateAllBtn,
-          secondaryText: t.modals.fillMissingBtn,
-          cancelText: t.modals.cancel,
-          onConfirm: () => executeGeneration(sectionKey, 'regenerate'),
-          onSecondary: () => executeGeneration(sectionKey, 'fill'),
-          onCancel: closeModal,
-        });
+        show3OptionModal(
+          () => executeGeneration(sectionKey, 'enhance'),
+          () => executeGeneration(sectionKey, 'fill'),
+          () => executeGeneration(sectionKey, 'regenerate')
+        );
         return;
       }
 
-      // LEVEL 3: Nothing exists anywhere → just generate
+      // LEVEL 4: Nothing exists anywhere → just generate
       executeGeneration(sectionKey, 'regenerate');
     },
-    [ensureApiKey, language, t, checkSectionHasContent, checkOtherLanguageHasContent,
-     executeGeneration, performTranslationFromOther, setModalConfig, closeModal, setIsSettingsOpen]
+    [ensureApiKey, language, checkSectionHasContent, checkOtherLanguageHasContent,
+     executeGeneration, performTranslationFromOther, show3OptionModal,
+     setModalConfig, closeModal, setIsSettingsOpen]
   );
 
   // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
@@ -406,48 +451,56 @@ export const useGeneration = ({
             ? `Prevedi iz ${otherLang}`
             : `Translate from ${otherLang}`,
           secondaryText: language === 'si' ? 'Generiraj novo' : 'Generate new',
-          cancelText: t.modals.cancel,
+          cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
           onSecondary: () => runComposite('regenerate'),
           onCancel: closeModal,
         });
       } else if (otherLangData && hasContentInSections) {
+        // Both languages have content → translate or work with current
         setModalConfig({
           isOpen: true,
           title: language === 'si'
             ? `Rezultati obstajajo v obeh jezikih`
             : `Results exist in both languages`,
           message: language === 'si'
-            ? `Želite prevesti iz ${otherLang}, dopolniti manjkajoča polja ali generirati vse na novo?`
-            : `Would you like to translate from ${otherLang}, fill missing fields, or regenerate everything?`,
+            ? `Želite prevesti iz ${otherLang} ali delati s trenutno vsebino?`
+            : `Would you like to translate from ${otherLang} or work with current content?`,
           confirmText: language === 'si'
             ? `Prevedi iz ${otherLang}`
             : `Translate from ${otherLang}`,
-          secondaryText: t.modals.fillMissingBtn,
-          cancelText: t.modals.cancel,
+          secondaryText: language === 'si'
+            ? 'Uporabi trenutno vsebino'
+            : 'Work with current content',
+          cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
-          onSecondary: () => runComposite('fill'),
+          onSecondary: () => {
+            closeModal();
+            setTimeout(() => {
+              show3OptionModal(
+                () => runComposite('enhance'),
+                () => runComposite('fill'),
+                () => runComposite('regenerate')
+              );
+            }, 100);
+          },
           onCancel: closeModal,
         });
       } else if (hasContentInSections) {
-        setModalConfig({
-          isOpen: true,
-          title: t.modals.generationChoiceTitle,
-          message: t.modals.generationChoiceMsg,
-          confirmText: t.modals.regenerateAllBtn,
-          secondaryText: t.modals.fillMissingBtn,
-          cancelText: t.modals.cancel,
-          onConfirm: () => runComposite('regenerate'),
-          onSecondary: () => runComposite('fill'),
-          onCancel: closeModal,
-        });
+        // v3.3: 3-option modal for composite sections too
+        show3OptionModal(
+          () => runComposite('enhance'),
+          () => runComposite('fill'),
+          () => runComposite('regenerate')
+        );
       } else {
         runComposite('regenerate');
       }
     },
     [ensureApiKey, checkSectionHasContent, checkOtherLanguageHasContent, projectData,
      language, t, closeModal, setProjectData, setHasUnsavedTranslationChanges,
-     setIsSettingsOpen, setModalConfig, handleAIError, performTranslationFromOther]
+     setIsSettingsOpen, setModalConfig, handleAIError, performTranslationFromOther,
+     show3OptionModal]
   );
 
   // ─── Single field generation ───────────────────────────────────
