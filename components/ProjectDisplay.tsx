@@ -400,7 +400,7 @@ const renderProjectManagement = (props) => {
     const pmPath = ['projectManagement'];
 
     return (
-        <div id="quality-efficiency" className="mb-10 pb-8">
+        <div id="implementation" className="mb-10 pb-8">
             <SectionHeader title={t.management.title}>
                 <GenerateButton 
                     onClick={() => onGenerateSection('projectManagement')} 
@@ -413,29 +413,23 @@ const renderProjectManagement = (props) => {
             
             <p className="text-sm text-slate-500 mb-6 -mt-2">{t.management.desc}</p>
 
-            {/* ── IMPLEMENTACIJA ── */}
-            <div className="mb-8">
-                <div className="mb-3 border-b border-slate-200 pb-2">
-                    <h4 className="text-lg font-bold text-slate-700">{t.management.implementation}</h4>
-                    <p className="text-sm text-slate-500 mt-0.5">{t.management.implementationDesc}</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea 
-                        label={t.description} 
-                        path={[...pmPath, 'description']} 
-                        value={projectManagement?.description || ''} 
-                        onUpdate={onUpdateData} 
-                        onGenerate={onGenerateField} 
-                        isLoading={isLoading} 
-                        placeholder={t.management.placeholder} 
-                        generateTitle={`${t.generateField} ${t.description}`} 
-                        missingApiKey={missingApiKey} 
-                    />
-                </div>
+            {/*  DESCRIPTION FIELD  */}
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
+                <TextArea 
+                    label={t.description} 
+                    path={[...pmPath, 'description']} 
+                    value={projectManagement?.description || ''} 
+                    onUpdate={onUpdateData} 
+                    onGenerate={onGenerateField} 
+                    isLoading={isLoading} 
+                    placeholder={t.management.placeholder} 
+                    generateTitle={`${t.generateField} ${t.description}`} 
+                    missingApiKey={missingApiKey} 
+                />
             </div>
 
-            {/* ── ORGANIZACIJSKA STRUKTURA (ORGANIGRAM) ── */}
-            <div>
+            {/*  ORGANIZATIONAL STRUCTURE (ORGANIGRAM)  */}
+            <div id="organigram">
                 <div className="mb-3 border-b border-slate-200 pb-2">
                     <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
                 </div>
@@ -459,11 +453,40 @@ const renderRisks = (props) => {
     const path = ['risks'];
     const t = TEXT[language] || TEXT['en'];
 
-    const trafficColors = {
-        Low: 'bg-green-100 border-green-300 text-green-800',
-        Medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-        High: 'bg-red-100 border-red-300 text-red-800'
-    };
+    // 1. trafficColors – lowercase keys
+const trafficColors = {
+    low: 'bg-green-100 border-green-300 text-green-800',
+    medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
+    high: 'bg-red-100 border-red-300 text-red-800'
+};
+
+// 2. onAddItem – lowercase defaults
+onAddItem(path, { id: `RISK${risks.length + 1}`, category: 'technical', title: '', 
+    description: '', likelihood: 'low', impact: 'low', mitigation: '' })
+
+// 3. Category select – lowercase values + environmental
+<select
+    value={risk.category || 'technical'}
+    onChange={(e) => onUpdateData([...path, index, 'category'], e.target.value)}
+    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-base"
+>
+    <option value="technical">{t.risks.categories.technical}</option>
+    <option value="social">{t.risks.categories.social}</option>
+    <option value="economic">{t.risks.categories.economic}</option>
+    <option value="environmental">{t.risks.categories.environmental}</option>
+</select>
+
+// 4. Likelihood select – lowercase values
+<option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
+<option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
+<option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
+
+// 5. Impact select – same lowercase values
+
+// 6. trafficColors usage – case-insensitive lookup
+className={`... ${trafficColors[risk.likelihood?.toLowerCase?.()] || trafficColors.low} ...`}
+// in
+className={`... ${trafficColors[risk.impact?.toLowerCase?.()] || trafficColors.low} ...`}
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
