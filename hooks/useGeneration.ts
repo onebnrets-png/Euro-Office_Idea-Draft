@@ -2,17 +2,18 @@
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
 //
-// v3.4 — 2026-02-14 — CHANGES:
+// v3.5 — 2026-02-14 — CHANGES:
 //   - FIXED: robustCheckSectionHasContent replaces broken parent check
-//   - Recursively checks ALL fields (title, description, nested objects, arrays)
-//   - 3-option modal now correctly shown when ANY field has content
-//   - checkOtherLanguageHasContent also checks nested objects
+//   - FIXED: checkOtherLanguageHasContent now checks ONLY the specific
+//     section with deep recursive content check — no false positives
+//     from empty objects or unrelated sections
+//   - 3-option modal: Enhance Existing / Fill Missing / Regenerate All
 //   - 'enhance' mode passed to geminiService for professional deepening
 //
 // SMART 4-LEVEL LOGIC for "Generate with AI" button:
-//   1. Check if OTHER language has content, CURRENT is empty
+//   1. Check if OTHER language has content FOR THIS SECTION, CURRENT is empty
 //      → Offer "Translate from SI/EN" or "Generate new"
-//   2. Check if BOTH languages have content
+//   2. Check if BOTH languages have content FOR THIS SECTION
 //      → Offer "Translate" or 3-option (Enhance/Fill/Regenerate)
 //   3. Check if CURRENT language already has content
 //      → 3-option modal: Enhance / Fill / Regenerate
@@ -76,46 +77,33 @@ export const useGeneration = ({
 
   const t = TEXT[language] || TEXT['en'];
 
+  // ─── DEEP CONTENT CHECKER (shared utility) ─────────────────────
+  // Returns true only if the given data contains actual meaningful
+  // text — not just empty strings, empty arrays, or empty objects.
+
+  const hasDeepContent = useCallback((data: any): boolean => {
+    if (!data) return false;
+    if (typeof data === 'string') return data.trim().length > 0;
+    if (Array.isArray(data)) {
+      return data.length > 0 && data.some((item: any) => hasDeepContent(item));
+    }
+    if (typeof data === 'object') {
+      return Object.values(data).some((v: any) => hasDeepContent(v));
+    }
+    return false;
+  }, []);
+
   // ─── ROBUST content checker (v3.4 FIX) ─────────────────────────
   // The parent's checkSectionHasContent only checks top-level or
-  // title fields. This version recursively checks ALL fields:
-  // title, description, nested objects, arrays with items.
-  // This ensures the 3-option modal appears when the user has
-  // entered ANY content (e.g. just a description, not a title).
+  // title fields. This version recursively checks ALL fields.
 
   const robustCheckSectionHasContent = useCallback(
     (sectionKey: string): boolean => {
       const section = projectData[sectionKey];
       if (!section) return false;
-
-      const hasAnyContent = (obj: any): boolean => {
-        if (!obj || typeof obj !== 'object') return false;
-        for (const key of Object.keys(obj)) {
-          const val = obj[key];
-          // String field with actual text
-          if (typeof val === 'string' && val.trim().length > 0) return true;
-          // Array with at least one meaningful item
-          if (Array.isArray(val) && val.length > 0) {
-            if (
-              val.some((item: any) => {
-                if (typeof item === 'string') return item.trim().length > 0;
-                if (typeof item === 'object') return hasAnyContent(item);
-                return false;
-              })
-            )
-              return true;
-          }
-          // Nested object
-          if (typeof val === 'object' && !Array.isArray(val) && hasAnyContent(val)) {
-            return true;
-          }
-        }
-        return false;
-      };
-
-      return hasAnyContent(section);
+      return hasDeepContent(section);
     },
-    [projectData]
+    [projectData, hasDeepContent]
   );
 
   // ─── Friendly error handler ────────────────────────────────────
@@ -190,50 +178,41 @@ export const useGeneration = ({
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
 
-  // ─── Check if other language has content for a section ─────────
+  // ─── Check if other language has content FOR THIS SECTION (v3.5 FIX) ──
 
   const checkOtherLanguageHasContent = useCallback(
     async (sectionKey: string): Promise<any | null> => {
       const otherLang = language === 'en' ? 'si' : 'en';
 
-      // Recursive content checker (same logic as robustCheckSectionHasContent)
-      const hasDeepContent = (data: any): boolean => {
-        if (!data) return false;
-        if (typeof data === 'string') return data.trim().length > 0;
-        if (Array.isArray(data)) {
-          return data.some((item: any) => hasDeepContent(item));
+      // Helper: check if a specific project version has content
+      // in the EXACT section we're asking about — not anywhere else
+      const checkVersion = (projectVersion: any): any | null => {
+        if (!projectVersion) return null;
+        const sectionData = projectVersion[sectionKey];
+        if (!sectionData) return null;
+        // Only return the project if THIS SPECIFIC SECTION has real content
+        if (hasDeepContent(sectionData)) {
+          return projectVersion;
         }
-        if (typeof data === 'object') {
-          return Object.values(data).some((v: any) => hasDeepContent(v));
-        }
-        return false;
+        return null;
       };
 
       // First check in-memory versions
-      const cached = projectVersions[otherLang];
-      if (cached) {
-        const sectionData = cached[sectionKey];
-        if (sectionData && hasDeepContent(sectionData)) {
-          return cached;
-        }
-      }
+      const cachedResult = checkVersion(projectVersions[otherLang]);
+      if (cachedResult) return cachedResult;
 
       // If not in memory, try loading from storage
       try {
         const loaded = await storageService.loadProject(otherLang, currentProjectId);
-        if (loaded) {
-          const sectionData = loaded[sectionKey];
-          if (sectionData && hasDeepContent(sectionData)) {
-            return loaded;
-          }
-        }
+        const loadedResult = checkVersion(loaded);
+        if (loadedResult) return loadedResult;
       } catch (e) {
         console.warn('[useGeneration] Could not load other language version:', e);
       }
 
       return null;
     },
-    [language, projectVersions, currentProjectId]
+    [language, projectVersions, currentProjectId, hasDeepContent]
   );
 
   // ─── Perform translation from other language ───────────────────
@@ -355,7 +334,6 @@ export const useGeneration = ({
   );
 
   // ─── 3-option generation modal helper (v3.3) ──────────────────
-  // Reusable function that shows Enhance / Fill / Regenerate modal
 
   const show3OptionModal = useCallback(
     (onEnhance: () => void, onFill: () => void, onRegenerate: () => void) => {
@@ -386,7 +364,7 @@ export const useGeneration = ({
     [t, language, setModalConfig, closeModal]
   );
 
-  // ─── SMART Handle generate (4-level logic — v3.4) ─────────────
+  // ─── SMART Handle generate (4-level logic — v3.5) ─────────────
 
   const handleGenerateSection = useCallback(
     async (sectionKey: string) => {
@@ -397,14 +375,14 @@ export const useGeneration = ({
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
-      // v3.4 FIX: Use robust check instead of parent's broken version
+      // v3.4/3.5 FIX: Use robust check instead of parent's broken version
       const currentHasContent = robustCheckSectionHasContent(sectionKey);
 
-      // LEVEL 1: Check if other language has content
+      // LEVEL 1: Check if other language has content FOR THIS SPECIFIC SECTION
       const otherLangData = await checkOtherLanguageHasContent(sectionKey);
 
       if (otherLangData && !currentHasContent) {
-        // Other language has content, current is empty → translate or generate?
+        // Other language has content for THIS section, current is empty → translate or generate?
         setModalConfig({
           isOpen: true,
           title:
@@ -429,7 +407,7 @@ export const useGeneration = ({
       }
 
       if (otherLangData && currentHasContent) {
-        // LEVEL 2: Both languages have content → translate or 3-option?
+        // LEVEL 2: Both languages have content FOR THIS SECTION → translate or 3-option?
         setModalConfig({
           isOpen: true,
           title:
@@ -449,7 +427,6 @@ export const useGeneration = ({
           cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
           onSecondary: () => {
-            // Close this modal and show the 3-option modal
             closeModal();
             setTimeout(() => {
               show3OptionModal(
@@ -502,7 +479,7 @@ export const useGeneration = ({
 
       const sections = ['outputs', 'outcomes', 'impacts', 'kers'];
 
-      // v3.4 FIX: Use robust check
+      // v3.4/3.5 FIX: Use robust check
       const hasContentInSections = sections.some((s) =>
         robustCheckSectionHasContent(s)
       );
@@ -546,7 +523,6 @@ export const useGeneration = ({
       };
 
       if (otherLangData && !hasContentInSections) {
-        // Other language has results, current is empty
         setModalConfig({
           isOpen: true,
           title:
@@ -568,7 +544,6 @@ export const useGeneration = ({
           onCancel: closeModal,
         });
       } else if (otherLangData && hasContentInSections) {
-        // Both languages have content → translate or work with current
         setModalConfig({
           isOpen: true,
           title:
@@ -602,7 +577,6 @@ export const useGeneration = ({
           onCancel: closeModal,
         });
       } else if (hasContentInSections) {
-        // v3.3: 3-option modal for composite sections too
         show3OptionModal(
           () => runComposite('enhance'),
           () => runComposite('fill'),
