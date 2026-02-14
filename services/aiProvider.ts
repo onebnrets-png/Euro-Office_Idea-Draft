@@ -1,6 +1,15 @@
 // services/aiProvider.ts
-// Universal AI Provider Abstraction Layer
-// Supports: Google Gemini (direct) and OpenRouter (100+ models)
+// ═══════════════════════════════════════════════════════════════
+// Universal AI Provider Abstraction Layer – v2.0 (2026-02-14)
+// ═══════════════════════════════════════════════════════════════
+// CHANGELOG:
+// v2.0 – FIX: Added dynamic max_tokens for OpenRouter based on
+//         section key. Prevents 402 "insufficient credits" errors
+//         by requesting only the tokens actually needed instead of
+//         the model default (65536). Also improved 402 error handling
+//         with user-friendly message.
+// v1.0 – Initial version.
+// ═══════════════════════════════════════════════════════════════
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { storageService } from './storageService.ts';
@@ -20,10 +29,49 @@ export interface AIGenerateOptions {
   jsonSchema?: any;
   jsonMode?: boolean;
   temperature?: number;
+  sectionKey?: string;  // ★ FIX v2.0: pass section key for dynamic max_tokens
 }
 
 export interface AIGenerateResult {
   text: string;
+}
+
+// ─── ★ FIX v2.0: DYNAMIC MAX_TOKENS PER SECTION ─────────────────
+// OpenRouter pre-charges credits for the FULL max_tokens budget.
+// By right-sizing per section, we use 4–16× fewer credits per call.
+// These values are generous upper bounds – actual output is usually 30-60% of this.
+
+const SECTION_MAX_TOKENS: Record<string, number> = {
+  // Large structured sections
+  activities:          16384,  // Multiple WPs with tasks, milestones, deliverables
+  expectedResults:     8192,   // Composite: outputs + outcomes + impacts
+  
+  // Medium sections
+  projectManagement:   8192,   // Implementation + organigram description
+  risks:               6144,   // Risk table with mitigations
+  objectives:          6144,   // General + specific objectives
+  
+  // Smaller sections
+  problemAnalysis:     4096,   // Core problem, causes, consequences
+  projectIdea:         4096,   // Title, acronym, summary, state of the art
+  outputs:             4096,
+  outcomes:            4096,
+  impacts:             4096,
+  kers:                4096,   // Key Expected Results
+  
+  // Single field generation (used by generateFieldContent)
+  field:               2048,
+  
+  // Summary & translation
+  summary:             4096,
+  translation:         8192,
+};
+
+const DEFAULT_MAX_TOKENS = 4096;
+
+function getMaxTokensForSection(sectionKey?: string): number {
+  if (!sectionKey) return DEFAULT_MAX_TOKENS;
+  return SECTION_MAX_TOKENS[sectionKey] || DEFAULT_MAX_TOKENS;
 }
 
 // ─── GEMINI MODELS ───────────────────────────────────────────────
@@ -197,6 +245,7 @@ async function generateWithGemini(config: AIProviderConfig, options: AIGenerateO
 }
 
 // ─── OPENROUTER ADAPTER ─────────────────────────────────────────
+// ★ FIX v2.0: Now includes dynamic max_tokens + 402 error handling
 
 async function generateWithOpenRouter(config: AIProviderConfig, options: AIGenerateOptions): Promise<AIGenerateResult> {
   const messages: any[] = [
@@ -210,9 +259,13 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
     });
   }
 
+  // ★ FIX v2.0: Calculate appropriate max_tokens for this section
+  const maxTokens = getMaxTokensForSection(options.sectionKey);
+
   const body: any = {
     model: config.model,
     messages: messages,
+    max_tokens: maxTokens,  // ★ FIX v2.0: explicit limit instead of model default (65536)
   };
 
   if (options.jsonSchema || options.jsonMode) {
@@ -245,6 +298,10 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
       if (response.status === 429) {
         throw new Error('API Quota Exceeded. You have reached the rate limit. Please try again later or switch to a different model/plan.');
       }
+      // ★ FIX v2.0: Handle 402 (insufficient credits) with clear message
+      if (response.status === 402) {
+        throw new Error(`Insufficient OpenRouter credits. Requested ${maxTokens} max_tokens for "${options.sectionKey || 'unknown'}" section. Please add credits at https://openrouter.ai/settings/credits or switch to a free/cheaper model.`);
+      }
       throw new Error(`OpenRouter Error: ${errorMsg}`);
     }
 
@@ -257,7 +314,7 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
 
     return { text };
   } catch (e: any) {
-    if (e.message === 'MISSING_API_KEY' || e.message?.includes('Quota')) {
+    if (e.message === 'MISSING_API_KEY' || e.message?.includes('Quota') || e.message?.includes('Insufficient OpenRouter')) {
       throw e;
     }
     handleProviderError(e, 'openrouter');
@@ -276,6 +333,11 @@ function handleProviderError(e: any, provider: string): never {
 
   if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('rate limit')) {
     throw new Error("API Quota Exceeded. You have reached the rate limit. Please try again later or switch to a different model/plan.");
+  }
+
+  // ★ FIX v2.0: Pass through 402 / credits errors without wrapping
+  if (msg.includes('402') || msg.includes('credits') || msg.includes('Insufficient')) {
+    throw e;
   }
 
   console.error(`${provider} API Error:`, e);
