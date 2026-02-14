@@ -1,112 +1,141 @@
-// =============================================================================
-// types.ts - Centralized TypeScript Type Definitions
-// =============================================================================
+// types.ts
+// ═══════════════════════════════════════════════════════════════
+// Central type definitions for Intervencijska logika
+// v4.3 — 2026-02-14 — CHANGES:
+//   - Added 'environmental' to RiskCategory type
+// ═══════════════════════════════════════════════════════════════
 
-// --- Core Data Primitives ---
-
+// ─── Problem Analysis ────────────────────────────────────────
 export interface ProblemNode {
-  title: string;
-  description: string;
+  id: string;
+  text: string;
+  children?: ProblemNode[];
 }
 
 export interface PolicyItem {
+  id: string;
+  level: 'eu' | 'national' | 'regional' | 'local';
   name: string;
   description: string;
+  relevance: string;
 }
 
 export interface ObjectiveItem {
-  title: string;
-  description: string;
-  indicator: string;
+  id: string;
+  text: string;
+  indicators: string;
+  targetValue: string;
+  baselineValue: string;
+  verificationSource: string;
 }
 
-export interface ReadinessLevelValue {
-  level: number | null;
-  justification: string;
-}
-
+// ─── Readiness Levels ────────────────────────────────────────
 export interface ReadinessLevels {
-  TRL: ReadinessLevelValue;
-  SRL: ReadinessLevelValue;
-  ORL: ReadinessLevelValue;
-  LRL: ReadinessLevelValue;
+  trl: number;
+  srl: number;
+  orl: number;
+  lrl: number;
 }
 
-// --- Task & Activity Types ---
-
-export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
-
+// ─── Tasks & Work Packages ───────────────────────────────────
 export interface TaskDependency {
-  predecessorId: string;
-  type: DependencyType;
+  taskId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
 }
 
 export interface Task {
   id: string;
+  wpId: string;
   title: string;
   description: string;
   startDate: string;
   endDate: string;
+  duration: number;
   dependencies: TaskDependency[];
+  responsiblePartner: string;
+  resources: string;
+  isManagement?: boolean;
 }
 
 export interface Milestone {
   id: string;
-  description: string;
+  wpId: string;
+  title: string;
   date: string;
+  description: string;
+  verificationMethod: string;
 }
 
 export interface Deliverable {
   id: string;
+  wpId: string;
+  title: string;
+  date: string;
+  type: 'report' | 'prototype' | 'software' | 'dataset' | 'other';
   description: string;
-  indicator: string;
+  disseminationLevel: 'public' | 'confidential' | 'restricted';
 }
 
 export interface WorkPackage {
   id: string;
   title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  leadPartner: string;
+  participants: string[];
   tasks: Task[];
   milestones: Milestone[];
   deliverables: Deliverable[];
+  isManagement?: boolean;
 }
 
-// --- Risk & KER Types ---
+// ─── Risk Management ─────────────────────────────────────────
+export type RiskCategory = 'technical' | 'social' | 'economic' | 'environmental';
+export type RiskLikelihood = 'low' | 'medium' | 'high';
+export type RiskImpact = 'low' | 'medium' | 'high';
 
-export type RiskCategory = 'Technical' | 'Social' | 'Economic';
-export type RiskLevel = 'Low' | 'Medium' | 'High';
-
-export interface Risk {
+export interface RiskItem {
   id: string;
   category: RiskCategory;
-  title: string;
   description: string;
-  likelihood: RiskLevel;
-  impact: RiskLevel;
+  likelihood: RiskLikelihood;
+  impact: RiskImpact;
   mitigation: string;
+  contingency: string;
+  responsiblePartner: string;
 }
 
-export interface KER {
+// ─── KER (Key Exploitable Results) ──────────────────────────
+export interface KERItem {
   id: string;
   title: string;
   description: string;
+  type: 'product' | 'process' | 'service' | 'method' | 'knowledge' | 'other';
+  owners: string;
   exploitationStrategy: string;
+  targetUsers: string;
+  ipProtection: string;
+  trlCurrent: number;
+  trlTarget: number;
 }
 
-// --- Result Types (Outputs, Outcomes, Impacts) ---
-
+// ─── Result Items ────────────────────────────────────────────
 export interface ResultItem {
-  title: string;
-  description: string;
-  indicator: string;
+  id: string;
+  text: string;
+  indicators: string;
+  targetValue: string;
+  verificationSource: string;
 }
 
-// --- Project Management ---
-
+// ─── Project Management ──────────────────────────────────────
 export interface ProjectManagementStructure {
   coordinator: string;
   steeringCommittee: string;
   advisoryBoard: string;
-  wpLeaders: string;
+  wpLeaders: string[];
 }
 
 export interface ProjectManagement {
@@ -114,200 +143,164 @@ export interface ProjectManagement {
   structure: ProjectManagementStructure;
 }
 
-// --- Section Types ---
-
+// ─── Project Sections ────────────────────────────────────────
 export interface ProblemAnalysis {
-  coreProblem: ProblemNode;
+  coreProblem: string;
   causes: ProblemNode[];
   consequences: ProblemNode[];
-}
-
-export interface ProjectIdea {
-  projectTitle: string;
-  projectAcronym: string;
-  startDate: string;
-  mainAim: string;
-  proposedSolution: string;
-  stateOfTheArt: string;
-  readinessLevels: ReadinessLevels;
+  stakeholders: string;
   policies: PolicyItem[];
 }
 
-// --- Master Project Data ---
+export interface ProjectIdea {
+  title: string;
+  summary: string;
+  innovation: string;
+  targetGroups: string;
+  expectedImpact: string;
+  readinessLevels: ReadinessLevels;
+}
 
 export interface ProjectData {
   problemAnalysis: ProblemAnalysis;
   projectIdea: ProjectIdea;
   generalObjectives: ObjectiveItem[];
   specificObjectives: ObjectiveItem[];
-  projectManagement: ProjectManagement;
   activities: WorkPackage[];
+  projectManagement: ProjectManagement;
+  risks: RiskItem[];
   outputs: ResultItem[];
   outcomes: ResultItem[];
   impacts: ResultItem[];
-  risks: Risk[];
-  kers: KER[];
+  kers: KERItem[];
+  projectStartDate?: string;
+  projectEndDate?: string;
 }
 
-// --- App State Types ---
-
+// ─── App State Types ─────────────────────────────────────────
 export type Language = 'en' | 'si';
-
-export type ViewMode = 'week' | 'month' | 'quarter' | 'semester' | 'year' | 'project';
+export type ViewMode = 'standard' | 'academic';
 
 export interface ProjectVersions {
-  en: ProjectData | null;
-  si: ProjectData | null;
+  [versionId: string]: {
+    data: ProjectData;
+    timestamp: number;
+    label: string;
+  };
 }
 
 export interface ProjectMeta {
   id: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  language: Language;
+  mode: ViewMode;
+  currentVersionId: string;
+  versions: ProjectVersions;
 }
 
 export interface ModalConfig {
   isOpen: boolean;
   title: string;
   message: string;
-  onConfirm: () => void;
-  onSecondary: (() => void) | null;
+  options?: { label: string; value: string; description?: string }[];
+  onConfirm: (value?: string) => void;
   onCancel: () => void;
-  confirmText: string;
-  secondaryText: string;
-  cancelText: string;
 }
 
-// --- Export Data Types ---
-
-export interface ExportMeta {
-  version: string;
-  createdAt: string;
-  activeLanguage: Language;
-  author: string;
-  projectId: string;
-}
-
+// ─── Export Data ─────────────────────────────────────────────
 export interface ExportData {
-  meta: ExportMeta;
-  data: ProjectVersions;
+  projectMeta: ProjectMeta;
+  projectData: ProjectData;
+  exportDate: string;
+  appVersion: string;
 }
 
-// --- Chart Image Data (for DOCX export) ---
-
+// ─── Chart Image Data ────────────────────────────────────────
 export interface ChartImageData {
-  dataUrl: string;
-  width: number;
-  height: number;
+  gantt?: string;
+  pert?: string;
+  organigram?: string;
 }
 
-// --- Auth Types ---
-
-export type UserRole = 'admin' | 'user' | 'guest';
-
+// ─── Auth ────────────────────────────────────────────────────
 export interface UserRecord {
+  id: string;
   email: string;
-  displayName: string;
-  password: string;
-  role: UserRole;
-  twoFactorSecret: string;
-  isVerified: boolean;
-  tempSimulatedCode?: string;
+  name: string;
+  createdAt: number;
 }
 
 export interface AuthResult {
   success: boolean;
-  message?: string;
-  email?: string;
-  displayName?: string;
-  role?: UserRole;
-  twoFactorSecret?: string;
+  user?: UserRecord;
+  error?: string;
 }
 
-// --- Instructions Types ---
-
-export interface InstructionChapter {
-  title: string;
-  subChapters: string[];
-  RULES: string[];
+// ─── Instruction Types ───────────────────────────────────────
+export interface InstructionSet {
+  global: string;
+  language: string;
+  academic: string;
+  humanization: string;
+  projectTitle: string;
+  mode: string;
+  qualityGates: string;
+  sectionTask: string;
+  fieldRules: string;
+  translation: string;
+  summary: string;
+  chapter: string;
 }
 
-export interface AppInstructions {
-  _METADATA: {
-    version: number;
-    lastUpdated: string;
-  };
-  GLOBAL_RULES: string[];
-  CHAPTERS: Record<string, InstructionChapter>;
-}
-
-// --- Gantt Chart Internal Types ---
-
-export interface GanttTaskInternal {
+// ─── Gantt / PERT Internal ───────────────────────────────────
+export interface GanttTask {
   id: string;
-  title: string;
   wpId: string;
-  wpTitle: string;
-  type: 'task' | 'milestone';
-  start: Date;
-  end: Date;
-  date?: Date;
+  title: string;
+  startDate: Date;
+  endDate: Date;
   duration: number;
   dependencies: TaskDependency[];
-  wpIndex?: number;
-  taskIndex?: number;
+  progress: number;
+  isWpSummary?: boolean;
+  isMilestone?: boolean;
+  milestoneDate?: Date;
 }
 
-// --- PERT Chart Internal Types ---
-
-export interface PERTNode {
+export interface PertNode {
   id: string;
   title: string;
-  wpTitle: string;
-  dependencies: TaskDependency[];
-  startDate: Date | null;
-  endDate: Date | null;
-  duration: number;
-  level: number;
-  x: number;
-  y: number;
-  wpIndex: number;
+  es: number;
+  ef: number;
+  ls: number;
+  lf: number;
+  slack: number;
+  isCritical: boolean;
+  dependencies: string[];
+  x?: number;
+  y?: number;
 }
 
-export interface PERTEdge {
-  from: PERTNode;
-  to: PERTNode;
-  type: DependencyType;
-}
-
-// --- Readiness Level Definition Types ---
-
+// ─── Readiness Level Definitions ─────────────────────────────
 export interface ReadinessLevelDefinition {
-  level: number;
-  title: string;
-}
-
-export interface ReadinessLevelCategory {
+  key: string;
   name: string;
   description: string;
-  levels: ReadinessLevelDefinition[];
+  levels: { value: number; title: { en: string; si: string } }[];
 }
 
-export type ReadinessLevelDefinitions = Record<string, ReadinessLevelCategory>;
-
-// --- Step Types ---
-
-export interface Step {
+// ─── Step Navigation ─────────────────────────────────────────
+export interface StepDefinition {
   id: number;
   key: string;
-  title: string;
+  title: { en: string; si: string };
   color: string;
 }
 
-export interface SubStep {
+export interface SubStepDefinition {
   id: string;
-  title: string;
+  key: string;
+  title: { en: string; si: string };
 }
-
-export type SubStepsMap = Record<string, SubStep[]>;
