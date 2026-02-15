@@ -539,8 +539,8 @@ export const useGeneration = ({
     ]
   );
 
-  // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
-  // ★ v3.6 FIX: try/catch INSIDE for loop + longer delay + partial success reporting
+    // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
+  // ★ v3.6 FIX: try/catch INSIDE for loop + retry with backoff + friendly modals
 
   const handleGenerateCompositeSection = useCallback(
     async (_sectionKey: string) => {
@@ -551,21 +551,18 @@ export const useGeneration = ({
 
       const sections = ['outputs', 'outcomes', 'impacts', 'kers'];
 
-      // v3.4/3.5 FIX: Use robust check
       const hasContentInSections = sections.some((s) =>
         robustCheckSectionHasContent(s)
       );
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
-      // Check if other language has content in any of the composite sections
       let otherLangData: any = null;
       for (const s of sections) {
         otherLangData = await checkOtherLanguageHasContent(s);
         if (otherLangData) break;
       }
 
-      // ★ v3.6 FIX: Resilient composite runner
       const runComposite = async (mode: string) => {
         closeModal();
         setIsLoading(true);
@@ -574,41 +571,72 @@ export const useGeneration = ({
         let successCount = 0;
         let lastError: any = null;
 
+        const modeLabel = mode === 'fill'
+          ? (language === 'si' ? 'Dopolnjujem' : 'Filling missing in')
+          : mode === 'enhance'
+            ? (language === 'si' ? 'Izboljšujem' : 'Enhancing')
+            : (language === 'si' ? 'Generiram' : 'Generating');
+
+        const waitLabel = language === 'si' ? 'Čakam na API kvoto' : 'Waiting for API quota';
+
         for (const s of sections) {
-          setIsLoading(`${t.generating} ${s}...`);
-          try {
-            const generatedData = await generateSectionContent(
-              s,
-              projectData,
-              language,
-              mode
-            );
-            setProjectData((prev: any) => {
-              const next = { ...prev };
-              next[s] = generatedData;
-              return next;
-            });
-            successCount++;
-          } catch (e: any) {
-            console.error(`[runComposite] Failed to generate ${s}:`, e);
-            lastError = e;
-            // Continue with next section — don't break the loop
+          setIsLoading(`${modeLabel} ${s}...`);
+
+          let success = false;
+          let retries = 0;
+          const maxRetries = 3;
+
+          while (!success && retries <= maxRetries) {
+            try {
+              const generatedData = await generateSectionContent(
+                s,
+                projectData,
+                language,
+                mode
+              );
+              setProjectData((prev: any) => {
+                const next = { ...prev };
+                next[s] = generatedData;
+                return next;
+              });
+              successCount++;
+              success = true;
+            } catch (e: any) {
+              const emsg = e.message || '';
+              const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+
+              if (isRateLimit && retries < maxRetries) {
+                retries++;
+                const waitSeconds = retries * 20;
+                console.warn(`[runComposite] Rate limit on ${s}, retry ${retries}/${maxRetries} in ${waitSeconds}s...`);
+                for (let countdown = waitSeconds; countdown > 0; countdown--) {
+                  setIsLoading(`${waitLabel}... ${countdown}s → ${s}`);
+                  await new Promise((r) => setTimeout(r, 1000));
+                }
+              } else {
+                console.error(`[runComposite] Failed to generate ${s}:`, e);
+                lastError = e;
+                break;
+              }
+            }
           }
-          // Longer delay between calls to avoid rate limits (especially Gemini free tier)
-          await new Promise((r) => setTimeout(r, 1500));
+
+          if (success) {
+            await new Promise((r) => setTimeout(r, 3000));
+          }
         }
 
         if (successCount > 0) {
           setHasUnsavedTranslationChanges(true);
         }
 
-              if (lastError && successCount < sections.length) {
+        if (lastError && successCount < sections.length) {
           const failedCount = sections.length - successCount;
-          const msg = lastError.message || '';
-          const isRateLimit = msg.includes('429') || msg.includes('Quota') || msg.includes('rate limit') || msg.includes('RESOURCE_EXHAUSTED');
-          const isCredits = msg.includes('afford') || msg.includes('credits') || msg.includes('402');
-          const isJSON = msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse');
-          const isNetwork = msg.includes('fetch') || msg.includes('network') || msg.includes('Failed to fetch') || msg.includes('ERR_');
+          const emsg = lastError.message || '';
+          const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+          const isCredits = emsg.includes('afford') || emsg.includes('credits') || emsg.includes('402');
+          const isJSON = emsg.includes('JSON') || emsg.includes('Unexpected token') || emsg.includes('parse');
+          const isNetwork = emsg.includes('fetch') || emsg.includes('network') || emsg.includes('Failed to fetch') || emsg.includes('ERR_');
 
           let modalTitle: string;
           let modalMessage: string;
@@ -654,23 +682,20 @@ export const useGeneration = ({
         }
 
         setIsLoading(false);
+      };
 
       if (otherLangData && !hasContentInSections) {
-        // LEVEL 1: Other language has results, current is empty
         setModalConfig({
           isOpen: true,
-          title:
-            language === 'si'
-              ? `Rezultati obstajajo v ${otherLang}`
-              : `Results exist in ${otherLang}`,
-          message:
-            language === 'si'
-              ? `Pričakovani rezultati že obstajajo v ${otherLang} jeziku. Želite prevesti ali generirati na novo?`
-              : `Expected results already exist in ${otherLang}. Would you like to translate or generate new?`,
-          confirmText:
-            language === 'si'
-              ? `Prevedi iz ${otherLang}`
-              : `Translate from ${otherLang}`,
+          title: language === 'si'
+            ? `Rezultati obstajajo v ${otherLang}`
+            : `Results exist in ${otherLang}`,
+          message: language === 'si'
+            ? `Pričakovani rezultati že obstajajo v ${otherLang} jeziku. Želite prevesti ali generirati na novo?`
+            : `Expected results already exist in ${otherLang}. Would you like to translate or generate new?`,
+          confirmText: language === 'si'
+            ? `Prevedi iz ${otherLang}`
+            : `Translate from ${otherLang}`,
           secondaryText: language === 'si' ? 'Generiraj novo' : 'Generate new',
           cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => performTranslationFromOther(otherLangData),
@@ -678,26 +703,20 @@ export const useGeneration = ({
           onCancel: closeModal,
         });
       } else if (otherLangData && hasContentInSections) {
-        // LEVEL 2: Both languages have content
-        // v3.5.1 FIX: Primary = Generate/Enhance, Secondary = Translate
         setModalConfig({
           isOpen: true,
-          title:
-            language === 'si'
-              ? `Rezultati obstajajo v obeh jezikih`
-              : `Results exist in both languages`,
-          message:
-            language === 'si'
-              ? `Rezultati obstajajo v slovenščini in angleščini. Kaj želite storiti?`
-              : `Results exist in both SI and EN. What would you like to do?`,
-          confirmText:
-            language === 'si'
-              ? 'Generiraj / izboljšaj trenutno'
-              : 'Generate / enhance current',
-          secondaryText:
-            language === 'si'
-              ? `Prevedi iz ${otherLang}`
-              : `Translate from ${otherLang}`,
+          title: language === 'si'
+            ? `Rezultati obstajajo v obeh jezikih`
+            : `Results exist in both languages`,
+          message: language === 'si'
+            ? `Rezultati obstajajo v slovenščini in angleščini. Kaj želite storiti?`
+            : `Results exist in both SI and EN. What would you like to do?`,
+          confirmText: language === 'si'
+            ? 'Generiraj / izboljšaj trenutno'
+            : 'Generate / enhance current',
+          secondaryText: language === 'si'
+            ? `Prevedi iz ${otherLang}`
+            : `Translate from ${otherLang}`,
           cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => {
             closeModal();
