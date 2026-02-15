@@ -1,14 +1,18 @@
 // components/GanttChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// Gantt Chart Component – v5.2 (2026-02-15)
+// Gantt Chart Component – v5.3 (2026-02-15)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
-// v5.2 – FIX: Ctrl+Scroll now ONLY zooms the chart, no longer
-//         triggers browser zoom simultaneously. Root cause: React
-//         synthetic onWheel is a passive listener — preventDefault()
-//         is ignored. Solution: native addEventListener with
-//         { passive: false } via useEffect, so preventDefault()
-//         and stopPropagation() actually work.
+// v5.3 – FIX: Ctrl+Scroll zoom now works reliably after refresh.
+//         Root cause: useEffect([], []) ran BEFORE the zoomAreaRef
+//         div was mounted (conditional render for containerWidth===0
+//         returned early, so the ref was null when the effect ran).
+//         Solution: use a callback ref (zoomAreaCallbackRef) that
+//         attaches/detaches native listeners whenever the DOM node
+//         appears or disappears. This is immune to conditional
+//         rendering and mount timing.
+// v5.2 – Native addEventListener({ passive: false }) — correct
+//         approach but broken by conditional render timing.
 // v5.1 – Self-contained inline zoom (replaced useZoomPan hook).
 // v5.0 – Attempted useZoomPan hook (didn't survive refresh).
 // v4.8 – Eliminated first-render flash.
@@ -61,18 +65,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
     const viewMode: ViewMode = forceViewMode || viewModeState;
 
     // ═══════════════════════════════════════════════════════════
-    // ★ v5.2: SELF-CONTAINED ZOOM with NATIVE wheel listener
-    // Uses native addEventListener({ passive: false }) so that
-    // preventDefault() actually blocks browser zoom.
+    // ★ v5.3: SELF-CONTAINED ZOOM with CALLBACK REF
+    // A callback ref guarantees that native event listeners are
+    // attached the moment the DOM node appears — even if the
+    // component conditionally renders (containerWidth === 0).
     // ═══════════════════════════════════════════════════════════
     const [zoomScale, setZoomScale] = useState(1);
     const [zoomTranslate, setZoomTranslate] = useState({ x: 0, y: 0 });
-    const zoomAreaRef = useRef<HTMLDivElement | null>(null);
+    const zoomAreaNodeRef = useRef<HTMLDivElement | null>(null);
     const zoomDragging = useRef(false);
     const zoomDragStart = useRef({ x: 0, y: 0 });
     const zoomTranslateStart = useRef({ x: 0, y: 0 });
 
-    // Refs for latest state (avoid stale closures in native listeners)
+    // Refs for latest state (native listeners read these, never stale)
     const zoomScaleRef = useRef(zoomScale);
     const zoomTranslateRef = useRef(zoomTranslate);
     useEffect(() => { zoomScaleRef.current = zoomScale; }, [zoomScale]);
@@ -87,18 +92,20 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     const ganttZoomBadgeText = zoomScale === 1 ? '' : `${Math.round(zoomScale * 100)}%`;
 
-    // ★ v5.2: NATIVE wheel listener — { passive: false } is required
-    // so that e.preventDefault() actually blocks browser Ctrl+Scroll zoom.
-    useEffect(() => {
-        const el = zoomAreaRef.current;
-        if (!el) return;
+    // ★ v5.3: Stable handler refs (defined once, never change)
+    const handleWheelRef = useRef<((e: WheelEvent) => void) | null>(null);
+    const handleMouseDownRef = useRef<((e: MouseEvent) => void) | null>(null);
+    const handleDblClickRef = useRef<(() => void) | null>(null);
 
-        const handleWheel = (e: WheelEvent) => {
+    // Define handlers (they read from refs, so always fresh)
+    if (!handleWheelRef.current) {
+        handleWheelRef.current = (e: WheelEvent) => {
             if (!e.ctrlKey && !e.metaKey) return;
-
-            // *** THE KEY FIX: block browser zoom ***
             e.preventDefault();
             e.stopPropagation();
+
+            const el = zoomAreaNodeRef.current;
+            if (!el) return;
 
             const rect = el.getBoundingClientRect();
             const cursorX = e.clientX - rect.left;
@@ -119,30 +126,68 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 y: cursorY - ratio * (cursorY - prevTranslate.y),
             });
         };
+    }
 
-        el.addEventListener('wheel', handleWheel, { passive: false });
-        return () => el.removeEventListener('wheel', handleWheel);
-    }, []); // empty deps — refs keep state fresh
-
-    // Drag-to-pan: mousedown (native, on zoom area)
-    useEffect(() => {
-        const el = zoomAreaRef.current;
-        if (!el) return;
-
-        const handleMouseDown = (e: MouseEvent) => {
+    if (!handleMouseDownRef.current) {
+        handleMouseDownRef.current = (e: MouseEvent) => {
             if (e.button !== 0) return;
-            // Only drag when zoomed (not at exactly 100%)
             if (Math.abs(zoomScaleRef.current - 1) < 0.001) return;
 
             zoomDragging.current = true;
             zoomDragStart.current = { x: e.clientX, y: e.clientY };
             zoomTranslateStart.current = { ...zoomTranslateRef.current };
-            el.style.cursor = 'grabbing';
+
+            const el = zoomAreaNodeRef.current;
+            if (el) el.style.cursor = 'grabbing';
             e.preventDefault();
         };
+    }
 
-        el.addEventListener('mousedown', handleMouseDown);
-        return () => el.removeEventListener('mousedown', handleMouseDown);
+    if (!handleDblClickRef.current) {
+        handleDblClickRef.current = () => {
+            setZoomScale(1);
+            setZoomTranslate({ x: 0, y: 0 });
+        };
+    }
+
+    // ★ v5.3: CALLBACK REF — attaches listeners when DOM node mounts,
+    // detaches when it unmounts. Works even with conditional rendering.
+    const cleanupRef = useRef<(() => void) | null>(null);
+
+    const zoomAreaCallbackRef = useCallback((node: HTMLDivElement | null) => {
+        // Cleanup previous node's listeners
+        if (cleanupRef.current) {
+            cleanupRef.current();
+            cleanupRef.current = null;
+        }
+
+        zoomAreaNodeRef.current = node;
+
+        if (!node) return;
+
+        const onWheel = handleWheelRef.current!;
+        const onMouseDown = handleMouseDownRef.current!;
+        const onDblClick = handleDblClickRef.current!;
+
+        node.addEventListener('wheel', onWheel, { passive: false });
+        node.addEventListener('mousedown', onMouseDown);
+        node.addEventListener('dblclick', onDblClick);
+
+        cleanupRef.current = () => {
+            node.removeEventListener('wheel', onWheel);
+            node.removeEventListener('mousedown', onMouseDown);
+            node.removeEventListener('dblclick', onDblClick);
+        };
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (cleanupRef.current) {
+                cleanupRef.current();
+                cleanupRef.current = null;
+            }
+        };
     }, []);
 
     // Drag-to-pan: mousemove/mouseup on window
@@ -157,7 +202,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         const handleUp = () => {
             if (zoomDragging.current) {
                 zoomDragging.current = false;
-                const el = zoomAreaRef.current;
+                const el = zoomAreaNodeRef.current;
                 if (el) {
                     el.style.cursor = Math.abs(zoomScaleRef.current - 1) > 0.001 ? 'grab' : 'default';
                 }
@@ -172,19 +217,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
         };
     }, []);
 
-    // Double-click to reset
-    useEffect(() => {
-        const el = zoomAreaRef.current;
-        if (!el) return;
-
-        const handleDblClick = () => {
-            ganttResetZoom();
-        };
-
-        el.addEventListener('dblclick', handleDblClick);
-        return () => el.removeEventListener('dblclick', handleDblClick);
-    }, [ganttResetZoom]);
-
     // CSS transform for zoomable content
     const ganttContentTransform: React.CSSProperties = {
         transform: `translate(${zoomTranslate.x}px, ${zoomTranslate.y}px) scale(${zoomScale})`,
@@ -193,7 +225,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         willChange: 'transform',
     };
     // ═══════════════════════════════════════════════════════════
-    // END SELF-CONTAINED ZOOM v5.2
+    // END SELF-CONTAINED ZOOM v5.3
     // ═══════════════════════════════════════════════════════════
 
     // ★ FIX v4.8: Two-phase width measurement
@@ -648,9 +680,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 </div>
             )}
 
-            {/* ★ v5.2: Zoom area — native event listeners via useEffect */}
+            {/* ★ v5.3: Zoom area — callback ref attaches native listeners */}
             <div
-                ref={zoomAreaRef}
+                ref={zoomAreaCallbackRef}
                 className="relative"
                 style={{
                     overflow: 'hidden',
@@ -659,7 +691,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
                     cursor: isZoomed ? 'grab' : 'default',
                     touchAction: 'none',
                 }}
-                // NO onWheel here — handled by native addEventListener above
             >
                 {/* Zoom Badge */}
                 {!forceViewMode && (
