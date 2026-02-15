@@ -1,12 +1,14 @@
-// components/PERTChart.tsx v1.1
+// components/PERTChart.tsx v1.2
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
-// v1.1 – FEAT: Integrated CTRL+Scroll zoom, drag-to-pan, pinch-to-zoom,
-//         double-click reset, and ZoomBadge overlay. Existing toolbar
-//         buttons (Zoom In/Out, 100%, Fit) still work and share the
-//         same zoom/translate state via useZoomPan hook.
-//         Removed old manual zoom state; all zoom logic unified in hook.
-// v1.0 – Initial implementation with manual zoom buttons + fit mode.
+// v1.2 – FIX: "Full Project" button now works after CTRL+scroll zoom.
+//         Root cause: CTRL+scroll didn't switch viewMode to 'manual',
+//         so clicking "Full Project" (which was already 'fit') didn't
+//         trigger the useEffect. Fixed by using onUserZoom callback
+//         from useZoomPan v1.1 to auto-switch to 'manual' on any
+//         user-initiated zoom. Also restored SVG viewBox for fit mode.
+// v1.1 – FEAT: Integrated CTRL+Scroll zoom via useZoomPan hook.
+// v1.0 – Initial implementation.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
@@ -15,7 +17,6 @@ import { TECHNICAL_CONFIG } from '../services/TechnicalInstructions.ts';
 import { useZoomPan } from '../hooks/useZoomPan';
 import { ZoomBadge } from '../hooks/ZoomBadge';
 
-// Extract constants
 const { NODE_WIDTH, NODE_HEIGHT, X_GAP, Y_GAP, STYLES } = TECHNICAL_CONFIG.PERT;
 
 const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', printMode = false, containerWidth: initialWidth = 1200 }) => {
@@ -27,7 +28,11 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
     const outerContainerRef = useRef<HTMLDivElement>(null);
     const t = TEXT[language];
 
-    // ★ v1.1: Unified zoom/pan via hook
+    // ★ v1.2: onUserZoom auto-switches to manual mode
+    const handleUserZoom = useCallback((newScale: number) => {
+        setViewMode('manual');
+    }, []);
+
     const {
         containerRef: zoomContainerRef,
         containerStyle: zoomContainerStyle,
@@ -35,13 +40,15 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
         scale: zoomScale,
         zoomBadgeText,
         resetZoom,
-    } = useZoomPan({ minScale: 0.2, maxScale: 2.0, scaleStep: 0.1 });
+    } = useZoomPan({
+        minScale: 0.2,
+        maxScale: 2.0,
+        scaleStep: 0.1,
+        onUserZoom: handleUserZoom,
+        enableDrag: true,
+    });
 
-    // We need a combined ref for outer measurement + zoom container
-    // The zoom container ref is set on the scrollable area
-    // The outer ref measures available space for fit calculations
-
-    // Measure container size for auto-fit logic
+    // Measure container
     useEffect(() => {
         if (printMode) {
             setContainerWidth(initialWidth);
@@ -63,7 +70,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
         return () => resizeObserver.disconnect();
     }, [printMode, initialWidth]);
 
-    // 1. Process Data into Graph Structure & Calculate Critical Path
+    // Process Data
     const { nodes, edges, chartDimensions, criticalPathNodes, criticalPathEdges } = useMemo(() => {
         const nodeList = [];
         const nodeMap = new Map();
@@ -97,7 +104,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
             });
         });
 
-        // Topological Sort / Level Calculation
         const levelCache = new Map();
         const getLevel = (nodeId, visited = new Set()) => {
             if (visited.has(nodeId)) return 0;
@@ -124,7 +130,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
 
         nodeList.forEach(node => node.level = getLevel(node.id));
 
-        // Critical Path
         let maxEndDate = 0;
         nodeList.forEach(n => {
             if (n.endDate && n.endDate.getTime() > maxEndDate) maxEndDate = n.endDate.getTime();
@@ -165,7 +170,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
             }
         });
 
-        // Layout Calculation
         const levels = {};
         nodeList.forEach(node => {
             if (!levels[node.level]) levels[node.level] = [];
@@ -195,7 +199,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
             });
         });
 
-        // Generate Edges
         nodeList.forEach(node => {
             node.dependencies.forEach(dep => {
                 const predecessor = nodeMap.get(dep.predecessorId);
@@ -221,17 +224,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
         };
     }, [activities]);
 
-    // ★ v1.1: "Fit" mode now resets zoom to fit chart in container
-    useEffect(() => {
-        if (viewMode === 'fit' && !printMode && containerWidth > 0 && containerHeight > 0) {
-            // We let the useZoomPan handle the actual transform;
-            // for "fit", we calculate ideal scale and reset to it
-            // But since useZoomPan doesn't have a "setScale" method,
-            // we simply reset and the SVG viewBox handles fit.
-            resetZoom();
-        }
-    }, [viewMode, containerWidth, containerHeight, printMode, resetZoom]);
-
     if (nodes.length === 0) {
         return (
             <div id={id} className="p-8 text-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 italic">
@@ -255,17 +247,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
         return `M ${startX} ${startY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${endX} ${endY}`;
     };
 
-    // ★ v1.1: Toolbar buttons now just reset zoom hook state
-    const handleZoomIn = () => {
-        setViewMode('manual');
-        // Manual zoom via toolbar not supported by hook directly;
-        // user can CTRL+scroll. Button kept for UX familiarity.
-    };
-
-    const handleZoomOut = () => {
-        setViewMode('manual');
-    };
-
+    // ★ v1.2: Toolbar handlers
     const handleResetZoom = () => {
         setViewMode('manual');
         resetZoom();
@@ -273,7 +255,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
 
     const handleFitScreen = () => {
         setViewMode('fit');
-        resetZoom();
+        resetZoom(); // ★ v1.2: Always reset zoom transform when switching to fit
     };
 
     const containerClasses = printMode
@@ -283,8 +265,8 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
     const svgWidth = Math.max(chartDimensions.width, 100);
     const svgHeight = Math.max(chartDimensions.height, 100);
 
-    // ★ v1.1: For fit mode, use viewBox to auto-scale SVG
-    const useFitViewBox = viewMode === 'fit' && !printMode;
+    // ★ v1.2: In fit mode AND zoom is at default (scale=1, translate=0), use viewBox for auto-fit
+    const isFitMode = viewMode === 'fit';
 
     return (
         <div id={id} ref={outerContainerRef} className={containerClasses}>
@@ -296,7 +278,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                     </h3>
 
                     <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 p-1 shadow-sm">
-                        <button onClick={handleFitScreen} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${viewMode === 'fit' ? 'bg-sky-100 text-sky-700 font-bold' : 'hover:bg-slate-100 text-slate-600'}`}>
+                        <button onClick={handleFitScreen} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${isFitMode ? 'bg-sky-100 text-sky-700 font-bold' : 'hover:bg-slate-100 text-slate-600'}`}>
                             {t.views?.project || "Full Project"}
                         </button>
                         <div className="w-px h-4 bg-slate-200 mx-1"></div>
@@ -308,7 +290,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                 </div>
             )}
 
-            {/* ★ v1.1: Zoom/pan container wraps the chart area */}
+            {/* Zoom/pan container */}
             <div
                 ref={zoomContainerRef}
                 className="relative"
@@ -318,7 +300,7 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                     overflow: 'hidden',
                 }}
             >
-                {/* ★ v1.1: Zoom Badge */}
+                {/* Zoom Badge */}
                 {!printMode && (
                     <ZoomBadge
                         zoomText={zoomBadgeText}
@@ -327,16 +309,14 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                     />
                 )}
 
-                {/* Legend Overlay */}
+                {/* Legend Overlay — stays fixed, not zoomable */}
                 {!printMode && (
                     <div className="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow text-xs z-50 pointer-events-none select-none">
                         <div className="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">{t.pertLegend?.legend || "Legend"}</div>
-
                         <div className="flex items-center gap-2 mb-1.5">
                             <div className="w-8 h-1 bg-red-600"></div>
                             <span className="text-slate-600 font-semibold">{t.pertLegend?.critical || "Critical Path"}</span>
                         </div>
-
                         <div className="flex items-center gap-2 mb-1.5">
                             <div className="w-8 h-0.5 bg-slate-300"></div>
                             <span className="text-slate-600">{t.pertLegend?.dependency || "Dependency"}</span>
@@ -352,15 +332,16 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                     </div>
                 )}
 
-                {/* ★ v1.1: Zoomable/pannable content */}
+                {/* Zoomable/pannable content */}
                 <div
                     className="bg-slate-50 relative w-full h-full"
                     style={zoomContentStyle}
                 >
                     <svg
-                        width={svgWidth}
-                        height={svgHeight}
-                        viewBox={useFitViewBox ? `0 0 ${svgWidth} ${svgHeight}` : undefined}
+                        width={isFitMode ? '100%' : svgWidth}
+                        height={isFitMode ? '100%' : svgHeight}
+                        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                        preserveAspectRatio={isFitMode ? "xMidYMid meet" : "xMinYMin meet"}
                         style={{ display: 'block' }}
                     >
                         <defs>
@@ -379,7 +360,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                         </defs>
 
                         <g>
-                            {/* Connections */}
                             {edges.map((edge) => {
                                 const isActive = hoveredNode && (hoveredNode === edge.from.id || hoveredNode === edge.to.id);
                                 const isIncoming = hoveredNode === edge.to.id;
@@ -424,7 +404,6 @@ const PERTChart = ({ activities, language = 'en', id = 'pert-chart-content', pri
                                 );
                             })}
 
-                            {/* Nodes */}
                             {nodes.map((node) => {
                                 const isHovered = hoveredNode === node.id;
                                 const isCritical = criticalPathNodes.has(node.id);
