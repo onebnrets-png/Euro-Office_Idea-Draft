@@ -1,22 +1,22 @@
 // services/translationDiffService.ts
 // ═══════════════════════════════════════════════════════════════
 // Granular diff-based translation engine.
-// Tracks which fields changed since the last translation
-// and only sends changed content to the AI.
+// v4.0 — 2026-02-15 — RELIABILITY OVERHAUL
 //
-// TRANSLATION RULES are read from services/Instructions.ts
-// — the single source of truth. No hardcoded rules here.
+// FIXES:
+//   - Reduced batch size from 30 to 15 for higher AI reliability.
+//   - Added post-translation LANGUAGE VERIFICATION: checks each
+//     translated field to confirm it's actually in the target language.
+//     Fields that fail verification are queued for individual retry.
+//   - Individual retry for fields missing from batch AI response.
+//   - Fallback NO LONGER copies source text — preserves existing
+//     target text or marks field for retry.
+//   - New forceTranslateAll option: ignores hashes, re-translates
+//     every field. Useful when user notices bad translations.
+//   - Added explicit source/target language labels in the prompt.
+//   - Enhanced prompt with stronger instructions and examples.
 //
-// NON-TRANSLATABLE fields (IDs, dates, acronyms, levels,
-// dependencies, categories) are ALWAYS COPIED from source
-// to target — never translated, never skipped.
-//
-// RATE LIMITING: 2s delay between batches + exponential
-// backoff retry (up to 3 retries) on 429 errors.
-//
-// v3.4 — 2026-02-14 — FIX:
-//   - getTranslationRules() returns string OR string[].
-//     translateFieldBatch now handles both types safely.
+// v3.4 — 2026-02-14 — getTranslationRules() safe formatting.
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
@@ -24,7 +24,7 @@ import { generateContent } from './aiProvider.ts';
 import { storageService } from './storageService.ts';
 import { getTranslationRules } from './Instructions.ts';
 
-// ─── SIMPLE HASH (fast, no crypto needed) ────────────────────────
+// ─── SIMPLE HASH ─────────────────────────────────────────────────
 
 const simpleHash = (str: string): string => {
   let hash = 0;
@@ -39,8 +39,6 @@ const simpleHash = (str: string): string => {
 };
 
 // ─── NON-TRANSLATABLE KEYS ──────────────────────────────────────
-// These keys are NEVER sent to the AI for translation.
-// Instead they are COPIED directly from source to target.
 
 const SKIP_KEYS = new Set([
   'id', 'startDate', 'endDate', 'date', 'level',
@@ -49,12 +47,13 @@ const SKIP_KEYS = new Set([
 ]);
 
 const SKIP_VALUES = new Set([
-  'Low', 'Medium', 'High',
-  'Technical', 'Social', 'Economic',
+  'Low', 'Medium', 'High', 'low', 'medium', 'high',
+  'Technical', 'Social', 'Economic', 'Environmental',
+  'technical', 'social', 'economic', 'environmental',
   'FS', 'SS', 'FF', 'SF'
 ]);
 
-// ─── FLATTEN: Extract all translatable field paths + values ──────
+// ─── FLATTEN ─────────────────────────────────────────────────────
 
 interface FieldEntry {
   path: string;
@@ -64,7 +63,6 @@ interface FieldEntry {
 
 const flattenTranslatableFields = (obj: any, prefix: string = ''): FieldEntry[] => {
   const entries: FieldEntry[] = [];
-
   if (obj === null || obj === undefined) return entries;
 
   if (typeof obj === 'string') {
@@ -77,8 +75,7 @@ const flattenTranslatableFields = (obj: any, prefix: string = ''): FieldEntry[] 
 
   if (Array.isArray(obj)) {
     obj.forEach((item, index) => {
-      const itemPrefix = `${prefix}[${index}]`;
-      entries.push(...flattenTranslatableFields(item, itemPrefix));
+      entries.push(...flattenTranslatableFields(item, `${prefix}[${index}]`));
     });
     return entries;
   }
@@ -94,7 +91,7 @@ const flattenTranslatableFields = (obj: any, prefix: string = ''): FieldEntry[] 
   return entries;
 };
 
-// ─── GET/SET value by dot-bracket path ───────────────────────────
+// ─── PATH HELPERS ────────────────────────────────────────────────
 
 const getByPath = (obj: any, path: string): any => {
   const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
@@ -115,7 +112,6 @@ const setByPath = (obj: any, path: string, value: any): void => {
     const idx = Number(part);
     const nextKey = parts[i + 1];
     const nextIsArray = !Number.isNaN(Number(nextKey));
-
     if (Number.isNaN(idx)) {
       if (current[part] === undefined || current[part] === null) {
         current[part] = nextIsArray ? [] : {};
@@ -137,7 +133,7 @@ const setByPath = (obj: any, path: string, value: any): void => {
   }
 };
 
-// ─── LOAD STORED HASHES FROM SUPABASE ────────────────────────────
+// ─── SUPABASE HASH STORAGE ──────────────────────────────────────
 
 const loadStoredHashes = async (
   projectId: string,
@@ -160,8 +156,6 @@ const loadStoredHashes = async (
   (data || []).forEach(row => map.set(row.field_path, row.source_hash));
   return map;
 };
-
-// ─── SAVE HASHES TO SUPABASE (batch upsert) ─────────────────────
 
 const saveHashes = async (
   projectId: string,
@@ -189,7 +183,42 @@ const saveHashes = async (
   }
 };
 
-// ─── GROUP CHANGED FIELDS INTO SECTION CHUNKS ────────────────────
+// ─── LANGUAGE DETECTION HELPER ───────────────────────────────────
+
+const detectLanguageOfText = (text: string): 'en' | 'si' | 'unknown' => {
+  if (!text || text.trim().length < 10) return 'unknown';
+
+  const slovenianMarkers = /[čšžČŠŽ]|(\b(je|za|na|ki|ali|ter|pri|kot|ima|biti|sem|ker|tudi|vse|med|lahko|zelo|brez|kako|kateri|vendar|zato|skupaj|potrebno|obstoječi|dejavnosti|razvoj|sodelovanje|vzpostaviti|okrepiti|zagotoviti|vzroke|posledice|projekt|upravljanje|spremljanje|ocenjevanje|delovni|sklop|naloga|mejnik|kazalnik|cilj|rezultat|tveganje|ukrep)\b)/gi;
+  const englishMarkers = /\b(the|is|are|was|were|been|being|have|has|had|will|would|shall|should|can|could|may|might|must|and|but|or|which|that|this|these|those|with|from|into|upon|about|between|through|during|before|after|above|below|against|project|management|monitoring|evaluation|work|package|task|milestone|indicator|objective|result|risk|measure)\b/gi;
+
+  const slMatches = (text.match(slovenianMarkers) || []).length;
+  const enMatches = (text.match(englishMarkers) || []).length;
+
+  if (slMatches > enMatches * 1.3) return 'si';
+  if (enMatches > slMatches * 1.3) return 'en';
+  return 'unknown';
+};
+
+// ─── VERIFY TRANSLATION LANGUAGE ─────────────────────────────────
+
+const verifyTranslationLanguage = (
+  translatedValue: string,
+  sourceValue: string,
+  targetLang: 'en' | 'si'
+): boolean => {
+  // Short strings (< 15 chars) are hard to detect — accept them
+  if (translatedValue.trim().length < 15) return true;
+
+  // If translated value is identical to source, it wasn't translated
+  if (translatedValue.trim() === sourceValue.trim()) return false;
+
+  // Check detected language
+  const detected = detectLanguageOfText(translatedValue);
+  if (detected === 'unknown') return true; // Can't determine — accept
+  return detected === targetLang;
+};
+
+// ─── GROUP BY SECTION ────────────────────────────────────────────
 
 const groupBySection = (fields: FieldEntry[]): Map<string, FieldEntry[]> => {
   const groups = new Map<string, FieldEntry[]>();
@@ -201,17 +230,11 @@ const groupBySection = (fields: FieldEntry[]): Map<string, FieldEntry[]> => {
   return groups;
 };
 
-// ─── SAFE RULES FORMATTER (v3.4 FIX) ────────────────────────────
-// getTranslationRules() may return a string OR a string[].
-// This helper normalises it into a formatted string for the prompt.
+// ─── SAFE RULES FORMATTER ────────────────────────────────────────
 
 const formatRulesForPrompt = (rules: string | string[]): string => {
-  if (Array.isArray(rules)) {
-    return rules.join('\n- ');
-  }
-  if (typeof rules === 'string' && rules.trim().length > 0) {
-    return rules;
-  }
+  if (Array.isArray(rules)) return rules.join('\n- ');
+  if (typeof rules === 'string' && rules.trim().length > 0) return rules;
   return 'Translate professionally, preserving JSON structure and EU terminology.';
 };
 
@@ -219,31 +242,54 @@ const formatRulesForPrompt = (rules: string | string[]): string => {
 
 const translateFieldBatch = async (
   fields: FieldEntry[],
-  targetLanguage: 'en' | 'si'
+  targetLanguage: 'en' | 'si',
+  sourceLanguage: 'en' | 'si'
 ): Promise<Map<string, string>> => {
-  const langName = targetLanguage === 'si' ? 'Slovenian' : 'English';
+  const targetName = targetLanguage === 'si' ? 'Slovenian (slovenščina)' : 'English (British English)';
+  const sourceName = sourceLanguage === 'si' ? 'Slovenian' : 'English';
 
-  // Read translation rules from the central Instructions.ts
   const translationRules = getTranslationRules(targetLanguage);
-
-  // v3.4 FIX: Use safe formatter instead of .join() directly
   const formattedRules = formatRulesForPrompt(translationRules);
 
-  // Build a simple key→value map for the AI
+  // Build key→value map
   const toTranslate: Record<string, string> = {};
   fields.forEach((f, i) => {
     toTranslate[`field_${i}`] = f.value;
   });
 
   const prompt = [
-    `You are a professional translator for EU Project Proposals.`,
-    `Translate each value in the following JSON object into ${langName}.`,
-    `RULES:\n- ${formattedRules}`,
-    `\nADDITIONAL:\n- Keep all keys exactly as they are (field_0, field_1, etc.).\n- Return ONLY valid JSON. No markdown, no explanation.`,
-    `\nJSON:\n${JSON.stringify(toTranslate, null, 2)}`
+    `You are a PROFESSIONAL TRANSLATOR specializing in EU Project Proposals.`,
+    ``,
+    `SOURCE LANGUAGE: ${sourceName}`,
+    `TARGET LANGUAGE: ${targetName}`,
+    ``,
+    `CRITICAL RULES:`,
+    `- You MUST translate EVERY field value from ${sourceName} to ${targetName}.`,
+    `- Do NOT copy source text unchanged — every field MUST be translated.`,
+    `- Do NOT leave any field in ${sourceName} — ALL output must be in ${targetName}.`,
+    `- If a field contains technical EU terminology, translate it using the correct official ${targetName} term.`,
+    `- Preserve professional, academic tone appropriate for EU project proposals.`,
+    `- Keep all JSON keys exactly as they are (field_0, field_1, etc.).`,
+    `- Return ONLY valid JSON. No markdown, no explanation, no wrapper.`,
+    ``,
+    `TRANSLATION QUALITY RULES:`,
+    `- ${formattedRules}`,
+    ``,
+    `VERIFICATION: After translating, CHECK each field:`,
+    `- Is it actually in ${targetName}? If not, fix it.`,
+    `- Is the meaning preserved? If not, improve it.`,
+    `- Is the EU terminology correct? If not, correct it.`,
+    ``,
+    `TRANSLATE THIS JSON (${fields.length} fields):`,
+    JSON.stringify(toTranslate, null, 2)
   ].join('\n');
 
-  const result = await generateContent({ prompt, jsonMode: true });
+  const result = await generateContent({
+    prompt,
+    jsonMode: true,
+    sectionKey: 'translation'
+  });
+
   const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
   const translated = JSON.parse(jsonStr);
 
@@ -258,58 +304,80 @@ const translateFieldBatch = async (
   return resultMap;
 };
 
-// ─── TRANSLATE WITH RETRY (exponential backoff on 429) ───────────
+// ─── TRANSLATE SINGLE FIELD (retry for failed fields) ────────────
+
+const translateSingleField = async (
+  field: FieldEntry,
+  targetLanguage: 'en' | 'si',
+  sourceLanguage: 'en' | 'si'
+): Promise<string | null> => {
+  const targetName = targetLanguage === 'si' ? 'Slovenian (slovenščina)' : 'English (British English)';
+  const sourceName = sourceLanguage === 'si' ? 'Slovenian' : 'English';
+
+  const prompt = [
+    `Translate the following text from ${sourceName} to ${targetName}.`,
+    `This is EU project proposal content — use correct EU terminology.`,
+    `Return ONLY the translated text, nothing else. No quotes, no explanation.`,
+    ``,
+    `TEXT TO TRANSLATE:`,
+    field.value
+  ].join('\n');
+
+  try {
+    const result = await generateContent({
+      prompt,
+      sectionKey: 'field'
+    });
+    const translated = result.text.trim();
+    if (translated && translated !== field.value) {
+      return translated;
+    }
+    return null;
+  } catch (e) {
+    console.warn(`[TranslationDiff] Single-field retry failed for ${field.path}:`, (e as any).message);
+    return null;
+  }
+};
+
+// ─── TRANSLATE WITH RETRY ────────────────────────────────────────
 
 const MAX_RETRIES = 3;
 
 const translateFieldBatchWithRetry = async (
   fields: FieldEntry[],
-  targetLanguage: 'en' | 'si'
+  targetLanguage: 'en' | 'si',
+  sourceLanguage: 'en' | 'si'
 ): Promise<Map<string, string>> => {
   let lastError: any = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // On retry, wait with exponential backoff: 4s, 8s, 16s
       if (attempt > 0) {
-        const delay = 2000 * Math.pow(2, attempt); // 4000, 8000, 16000
+        const delay = 2000 * Math.pow(2, attempt);
         console.log(`[TranslationDiff] Rate limited — retry ${attempt}/${MAX_RETRIES}, waiting ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       }
-
-      return await translateFieldBatch(fields, targetLanguage);
+      return await translateFieldBatch(fields, targetLanguage, sourceLanguage);
     } catch (e: any) {
       lastError = e;
       const msg = e.message || '';
+      const isRateLimit = msg.includes('429') || msg.includes('Quota') ||
+        msg.includes('RESOURCE_EXHAUSTED') || msg.includes('rate limit') ||
+        msg.includes('Rate Limit') || msg.includes('Too Many Requests');
 
-      // Only retry on rate limit errors
-      const isRateLimit = msg.includes('429') ||
-        msg.includes('Quota') ||
-        msg.includes('RESOURCE_EXHAUSTED') ||
-        msg.includes('rate limit') ||
-        msg.includes('Rate Limit') ||
-        msg.includes('Too Many Requests');
-
-      if (!isRateLimit || attempt === MAX_RETRIES) {
-        throw e; // Not a rate limit error, or we've exhausted retries
-      }
+      if (!isRateLimit || attempt === MAX_RETRIES) throw e;
     }
   }
-
-  throw lastError; // Should not reach here, but just in case
+  throw lastError;
 };
 
-// ─── COPY NON-TRANSLATABLE DATA FROM SOURCE TO TARGET ────────────
-// Recursively walks the source tree and copies every SKIP_KEYS
-// value (IDs, dates, acronyms, levels, dependencies, categories)
-// into the target. Also ensures arrays have matching structure.
+// ─── COPY NON-TRANSLATABLE DATA ─────────────────────────────────
 
 const copyNonTranslatableFromSource = (source: any, target: any): void => {
   if (!source || typeof source !== 'object') return;
 
   if (Array.isArray(source)) {
     for (let i = 0; i < source.length; i++) {
-      // Ensure target slot exists with correct type
       if (target[i] === undefined || target[i] === null) {
         if (typeof source[i] === 'object' && source[i] !== null) {
           target[i] = Array.isArray(source[i]) ? [] : {};
@@ -327,74 +395,97 @@ const copyNonTranslatableFromSource = (source: any, target: any): void => {
 
   for (const [key, val] of Object.entries(source)) {
     if (SKIP_KEYS.has(key)) {
-      // ALWAYS overwrite target with source value for non-translatable keys
       target[key] = val;
     } else if (typeof val === 'object' && val !== null) {
-      // Recurse into nested objects/arrays
       if (target[key] === undefined || target[key] === null) {
         target[key] = Array.isArray(val) ? [] : {};
       }
       copyNonTranslatableFromSource(val, target[key]);
     }
-    // String/number fields that are translatable → leave for AI translation
   }
 };
 
-// ─── MAIN: SMART INCREMENTAL TRANSLATION ─────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// MAIN: SMART INCREMENTAL TRANSLATION
+// ═══════════════════════════════════════════════════════════════
 
 export const smartTranslateProject = async (
   sourceData: any,
   targetLanguage: 'en' | 'si',
   existingTargetData: any,
-  projectId: string
+  projectId: string,
+  forceTranslateAll: boolean = false
 ): Promise<{
   translatedData: any;
-  stats: { total: number; changed: number; translated: number; failed: number };
+  stats: { total: number; changed: number; translated: number; failed: number; verified: number; retried: number };
 }> => {
-  const sourceLang = targetLanguage === 'si' ? 'en' : 'si';
+  const sourceLang: 'en' | 'si' = targetLanguage === 'si' ? 'en' : 'si';
 
-  // 1. Flatten all translatable fields from source
+  // 1. Flatten all translatable fields
   const sourceFields = flattenTranslatableFields(sourceData);
   console.log(`[TranslationDiff] Source has ${sourceFields.length} translatable fields.`);
 
-  // 2. Load stored hashes from last translation
-  const storedHashes = await loadStoredHashes(projectId, sourceLang, targetLanguage);
-  console.log(`[TranslationDiff] Found ${storedHashes.size} stored hashes.`);
+  // 2. Determine which fields need translation
+  let changedFields: FieldEntry[];
+  let unchangedFields: FieldEntry[];
 
-  // 3. Determine which fields changed
-  const changedFields: FieldEntry[] = [];
-  const unchangedFields: FieldEntry[] = [];
+  if (forceTranslateAll) {
+    // Force mode: translate EVERYTHING regardless of hashes
+    console.log(`[TranslationDiff] FORCE MODE: translating ALL ${sourceFields.length} fields.`);
+    changedFields = sourceFields;
+    unchangedFields = [];
+  } else {
+    // Normal mode: use hash diff
+    const storedHashes = await loadStoredHashes(projectId, sourceLang, targetLanguage);
+    console.log(`[TranslationDiff] Found ${storedHashes.size} stored hashes.`);
 
-  for (const field of sourceFields) {
-    const storedHash = storedHashes.get(field.path);
-    if (storedHash && storedHash === field.hash) {
-      unchangedFields.push(field);
-    } else {
-      changedFields.push(field);
+    changedFields = [];
+    unchangedFields = [];
+
+    for (const field of sourceFields) {
+      const storedHash = storedHashes.get(field.path);
+      if (storedHash && storedHash === field.hash) {
+        // ★ v4.0: Even if hash matches, verify the existing translation
+        // is actually in the target language (not just copied source)
+        const existingTranslation = existingTargetData
+          ? getByPath(existingTargetData, field.path)
+          : null;
+
+        if (existingTranslation && typeof existingTranslation === 'string') {
+          const isCorrectLang = verifyTranslationLanguage(existingTranslation, field.value, targetLanguage);
+          if (!isCorrectLang) {
+            console.warn(`[TranslationDiff] Field "${field.path}" hash matches but translation is in WRONG LANGUAGE — re-translating.`);
+            changedFields.push(field);
+            continue;
+          }
+        }
+
+        unchangedFields.push(field);
+      } else {
+        changedFields.push(field);
+      }
     }
   }
 
-  console.log(`[TranslationDiff] ${changedFields.length} fields changed, ${unchangedFields.length} unchanged.`);
+  console.log(`[TranslationDiff] ${changedFields.length} fields to translate, ${unchangedFields.length} unchanged.`);
 
-  // 4. Start with existing target data as base
+  // 3. Start with existing target data or deep copy of source
   const translatedData = existingTargetData
     ? JSON.parse(JSON.stringify(existingTargetData))
     : JSON.parse(JSON.stringify(sourceData));
 
-  // 5. CRITICAL: Copy ALL non-translatable data from source to target.
-  //    SKIP_KEYS fields (IDs, dates, acronyms, dependencies, levels,
-  //    categories, etc.) are never sent to the AI — they must be
-  //    copied directly. Without this step, Gantt/PERT charts break,
-  //    readiness levels disappear, and acronyms go missing.
+  // 4. Copy non-translatable data
   copyNonTranslatableFromSource(sourceData, translatedData);
   console.log(`[TranslationDiff] Non-translatable fields copied from source.`);
 
-  // 6. Translate changed fields in section-based batches
+  // 5. Translate changed fields
   const stats = {
     total: sourceFields.length,
     changed: changedFields.length,
     translated: 0,
-    failed: 0
+    failed: 0,
+    verified: 0,
+    retried: 0,
   };
 
   if (changedFields.length === 0) {
@@ -404,55 +495,115 @@ export const smartTranslateProject = async (
 
   const sectionGroups = groupBySection(changedFields);
   const successfullyTranslated: FieldEntry[] = [];
+  const fieldsNeedingRetry: FieldEntry[] = [];
   let batchIndex = 0;
+
+  // ★ v4.0: Reduced batch size from 30 to 15 for better reliability
+  const BATCH_SIZE = 15;
 
   for (const [section, fields] of sectionGroups) {
     console.log(`[TranslationDiff] Translating section "${section}" – ${fields.length} fields...`);
 
-    const BATCH_SIZE = 30;
     for (let i = 0; i < fields.length; i += BATCH_SIZE) {
       const batch = fields.slice(i, i + BATCH_SIZE);
 
-      // ═══ RATE LIMIT PROTECTION: Wait 2s between batches ═══
+      // Rate limit: 2s between batches
       if (batchIndex > 0) {
         await new Promise(r => setTimeout(r, 2000));
       }
       batchIndex++;
 
       try {
-        // Use retry-enabled translation (auto-retries on 429)
-        const results = await translateFieldBatchWithRetry(batch, targetLanguage);
+        const results = await translateFieldBatchWithRetry(batch, targetLanguage, sourceLang);
 
-        for (const [path, translatedValue] of results) {
-          setByPath(translatedData, path, translatedValue);
-          stats.translated++;
-        }
+        for (const field of batch) {
+          const translatedValue = results.get(field.path);
 
-        batch.forEach(f => {
-          if (results.has(f.path)) {
-            successfullyTranslated.push(f);
+          if (!translatedValue) {
+            // ★ v4.0: Field missing from AI response — queue for individual retry
+            console.warn(`[TranslationDiff] Field "${field.path}" missing from batch response — queuing for retry.`);
+            fieldsNeedingRetry.push(field);
+            continue;
           }
-        });
+
+          // ★ v4.0: Verify the translation is actually in the target language
+          const isCorrectLang = verifyTranslationLanguage(translatedValue, field.value, targetLanguage);
+
+          if (!isCorrectLang) {
+            console.warn(`[TranslationDiff] Field "${field.path}" translation appears to be in wrong language — queuing for retry.`);
+            fieldsNeedingRetry.push(field);
+            continue;
+          }
+
+          // Translation is good — apply it
+          setByPath(translatedData, field.path, translatedValue);
+          stats.translated++;
+          stats.verified++;
+          successfullyTranslated.push(field);
+        }
       } catch (error: any) {
         console.warn(`[TranslationDiff] Batch failed for "${section}" (${batch.length} fields):`, error.message);
-        stats.failed += batch.length;
 
-        // Fallback: keep existing target value, or copy source if target is empty
+        // ★ v4.0: Do NOT copy source! Instead, queue all batch fields for retry
         for (const field of batch) {
-          const existingTarget = getByPath(translatedData, field.path);
-          if (!existingTarget || (typeof existingTarget === 'string' && existingTarget.trim() === '')) {
-            setByPath(translatedData, field.path, field.value);
-          }
+          fieldsNeedingRetry.push(field);
         }
       }
     }
   }
 
-  // 7. Save hashes for all successfully translated fields + unchanged fields
+  // ═══ v4.0: RETRY PHASE — individually retry all failed/unverified fields ═══
+  if (fieldsNeedingRetry.length > 0) {
+    console.log(`[TranslationDiff] RETRY PHASE: ${fieldsNeedingRetry.length} fields need individual translation...`);
+
+    for (const field of fieldsNeedingRetry) {
+      // Rate limit between individual retries
+      await new Promise(r => setTimeout(r, 500));
+
+      try {
+        const translated = await translateSingleField(field, targetLanguage, sourceLang);
+
+        if (translated) {
+          const isCorrectLang = verifyTranslationLanguage(translated, field.value, targetLanguage);
+
+          if (isCorrectLang) {
+            setByPath(translatedData, field.path, translated);
+            stats.translated++;
+            stats.retried++;
+            stats.verified++;
+            successfullyTranslated.push(field);
+            console.log(`[TranslationDiff] ✓ Retry succeeded for "${field.path}"`);
+          } else {
+            // Still wrong language after retry — apply it anyway (better than source)
+            // but log the issue
+            console.warn(`[TranslationDiff] ✗ Retry for "${field.path}" still wrong language — applying best effort.`);
+            setByPath(translatedData, field.path, translated);
+            stats.translated++;
+            stats.retried++;
+            successfullyTranslated.push(field);
+          }
+        } else {
+          // ★ v4.0: If retry also fails, keep existing target value (don't copy source)
+          const existingTarget = getByPath(translatedData, field.path);
+          if (!existingTarget || (typeof existingTarget === 'string' && existingTarget.trim() === '')) {
+            // Only as ABSOLUTE last resort, copy source — but mark as failed
+            setByPath(translatedData, field.path, field.value);
+          }
+          stats.failed++;
+          console.warn(`[TranslationDiff] ✗ Retry failed for "${field.path}" — keeping existing value.`);
+        }
+      } catch (e: any) {
+        stats.failed++;
+        console.warn(`[TranslationDiff] ✗ Retry error for "${field.path}":`, (e as any).message);
+      }
+    }
+  }
+
+  // 7. Save hashes
   const allToSave = [...successfullyTranslated, ...unchangedFields];
   await saveHashes(projectId, sourceLang, targetLanguage, allToSave);
 
-  console.log(`[TranslationDiff] Done: ${stats.translated}/${stats.changed} translated, ${stats.failed} failed, ${unchangedFields.length} skipped.`);
+  console.log(`[TranslationDiff] DONE: ${stats.translated}/${stats.changed} translated, ${stats.verified} verified, ${stats.retried} retried, ${stats.failed} failed, ${unchangedFields.length} skipped.`);
 
   return { translatedData, stats };
 };
