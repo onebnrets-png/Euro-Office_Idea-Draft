@@ -79,6 +79,15 @@ const GanttChart: React.FC<GanttChartProps> = ({
     // Use forced view mode if provided (for export), otherwise internal state
     const viewMode: ViewMode = forceViewMode || viewModeState;
 
+    // ★ v4.9: Zoom & Pan for chart content
+    const {
+        containerRef: zoomContainerRef,
+        containerStyle: zoomContainerStyle,
+        contentStyle: zoomContentStyle,
+        zoomBadgeText,
+        resetZoom,
+    } = useZoomPan({ minScale: 0.5, maxScale: 2.0, scaleStep: 0.1 });
+
     // ★ FIX v4.8: Two-phase width measurement to eliminate first-render flash.
     //
     // PROBLEM: useEffect runs AFTER paint → first frame uses wrong width (0 or 1200).
