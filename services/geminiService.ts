@@ -668,6 +668,50 @@ export const generateSectionContent = async (
   language: 'en' | 'si' = 'en',
   mode: string = 'regenerate'
 ) => {
+  // ★ FIX v4.5: Handle 'expectedResults' as a composite section
+  // It generates outputs, outcomes, and impacts in one call using the 'results' schema,
+  // then returns an object with all three arrays.
+  if (sectionKey === 'expectedResults') {
+    const subSections = ['outputs', 'outcomes', 'impacts'];
+    const compositeResult: Record<string, any> = {};
+
+    for (const subKey of subSections) {
+      try {
+        const currentSubData = projectData[subKey];
+        const { prompt, schema } = getPromptAndSchemaForSection(
+          subKey, projectData, language, mode, currentSubData
+        );
+
+        const config = getProviderConfig();
+        const useNativeSchema = config.provider === 'gemini';
+
+        const result = await generateContent({
+          prompt,
+          jsonSchema: useNativeSchema ? schema : undefined,
+          jsonMode: !useNativeSchema,
+          sectionKey: subKey,
+        });
+
+        const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+        let parsedData = JSON.parse(jsonStr);
+
+        if (mode === 'fill' && currentSubData) {
+          parsedData = smartMerge(currentSubData, parsedData);
+        }
+
+        parsedData = stripMarkdown(parsedData);
+        compositeResult[subKey] = parsedData;
+      } catch (err) {
+        console.warn(`[generateSectionContent] Failed to generate ${subKey}:`, err);
+        // Keep existing data if generation fails for a sub-section
+        compositeResult[subKey] = projectData[subKey] || [];
+      }
+    }
+
+    return compositeResult;
+  }
+
+  // ─── Standard (non-composite) generation ───
   const currentSectionData = projectData[sectionKey];
   const { prompt, schema } = getPromptAndSchemaForSection(
     sectionKey, projectData, language, mode, currentSectionData
@@ -676,7 +720,6 @@ export const generateSectionContent = async (
   const config = getProviderConfig();
   const useNativeSchema = config.provider === 'gemini';
 
-  // ★ FIX v4.5: Pass sectionKey so aiProvider can set appropriate max_tokens
   const result = await generateContent({
     prompt,
     jsonSchema: useNativeSchema ? schema : undefined,
