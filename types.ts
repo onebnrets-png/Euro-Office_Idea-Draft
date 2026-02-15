@@ -174,6 +174,7 @@ export interface ProjectData {
   impacts: ResultItem[];
   kers: KERItem[];
   projectStartDate?: string;
+  projectDurationMonths?: number;  // ★ v4.5: Project duration in months
   projectEndDate?: string;
 }
 
@@ -304,3 +305,4 @@ export interface SubStepDefinition {
   key: string;
   title: { en: string; si: string };
 }
+
