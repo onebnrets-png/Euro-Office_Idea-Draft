@@ -2,6 +2,16 @@
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
 //
+// v3.6 — 2026-02-15 — CHANGES:
+//   - FIX: runComposite — try/catch moved INSIDE the for loop so that
+//     a single failed section (e.g. kers hitting 429 rate limit) does
+//     NOT abort generation of remaining sections.
+//   - FIX: runComposite — delay between API calls increased from 100ms
+//     to 1500ms to reduce Gemini free-tier rate limit hits.
+//   - FIX: runComposite — partial success reporting: user sees
+//     "3/4 sections generated" instead of silent failure.
+//   - All previous v3.5.2 changes preserved.
+//
 // v3.5.2 — 2026-02-14 — CHANGES:
 //   - FIXED: Auto-generate projectManagement (Kakovost in učinkovitost
 //     izvedbe) when generating activities — description field was left
@@ -530,6 +540,7 @@ export const useGeneration = ({
   );
 
   // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
+  // ★ v3.6 FIX: try/catch INSIDE for loop + longer delay + partial success reporting
 
   const handleGenerateCompositeSection = useCallback(
     async (_sectionKey: string) => {
@@ -554,54 +565,54 @@ export const useGeneration = ({
         if (otherLangData) break;
       }
 
+      // ★ v3.6 FIX: Resilient composite runner
       const runComposite = async (mode: string) => {
-    closeModal();
-    setIsLoading(true);
-    setError(null);
+        closeModal();
+        setIsLoading(true);
+        setError(null);
 
-    let successCount = 0;
-    let lastError: any = null;
+        let successCount = 0;
+        let lastError: any = null;
 
-    for (const s of sections) {
-        setIsLoading(`${t.generating} ${s}...`);
-        try {
+        for (const s of sections) {
+          setIsLoading(`${t.generating} ${s}...`);
+          try {
             const generatedData = await generateSectionContent(
-                s,
-                projectData,
-                language,
-                mode
+              s,
+              projectData,
+              language,
+              mode
             );
             setProjectData((prev: any) => {
-                const next = { ...prev };
-                next[s] = generatedData;
-                return next;
+              const next = { ...prev };
+              next[s] = generatedData;
+              return next;
             });
             successCount++;
-        } catch (e: any) {
+          } catch (e: any) {
             console.error(`[runComposite] Failed to generate ${s}:`, e);
             lastError = e;
             // Continue with next section — don't break the loop
+          }
+          // Longer delay between calls to avoid rate limits (especially Gemini free tier)
+          await new Promise((r) => setTimeout(r, 1500));
         }
-        // Delay between calls to avoid rate limits (especially Gemini free tier)
-        await new Promise((r) => setTimeout(r, 1500));
-    }
 
-    if (successCount > 0) {
-        setHasUnsavedTranslationChanges(true);
-    }
+        if (successCount > 0) {
+          setHasUnsavedTranslationChanges(true);
+        }
 
-    if (lastError && successCount < sections.length) {
-        const failedCount = sections.length - successCount;
-        setError(
+        if (lastError && successCount < sections.length) {
+          const failedCount = sections.length - successCount;
+          setError(
             language === 'si'
-                ? `${successCount}/${sections.length} razdelkov uspešno generiranih. ${failedCount} ni uspelo — poskusite ponovno.`
-                : `${successCount}/${sections.length} sections generated successfully. ${failedCount} failed — please try again.`
-        );
-    }
+              ? `${successCount}/${sections.length} razdelkov uspešno generiranih. ${failedCount} ni uspelo — poskusite ponovno.`
+              : `${successCount}/${sections.length} sections generated successfully. ${failedCount} failed — please try again.`
+          );
+        }
 
-    setIsLoading(false);
-};
-
+        setIsLoading(false);
+      };
 
       if (otherLangData && !hasContentInSections) {
         // LEVEL 1: Other language has results, current is empty
