@@ -4,13 +4,13 @@
 // v4.6 — 2026-02-15 — CHANGES:
 //   - RENAMED appTitle: "EU Project Idea Draft" (EN) /
 //     "Idejni osnutek projekta EU" (SI)
-//   - ADDED copyright key for both languages.
+//   - copyright: "© 2026 INFINITA d.o.o. All rights reserved.",
 //   - All previous v4.5 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 export const TEXT = {
   en: {
-    appTitle: "EU Intervention Logic AI Assistant",
+    appTitle: "EU Project Idea Draft",
     subtitle: "10 Key Steps",
     clickToStart: "Click on a module to start building your project proposal.",
     projectActions: "Project Actions",
@@ -19,7 +19,7 @@ export const TEXT = {
     exportDocx: "Export as DOCX",
     exportSummary: "Export Summary",
     print: "Print",
-    backToHome: "EU Logic Assistant",
+    backToHome: "EU Project Idea Draft",
     add: "Add Item",
     remove: "Remove",
     generateAI: "Generate with AI",
@@ -336,7 +336,7 @@ export const TEXT = {
     }
   },
   si: {
-    appTitle: "Asistent za intervencijsko logiko EU",
+    appTitle: "Idejni osnutek projekta EU",
     subtitle: "10 ključnih korakov",
     clickToStart: "Kliknite na modul za začetek priprave projektnega predloga.",
     projectActions: "Projektna dejanja",
