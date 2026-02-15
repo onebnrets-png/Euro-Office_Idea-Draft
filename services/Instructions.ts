@@ -484,6 +484,9 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Dissemination WP spans the ENTIRE project duration (M1 to final month)',
       'No content/technical WP spans the entire project — each covers a specific phase',
       'Tasks within each WP are sequential or staggered — NOT all sharing identical start and end dates',
+      'NO task endDate exceeds the project end date ({{projectEnd}})',
+      'NO milestone date exceeds the project end date ({{projectEnd}})',
+      'Final reporting task and closing milestone are scheduled ON or BEFORE the project end date',
     ],
     si: [
       'ZADNJI DS (najvišja številka) je "Upravljanje in koordinacija projekta" — NE nobena druga tema',
@@ -506,6 +509,9 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'DS za diseminacijo traja CELOTNO trajanje projekta (M1 do zadnjega meseca)',
       'Noben vsebinski/tehnični DS ne traja celotno obdobje projekta — vsak pokriva specifično fazo',
       'Naloge znotraj vsakega DS so zaporedne ali zamaknjene — NE vse z enakimi začetnimi in končnimi datumi',
+      'NOBEN endDate naloge ne presega datuma zaključka projekta ({{projectEnd}})',
+      'NOBEN datum mejnika ne presega datuma zaključka projekta ({{projectEnd}})',
+      'Zaključna poročevalska naloga in zaključni mejnik sta načrtovana NA ali PRED datumom zaključka projekta',
     ]
   },
   _default: {
