@@ -78,11 +78,13 @@ export const createEmptyProjectData = () => {
       causes: [{ title: '', description: '' }],
       consequences: [{ title: '', description: '' }],
     },
-    projectIdea: {
+      projectIdea: {
       projectTitle: '',
       projectAcronym: '',
       startDate: today,
+      durationMonths: 24,  // ★ v4.5: Default 24 months
       mainAim: '',
+
       proposedSolution: '',
       stateOfTheArt: '',
       readinessLevels: {
