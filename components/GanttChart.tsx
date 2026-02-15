@@ -1,8 +1,16 @@
 // components/GanttChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// Gantt Chart Component – v4.7 (2026-02-14)
+// Gantt Chart Component – v4.8 (2026-02-15)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v4.8 – FIX: Eliminated first-render flash where Gantt chart renders at
+//         wrong width and only corrects after hard refresh. Solution:
+//         1. Initial containerWidth state = 0 (not 1200 default).
+//         2. useLayoutEffect measures width BEFORE browser paints.
+//         3. Safety net useEffect + rAF re-measures if layout wasn't ready.
+//         4. Early return renders empty container (with ref) while width = 0,
+//            so the ref attaches to DOM → measurement fires → re-render with
+//            correct width. User sees correct chart on first navigation.
 // v4.7 – FIX: Added visual inner padding (LEFT_PAD / RIGHT_PAD) so that
 //         bars, labels, markers, grid lines, and dependency paths do not
 //         touch the left or right edge of the container. All getLeft()
@@ -25,7 +33,7 @@
 //         to prevent horizontal expansion. Added SIDE_PADDING constant.
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { TEXT } from '../locales.ts';
 import { ICONS } from '../constants.tsx';
 import { downloadBlob } from '../utils.ts';
@@ -61,7 +69,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 }) => {
     const [hoveredTask, setHoveredTask] = useState<string | null>(null);
     const [viewModeState, setViewModeState] = useState<ViewMode>('project');
-    const [containerWidth, setContainerWidth] = useState(initialWidth);
+    const [containerWidth, setContainerWidth] = useState(0); // ★ FIX v4.8: start at 0, not initialWidth
     const chartRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const t = TEXT[language] || TEXT['en'];
@@ -69,12 +77,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
     // Use forced view mode if provided (for export), otherwise internal state
     const viewMode: ViewMode = forceViewMode || viewModeState;
 
-    // ★ FIX v4.8: Measure container width SYNCHRONOUSLY on mount via useLayoutEffect
-    // to prevent first-render flash with wrong width. ResizeObserver still handles
-    // subsequent resizes (window resize, sidebar toggle, etc.).
-    // useLayoutEffect fires synchronously after DOM mutations but BEFORE the browser
-    // paints, so the first paint already uses the correct measured width.
-    useEffect(() => {
+    // ★ FIX v4.8: Two-phase width measurement to eliminate first-render flash.
+    //
+    // PROBLEM: useEffect runs AFTER paint → first frame uses wrong width (0 or 1200).
+    //          useLayoutEffect runs before paint but containerRef may not be attached yet.
+    //
+    // SOLUTION:
+    //   Phase 1: useLayoutEffect reads width synchronously BEFORE paint (if ref is ready).
+    //   Phase 2: ResizeObserver handles all subsequent resizes (sidebar, window).
+    //   Phase 3: A second useEffect with rAF catches the edge case where Phase 1
+    //            fires before the DOM node has its final layout width.
+
+    // Phase 1 + 2: Synchronous read + ResizeObserver
+    useLayoutEffect(() => {
         if (forceViewMode) {
             setContainerWidth(initialWidth);
             return;
@@ -83,10 +98,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
         const node = containerRef.current;
         if (!node) return;
 
-        // ★ Synchronous initial measurement — prevents wrong-width first paint
-        const initialMeasured = node.getBoundingClientRect().width;
-        if (initialMeasured > 0) {
-            setContainerWidth(initialMeasured);
+        // Synchronous measurement — runs before browser paints
+        const measured = node.getBoundingClientRect().width;
+        if (measured > 0) {
+            setContainerWidth(measured);
         }
 
         const resizeObserver = new ResizeObserver((entries) => {
@@ -102,6 +117,23 @@ const GanttChart: React.FC<GanttChartProps> = ({
         return () => resizeObserver.disconnect();
     }, [initialWidth, forceViewMode]);
 
+    // Phase 3: Safety net — if Phase 1 measured 0 (DOM not ready), re-measure after commit
+    useEffect(() => {
+        if (forceViewMode || containerWidth > 0) return;
+
+        const node = containerRef.current;
+        if (!node) return;
+
+        // requestAnimationFrame ensures DOM layout is finalized
+        const rafId = requestAnimationFrame(() => {
+            const w = node.getBoundingClientRect().width;
+            if (w > 0) {
+                setContainerWidth(w);
+            }
+        });
+
+        return () => cancelAnimationFrame(rafId);
+    }, [forceViewMode, containerWidth]);
 
     // 1. Flatten all tasks with valid dates to find min/max and create a map
     const { allItems, taskMap, rows } = useMemo(() => {
@@ -162,6 +194,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
         );
     }
 
+    // ★ FIX v4.8: Don't render chart content until we have a real measured width.
+    // This prevents the flash where bars render at wrong positions.
+    if (containerWidth === 0 && viewMode === 'project' && !forceViewMode) {
+        return (
+            <div
+                ref={containerRef}
+                id={id}
+                className="mt-8 border border-slate-200 rounded-xl bg-white shadow-sm font-sans overflow-hidden"
+                style={{ maxWidth: '100%', boxSizing: 'border-box', minHeight: '200px' }}
+            />
+        );
+    }
+
     // 2. Determine Timeline Bounds
     const rawMin = Math.min(...allItems.map(t => t.type === 'milestone' ? t.date.getTime() : t.start.getTime()));
     const rawMax = Math.max(...allItems.map(t => t.type === 'milestone' ? t.date.getTime() : t.end.getTime()));
@@ -192,20 +237,17 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     // 3. Calculate Pixels Per Day
     // ★ FIX v4.7: Reserve LEFT_PAD + RIGHT_PAD inside the available space.
-    //   The "drawable" timeline area is (chartWidth - LEFT_PAD - RIGHT_PAD) wide,
-    //   but we keep chartWidth = full container width so the SVG and containers
-    //   span the whole area. getLeft() adds LEFT_PAD as offset.
     let pixelsPerDay: number;
     let chartWidth: number;
 
     if (viewMode === 'project') {
         const availableWidth = Math.max(containerWidth, 100);
-        const drawableWidth = availableWidth - SIDE_PADDING; // ★ FIX v4.7
+        const drawableWidth = availableWidth - SIDE_PADDING;
         pixelsPerDay = drawableWidth / Math.max(totalDays, 1);
-        chartWidth = availableWidth; // Full container width (pads are inside)
+        chartWidth = availableWidth;
     } else {
         pixelsPerDay = VIEW_SETTINGS[viewMode]?.px || 4;
-        chartWidth = (totalDays * pixelsPerDay) + SIDE_PADDING; // ★ FIX v4.7: add padding for scrollable views too
+        chartWidth = (totalDays * pixelsPerDay) + SIDE_PADDING;
     }
 
     // Add generous buffer (80px) to chart height to prevent bottom cutoff
@@ -326,7 +368,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
 
     // --- Orthogonal Dependency Path Logic ---
-    // v4.6+v4.7: Clamp path coordinates to [0, chartWidth] in project view
     const clampX = (x: number): number => {
         if (!isProjectView) return x;
         return Math.max(0, Math.min(x, chartWidth));
@@ -553,16 +594,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
                         {renderDependencies()}
                     </svg>
 
-                    {/* Header: Time Markers — ★ FIX v4.7: uses LEFT_PAD-aware getLeft + maxContentRight */}
+                    {/* Header: Time Markers */}
                     <div
                         className="border-b border-slate-200 bg-slate-50 sticky top-0 z-20 flex text-xs font-semibold text-slate-500 overflow-hidden"
                         style={{ height: `${HEADER_HEIGHT}px` }}
                     >
                         {markers.map((m, i) => {
                             const left = getLeft(m);
-                            // ★ FIX v4.7: filter markers that would overflow past right pad
                             if (left > maxContentRight - 40) return null;
-                            // Also skip markers that would be before the left pad
                             if (left < LEFT_PAD - 5) return null;
 
                             return (
@@ -580,7 +619,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                         })}
                     </div>
 
-                    {/* Grid Lines — ★ FIX v4.7: uses LEFT_PAD-aware getLeft */}
+                    {/* Grid Lines */}
                     <div className="absolute inset-0 z-0 pointer-events-none top-10">
                         {markers.map((m, i) => {
                             const left = getLeft(m);
@@ -627,7 +666,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                         className="border-b border-slate-100 bg-slate-50/50 flex items-center px-4 font-bold text-xs text-slate-700 sticky left-0 z-10 w-full"
                                         style={{ height: `${ROW_HEIGHT}px` }}
                                     >
-                                        {/* ★ FIX v4.7: WP bar uses getLeft which already includes LEFT_PAD */}
                                         <div
                                             className="absolute bg-slate-700 rounded-md opacity-90"
                                             style={{
@@ -668,7 +706,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                                         title={`${item.id}: ${item.description}`}
                                                     />
 
-                                                    {/* Label — ★ FIX v4.7: uses maxContentRight */}
+                                                    {/* Label */}
                                                     {(left + 10 < maxContentRight - 10) && (
                                                         <div
                                                             className="absolute text-[11px] font-bold text-slate-800 whitespace-nowrap px-2 pointer-events-none flex items-center overflow-hidden"
@@ -694,16 +732,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
                                             const fullLabel = `${item.id}: ${item.title}`;
                                             const textWidth = fullLabel.length * 7 + 16;
                                             const fitsInside = width >= textWidth;
-                                            // ★ FIX v4.7: use maxContentRight instead of chartWidth
                                             const fitsRight = (left + width + textWidth + 5) <= maxContentRight;
                                             const fitsLeft = (left - textWidth - 5) >= LEFT_PAD;
 
-                                            // v4.6+v4.7: In project view, never use 'right' if it would overflow
                                             let labelPos = fitsInside
                                                 ? 'inside'
                                                 : (fitsRight && !isProjectView ? 'right' : (fitsLeft ? 'left' : 'inside-truncate'));
 
-                                            // ★ FIX v4.7: Clamp bar width so it doesn't exceed right pad
                                             const clampedBarWidth = Math.min(width, maxContentRight - left);
 
                                             return (
