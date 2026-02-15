@@ -1200,3 +1200,10 @@ export async function resetAppInstructions(): Promise<any> {
   await storageService.saveCustomInstructions(defaults);
   return defaults;
 }
+
+// ───────────────────────────────────────────────────────────────
+// OPENROUTER SYSTEM PROMPT — v4.5
+// Moved here from aiProvider.ts to keep all AI rules in one place.
+// ───────────────────────────────────────────────────────────────
+
+export const OPENROUTER_SYSTEM_PROMPT = 'You are a professional EU project assistant. You MUST respond with valid JSON only. No markdown, no code fences, no explanations – just the raw JSON object or array.';
