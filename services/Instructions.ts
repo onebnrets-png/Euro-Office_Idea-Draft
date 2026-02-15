@@ -666,7 +666,18 @@ KLJUČNO: V strukturna polja NE vstavljaj opisov, pojasnil ali dolgega besedila.
   // ═══════════════════════════════════════════════════════════════
   activities: {
     en: `Generate between 6 and 10 Work Packages with tasks, milestones and deliverables.
-Project start date: {{projectStart}}.
+
+ABSOLUTE PROJECT TIMEFRAME CONSTRAINT:
+- Project START date: {{projectStart}}
+- Project END date: {{projectEnd}} ({{projectDurationMonths}} months total)
+- EVERY task startDate MUST be ≥ {{projectStart}}
+- EVERY task endDate MUST be ≤ {{projectEnd}}
+- EVERY milestone date MUST be ≤ {{projectEnd}}
+- EVERY WP must start on or after {{projectStart}} and end on or before {{projectEnd}}
+- NO activity, task, milestone, or deliverable may be scheduled AFTER {{projectEnd}}
+- Dissemination, exploitation, and reporting tasks MUST be completed by {{projectEnd}}
+- The final project report and closing milestone MUST be on or before {{projectEnd}}
+- This is NON-NEGOTIABLE — any date outside this range is a FATAL ERROR
 
 TITLE FORMAT RULES:
 - WP titles: noun phrase (e.g., "Baseline Analysis and Stakeholder Mapping")
@@ -719,7 +730,18 @@ MILESTONES:
 
 No markdown. Write like an experienced EU project consultant.`,
     si: `Generiraj med 6 in 10 delovnih sklopov z nalogami, mejniki in dosežki.
-Začetni datum projekta: {{projectStart}}.
+
+ABSOLUTNA ČASOVNA OMEJITEV PROJEKTA:
+- Datum ZAČETKA projekta: {{projectStart}}
+- Datum KONCA projekta: {{projectEnd}} (skupno {{projectDurationMonths}} mesecev)
+- VSAK startDate naloge MORA biti ≥ {{projectStart}}
+- VSAK endDate naloge MORA biti ≤ {{projectEnd}}
+- VSAK datum mejnika MORA biti ≤ {{projectEnd}}
+- VSAK DS se mora začeti na ali po {{projectStart}} in končati na ali pred {{projectEnd}}
+- NOBENA aktivnost, naloga, mejnik ali dosežek NE SME biti načrtovan PO {{projectEnd}}
+- Naloge diseminacije, eksploatacije in poročanja MORAJO biti zaključene do {{projectEnd}}
+- Zaključno projektno poročilo in zaključni mejnik MORATA biti na ali pred {{projectEnd}}
+- To je NEIZPODBOJNO — vsak datum izven tega obsega je USODNA NAPAKA
 
 PRAVILA ZA FORMAT NASLOVOV:
 - Naslovi DS: samostalniška zveza (npr. "Izhodiščna analiza in kartiranje deležnikov")
