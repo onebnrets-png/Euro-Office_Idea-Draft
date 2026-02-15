@@ -1,17 +1,17 @@
 // components/GanttChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// Gantt Chart Component – v5.0 (2026-02-15)
+// Gantt Chart Component – v5.1 (2026-02-15)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
-// v5.0 – FIX: Corrected CTRL+Scroll zoom integration.
-//         Root cause: zoomContentStyle was applied to scrollable div
-//         which had conflicting overflow/dimension styles. Fixed by:
-//         1. Zoom wrapper (zoomContainerRef) wraps ONLY the chart area.
-//         2. Single content div gets zoomContentStyle transform.
-//         3. Drag-to-pan only activates when scale > 1 (preserves
-//            hover/click on Gantt bars at normal zoom).
-//         4. Uses onUserZoom callback from useZoomPan v1.1.
-// v4.9 – FEAT: Added CTRL+Scroll zoom (initial integration, had bugs).
+// v5.1 – FIX: Replaced useZoomPan hook with self-contained inline zoom.
+//         Root cause: Hook's native addEventListener couldn't reliably
+//         capture wheel events through Gantt's nested overflow:hidden divs.
+//         After page refresh, hook's ref wasn't attached in time.
+//         Solution: React synthetic onWheel/onMouseDown/onDoubleClick
+//         handlers directly on the zoom wrapper div — these always fire
+//         regardless of DOM nesting or mount timing.
+//         Drag-to-pan uses window mousemove/mouseup via useEffect.
+// v5.0 – FIX: Attempted useZoomPan hook (didn't survive refresh).
 // v4.8 – FIX: Eliminated first-render flash.
 // v4.7 – FIX: Added visual inner padding (LEFT_PAD / RIGHT_PAD).
 // v4.6 – FIX: Multiple overflow prevention measures for "Project" view.
@@ -23,7 +23,6 @@ import { TEXT } from '../locales.ts';
 import { ICONS } from '../constants.tsx';
 import { downloadBlob } from '../utils.ts';
 import { TECHNICAL_CONFIG } from '../services/TechnicalInstructions.ts';
-import { useZoomPan } from '../hooks/useZoomPan';
 import { ZoomBadge } from '../hooks/ZoomBadge';
 
 // Extract constants from Technical Configuration
@@ -62,20 +61,94 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     const viewMode: ViewMode = forceViewMode || viewModeState;
 
-    // ★ v5.0: Zoom & Pan — enableDrag only when zoomed, onUserZoom for awareness
-    const {
-        containerRef: zoomContainerRef,
-        containerStyle: zoomContainerStyle,
-        contentStyle: zoomContentStyle,
-        zoomBadgeText,
-        resetZoom,
-        scale: currentZoomScale,
-    } = useZoomPan({
-        minScale: 0.5,
-        maxScale: 2.0,
-        scaleStep: 0.1,
-        enableDrag: true,
-    });
+    // ═══════════════════════════════════════════════════════════
+    // ★ v5.1: SELF-CONTAINED ZOOM (no useZoomPan hook)
+    // React synthetic events guarantee delivery regardless of
+    // DOM nesting, overflow rules, or mount timing.
+    // ═══════════════════════════════════════════════════════════
+    const [zoomScale, setZoomScale] = useState(1);
+    const [zoomTranslate, setZoomTranslate] = useState({ x: 0, y: 0 });
+    const zoomDragging = useRef(false);
+    const zoomDragStart = useRef({ x: 0, y: 0 });
+    const zoomTranslateStart = useRef({ x: 0, y: 0 });
+
+    const isZoomed = Math.abs(zoomScale - 1) > 0.001;
+
+    const ganttResetZoom = useCallback(() => {
+        setZoomScale(1);
+        setZoomTranslate({ x: 0, y: 0 });
+    }, []);
+
+    const ganttZoomBadgeText = zoomScale === 1 ? '' : `${Math.round(zoomScale * 100)}%`;
+
+    // CTRL+Scroll zoom handler (React synthetic event)
+    const handleGanttWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const cursorX = e.clientX - rect.left;
+        const cursorY = e.clientY - rect.top;
+        const direction = e.deltaY < 0 ? 1 : -1;
+
+        setZoomScale(prev => {
+            const newScale = Math.min(2.0, Math.max(0.5, Math.round((prev + direction * 0.1) * 100) / 100));
+            const ratio = newScale / prev;
+            setZoomTranslate(pt => ({
+                x: cursorX - ratio * (cursorX - pt.x),
+                y: cursorY - ratio * (cursorY - pt.y),
+            }));
+            return newScale;
+        });
+    }, []);
+
+    // Drag-to-pan: mousedown (React synthetic event)
+    const handleGanttMouseDown = useCallback((e: React.MouseEvent) => {
+        if (e.button !== 0) return;
+        if (Math.abs(zoomScale - 1) < 0.001) return; // no drag at exactly 100%
+        zoomDragging.current = true;
+        zoomDragStart.current = { x: e.clientX, y: e.clientY };
+        zoomTranslateStart.current = { x: zoomTranslate.x, y: zoomTranslate.y };
+        e.preventDefault();
+    }, [zoomScale, zoomTranslate]);
+
+    // Drag-to-pan: mousemove/mouseup on window (native, via useEffect)
+    useEffect(() => {
+        const handleMove = (e: MouseEvent) => {
+            if (!zoomDragging.current) return;
+            setZoomTranslate({
+                x: zoomTranslateStart.current.x + (e.clientX - zoomDragStart.current.x),
+                y: zoomTranslateStart.current.y + (e.clientY - zoomDragStart.current.y),
+            });
+        };
+        const handleUp = () => {
+            zoomDragging.current = false;
+        };
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+    }, []);
+
+    // Double-click to reset
+    const handleGanttDblClick = useCallback(() => {
+        ganttResetZoom();
+    }, [ganttResetZoom]);
+
+    // CSS transform for zoomable content
+    const ganttContentTransform: React.CSSProperties = {
+        transform: `translate(${zoomTranslate.x}px, ${zoomTranslate.y}px) scale(${zoomScale})`,
+        transformOrigin: '0 0',
+        transition: zoomDragging.current ? 'none' : 'transform 0.15s ease-out',
+        willChange: 'transform',
+    };
+    // ═══════════════════════════════════════════════════════════
+    // END SELF-CONTAINED ZOOM
+    // ═══════════════════════════════════════════════════════════
 
     // ★ FIX v4.8: Two-phase width measurement
     useLayoutEffect(() => {
@@ -517,40 +590,43 @@ const GanttChart: React.FC<GanttChartProps> = ({
                             {(Object.keys(VIEW_SETTINGS) as ViewMode[]).map((mode) => (
                                 <button
                                     key={mode}
-                                    onClick={() => { setViewModeState(mode); resetZoom(); }}
+                                    onClick={() => { setViewModeState(mode); ganttResetZoom(); }}
                                     className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${viewModeState === mode ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                                 >
                                     {t.views[mode]}
                                 </button>
                             ))}
                         </div>
-                        {/* ★ v5.0: Zoom hint */}
                         <span className="text-[10px] text-slate-400 ml-2 hidden sm:inline">CTRL+Scroll</span>
                     </div>
                 </div>
             )}
 
-            {/* ★ v5.0: Zoom/Pan wrapper — wraps ONLY the chart content area */}
+            {/* ★ v5.1: Self-contained zoom area — React synthetic events */}
             <div
-                ref={zoomContainerRef}
                 className="relative"
                 style={{
-                    ...zoomContainerStyle,
                     overflow: 'hidden',
+                    position: 'relative',
                     maxHeight: isProjectView ? 'none' : '700px',
+                    cursor: isZoomed ? 'grab' : 'default',
+                    touchAction: 'none',
                 }}
+                onWheel={handleGanttWheel}
+                onMouseDown={handleGanttMouseDown}
+                onDoubleClick={handleGanttDblClick}
             >
-                {/* ★ v5.0: Zoom Badge */}
+                {/* ★ v5.1: Zoom Badge */}
                 {!forceViewMode && (
                     <ZoomBadge
-                        zoomText={zoomBadgeText}
-                        onReset={resetZoom}
+                        zoomText={ganttZoomBadgeText}
+                        onReset={ganttResetZoom}
                         language={language === 'si' ? 'sl' : (language as 'en')}
                     />
                 )}
 
-                {/* ★ v5.0: This is THE zoomable content — single transform target */}
-                <div style={zoomContentStyle}>
+                {/* ★ v5.1: Zoomable content — CSS transform */}
+                <div style={ganttContentTransform}>
                     <div
                         id={forceViewMode ? `${id}-content` : 'gantt-chart-content'}
                         className="relative w-full bg-white"
