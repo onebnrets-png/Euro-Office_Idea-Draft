@@ -900,8 +900,10 @@ export const generateSectionContent = async (
     throw new Error("API returned an array for projectIdea section, expected an object.");
   }
 
-  if (sectionKey === 'activities' && Array.isArray(parsedData)) {
+    if (sectionKey === 'activities' && Array.isArray(parsedData)) {
     parsedData = sanitizeActivities(parsedData);
+    // ★ v4.5: FORCE all dates within project envelope — AI cannot be trusted with dates
+    parsedData = enforceTemporalIntegrity(parsedData, projectData);
   }
 
   if (sectionKey === 'projectIdea' && parsedData.proposedSolution) {
