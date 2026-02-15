@@ -302,6 +302,12 @@ export const useGeneration = ({
           } else {
             console.warn('[executeGeneration] activities: unexpected format, keeping original');
           }
+        } else if (sectionKey === 'expectedResults') {
+          // ★ FIX v4.5: Composite result — unpack outputs/outcomes/impacts
+          const compositeData = generatedData as any;
+          if (compositeData.outputs) newData.outputs = compositeData.outputs;
+          if (compositeData.outcomes) newData.outcomes = compositeData.outcomes;
+          if (compositeData.impacts) newData.impacts = compositeData.impacts;
         } else {
           newData[sectionKey] = generatedData;
         }
