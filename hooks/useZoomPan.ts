@@ -1,6 +1,15 @@
-// hooks/useZoomPan.ts v1.0
+// hooks/useZoomPan.ts v1.1
+// ═══════════════════════════════════════════════════════════════
 // Universal zoom & pan hook for chart components
 // CTRL+Scroll zoom (50%-200%), drag-to-pan, pinch-to-zoom, double-click reset
+// ═══════════════════════════════════════════════════════════════
+// CHANGELOG:
+// v1.1 – Added setScale() for programmatic zoom (Fit button),
+//         onZoomChange callback so components can react to user zoom,
+//         and improved drag behavior (only drag when scale !== 1 or
+//         when explicitly enabled).
+// v1.0 – Initial implementation.
+// ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
@@ -14,6 +23,10 @@ interface UseZoomPanOptions {
   minScale?: number;
   maxScale?: number;
   scaleStep?: number;
+  /** Called whenever user changes zoom via CTRL+scroll or pinch (NOT on programmatic changes) */
+  onUserZoom?: (newScale: number) => void;
+  /** If false, drag-to-pan is disabled (useful when chart has its own click handlers) */
+  enableDrag?: boolean;
 }
 
 interface UseZoomPanReturn {
@@ -23,6 +36,8 @@ interface UseZoomPanReturn {
   translateX: number;
   translateY: number;
   resetZoom: () => void;
+  /** Programmatically set scale (e.g. for "Fit" button). Resets translate to 0,0. */
+  setScale: (newScale: number) => void;
   containerStyle: React.CSSProperties;
   contentStyle: React.CSSProperties;
   zoomBadgeText: string;
@@ -33,6 +48,8 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     minScale = 0.5,
     maxScale = 2.0,
     scaleStep = 0.1,
+    onUserZoom,
+    enableDrag = true,
   } = options || {};
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +60,10 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     translateX: 0,
     translateY: 0,
   });
+
+  // Refs for callbacks to avoid stale closures
+  const onUserZoomRef = useRef(onUserZoom);
+  onUserZoomRef.current = onUserZoom;
 
   // --- Drag-to-pan state ---
   const isDragging = useRef(false);
@@ -56,6 +77,12 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
   const resetZoom = useCallback(() => {
     setState({ scale: 1, translateX: 0, translateY: 0 });
   }, []);
+
+  // --- Programmatic scale set ---
+  const setScale = useCallback((newScale: number) => {
+    const clamped = Math.min(maxScale, Math.max(minScale, Math.round(newScale * 100) / 100));
+    setState({ scale: clamped, translateX: 0, translateY: 0 });
+  }, [minScale, maxScale]);
 
   // --- Clamp helper ---
   const clampScale = useCallback(
@@ -71,14 +98,12 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     if (!container) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Only zoom when CTRL (or Meta on Mac) is held
       if (!e.ctrlKey && !e.metaKey) return;
 
       e.preventDefault();
       e.stopPropagation();
 
       const rect = container.getBoundingClientRect();
-      // Cursor position relative to container
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
 
@@ -87,9 +112,14 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
         const newScale = clampScale(prev.scale + direction * scaleStep);
         const ratio = newScale / prev.scale;
 
-        // Zoom toward cursor: adjust translate so cursor point stays fixed
         const newTranslateX = cursorX - ratio * (cursorX - prev.translateX);
         const newTranslateY = cursorY - ratio * (cursorY - prev.translateY);
+
+        // Notify component about user-initiated zoom
+        if (newScale !== prev.scale && onUserZoomRef.current) {
+          // Use setTimeout to avoid setState-in-setState
+          setTimeout(() => onUserZoomRef.current?.(newScale), 0);
+        }
 
         return {
           scale: newScale,
@@ -113,6 +143,9 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     const handleDblClick = (e: MouseEvent) => {
       e.preventDefault();
       resetZoom();
+      if (onUserZoomRef.current) {
+        setTimeout(() => onUserZoomRef.current?.(1), 0);
+      }
     };
 
     container.addEventListener('dblclick', handleDblClick);
@@ -120,15 +153,19 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
   }, [resetZoom]);
 
   // ============================================================
-  // Drag-to-pan (mouse)
+  // Drag-to-pan (mouse) — only when enableDrag is true
   // ============================================================
   useEffect(() => {
+    if (!enableDrag) return;
+
     const container = containerRef.current;
     if (!container) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      // Only pan when zoomed in (scale > 1) or always allow
-      if (e.button !== 0) return; // left click only
+      if (e.button !== 0) return;
+      // Only allow drag when zoomed (scale != 1) to avoid interfering with chart interactions
+      if (state.scale <= 1.01) return;
+
       isDragging.current = true;
       dragStart.current = { x: e.clientX, y: e.clientY };
       translateStart.current = {
@@ -153,7 +190,9 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     const handleMouseUp = () => {
       if (isDragging.current) {
         isDragging.current = false;
-        container.style.cursor = 'grab';
+        if (containerRef.current) {
+          containerRef.current.style.cursor = state.scale > 1.01 ? 'grab' : 'default';
+        }
       }
     };
 
@@ -166,7 +205,7 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [state.translateX, state.translateY]);
+  }, [enableDrag, state.scale, state.translateX, state.translateY]);
 
   // ============================================================
   // Pinch-to-zoom (touch)
@@ -185,8 +224,7 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
       if (e.touches.length === 2) {
         lastPinchDist.current = getPinchDist(e.touches);
         e.preventDefault();
-      } else if (e.touches.length === 1) {
-        // Single finger drag-to-pan
+      } else if (e.touches.length === 1 && enableDrag && state.scale > 1.01) {
         isDragging.current = true;
         dragStart.current = {
           x: e.touches[0].clientX,
@@ -205,7 +243,6 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
         const newDist = getPinchDist(e.touches);
         const delta = newDist - lastPinchDist.current;
 
-        // Pinch center
         const rect = container.getBoundingClientRect();
         const centerX =
           (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
@@ -213,9 +250,13 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
           (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
 
         setState((prev) => {
-          const scaleChange = delta * 0.005; // sensitivity
+          const scaleChange = delta * 0.005;
           const newScale = clampScale(prev.scale + scaleChange);
           const ratio = newScale / prev.scale;
+
+          if (newScale !== prev.scale && onUserZoomRef.current) {
+            setTimeout(() => onUserZoomRef.current?.(newScale), 0);
+          }
 
           return {
             scale: newScale,
@@ -258,16 +299,16 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [clampScale, state.translateX, state.translateY]);
+  }, [clampScale, enableDrag, state.scale, state.translateX, state.translateY]);
 
   // ============================================================
   // Computed styles
   // ============================================================
   const containerStyle: React.CSSProperties = {
     overflow: 'hidden',
-    cursor: state.scale > 1 ? 'grab' : 'default',
+    cursor: state.scale > 1.01 ? 'grab' : 'default',
     position: 'relative',
-    touchAction: 'none', // prevent browser default pinch
+    touchAction: 'none',
   };
 
   const contentStyle: React.CSSProperties = {
@@ -287,6 +328,7 @@ export function useZoomPan(options?: UseZoomPanOptions): UseZoomPanReturn {
     translateX: state.translateX,
     translateY: state.translateY,
     resetZoom,
+    setScale,
     containerStyle,
     contentStyle,
     zoomBadgeText,
