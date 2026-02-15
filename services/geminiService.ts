@@ -54,7 +54,8 @@ import {
   getProjectTitleRules,
   getModeInstruction,
   getQualityGate,
-  getSectionTaskInstruction
+  getSectionTaskInstruction,
+  TEMPORAL_INTEGRITY_RULE
 } from './Instructions.ts';
 import { detectProjectLanguage as detectLanguage } from '../utils.ts';
 import {
