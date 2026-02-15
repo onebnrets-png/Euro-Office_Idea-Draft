@@ -1,10 +1,11 @@
 // locales.ts
 // ═══════════════════════════════════════════════════════════════
 // UI text strings — English (en) & Slovenian (si)
-// v4.5 — 2026-02-14 — CHANGES:
-//   - RENAMED: "Quality & Efficiency of Implementation" → "Implementation"
-//     in management.implementation, management.title, subSteps.implementation
-//   - All previous v4.4 changes preserved.
+// v4.6 — 2026-02-15 — CHANGES:
+//   - RENAMED appTitle: "EU Project Idea Draft" (EN) /
+//     "Idejni osnutek projekta EU" (SI)
+//   - ADDED copyright key for both languages.
+//   - All previous v4.5 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 export const TEXT = {
