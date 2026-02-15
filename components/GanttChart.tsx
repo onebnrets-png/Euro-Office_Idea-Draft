@@ -564,18 +564,35 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 </div>
             )}
 
-            {/* Scrollable / Fit-to-container Area */}
+                       {/* ★ v4.9: Zoom/Pan wrapper */}
             <div
-                id={forceViewMode ? `${id}-content` : 'gantt-chart-content'}
-                className="custom-scrollbar relative w-full bg-white"
-                ref={chartRef}
+                ref={zoomContainerRef}
                 style={{
-                    overflowX: isProjectView ? 'hidden' : 'auto',
-                    overflowY: isProjectView ? 'visible' : 'auto',
+                    ...zoomContainerStyle,
+                    overflow: 'hidden',
                     maxHeight: isProjectView ? 'none' : '700px',
-                    height: isProjectView ? 'auto' : undefined
                 }}
+                className="relative"
             >
+                {/* ★ v4.9: Zoom Badge */}
+                {!forceViewMode && (
+                    <ZoomBadge
+                        zoomText={zoomBadgeText}
+                        onReset={resetZoom}
+                        language={language === 'si' ? 'sl' : (language as 'en')}
+                    />
+                )}
+
+                {/* Scrollable / Fit-to-container Area */}
+                <div
+                    id={forceViewMode ? `${id}-content` : 'gantt-chart-content'}
+                    className="custom-scrollbar relative w-full bg-white"
+                    ref={chartRef}
+                    style={{
+                        ...zoomContentStyle,
+                        height: isProjectView ? 'auto' : undefined,
+                    }}
+                >
                 <div
                     style={{
                         width: isProjectView ? '100%' : `${Math.max(chartWidth, 100)}px`,
