@@ -38,6 +38,8 @@ import { TEXT } from '../locales.ts';
 import { ICONS } from '../constants.tsx';
 import { downloadBlob } from '../utils.ts';
 import { TECHNICAL_CONFIG } from '../services/TechnicalInstructions.ts';
+import { useZoomPan } from '../hooks/useZoomPan';
+import { ZoomBadge } from '../hooks/ZoomBadge';
 
 // Extract constants from Technical Configuration
 const { ONE_DAY_MS, MIN_BAR_WIDTH, HEADER_HEIGHT, ROW_HEIGHT, BAR_HEIGHT, BAR_OFFSET_Y, VIEW_SETTINGS } = TECHNICAL_CONFIG.GANTT;
