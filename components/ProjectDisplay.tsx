@@ -923,11 +923,14 @@ const ProjectDisplay = (props) => {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
               <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
           </div>
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               {showGenerateButton && (
-                  <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                  sectionKey === 'expectedResults'
+                    ? <GenerateButton onClick={() => props.onGenerateCompositeSection('expectedResults')} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                    : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
               )}
           </div>
+
       </header>
 
       {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 m-6 rounded-r shadow-sm" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
