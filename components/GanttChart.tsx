@@ -69,24 +69,39 @@ const GanttChart: React.FC<GanttChartProps> = ({
     // Use forced view mode if provided (for export), otherwise internal state
     const viewMode: ViewMode = forceViewMode || viewModeState;
 
-    // Measure container width for "Project" view scaling, unless forced via prop
+    // ★ FIX v4.8: Measure container width SYNCHRONOUSLY on mount via useLayoutEffect
+    // to prevent first-render flash with wrong width. ResizeObserver still handles
+    // subsequent resizes (window resize, sidebar toggle, etc.).
+    // useLayoutEffect fires synchronously after DOM mutations but BEFORE the browser
+    // paints, so the first paint already uses the correct measured width.
     useEffect(() => {
-        if (!containerRef.current || forceViewMode) {
+        if (forceViewMode) {
             setContainerWidth(initialWidth);
             return;
         }
 
+        const node = containerRef.current;
+        if (!node) return;
+
+        // ★ Synchronous initial measurement — prevents wrong-width first paint
+        const initialMeasured = node.getBoundingClientRect().width;
+        if (initialMeasured > 0) {
+            setContainerWidth(initialMeasured);
+        }
+
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
-                if (entry.contentRect.width > 0) {
-                    setContainerWidth(entry.contentRect.width);
+                const w = entry.contentRect.width;
+                if (w > 0) {
+                    setContainerWidth(w);
                 }
             }
         });
 
-        resizeObserver.observe(containerRef.current);
+        resizeObserver.observe(node);
         return () => resizeObserver.disconnect();
     }, [initialWidth, forceViewMode]);
+
 
     // 1. Flatten all tasks with valid dates to find min/max and create a map
     const { allItems, taskMap, rows } = useMemo(() => {
