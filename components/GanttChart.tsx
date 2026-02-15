@@ -815,6 +815,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
                         })}
                     </div>
                 </div>
+                        </div>
+            {/* ★ v4.9: Close zoom wrapper */}
             </div>
 
             {!forceViewMode && (
