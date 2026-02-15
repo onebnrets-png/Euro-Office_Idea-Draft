@@ -511,7 +511,118 @@ const sanitizeActivities = (activities: any[]): any[] => {
           taskMap.set(task.id, { startDate: new Date(task.startDate), endDate: new Date(task.endDate) });
         }
       });
+      // ═══════════════════════════════════════════════════════════════
+// ★ v4.5: TEMPORAL INTEGRITY ENFORCER (post-processing)
+// ═══════════════════════════════════════════════════════════════
+// AI models cannot reliably calculate dates. This function
+// programmatically FORCES all dates within the project envelope
+// AFTER AI generation. This is the safety net that guarantees
+// no task/milestone exceeds projectEnd, regardless of AI output.
+
+const enforceTemporalIntegrity = (activities: any[], projectData: any): any[] => {
+  const startStr = projectData.projectIdea?.startDate;
+  const months = projectData.projectIdea?.durationMonths || 24;
+  
+  if (!startStr) return activities; // No start date → can't enforce
+  
+  const projectStart = new Date(startStr);
+  const projectEnd = new Date(projectStart);
+  projectEnd.setMonth(projectEnd.getMonth() + months);
+  projectEnd.setDate(projectEnd.getDate() - 1);
+  
+  const startISO = projectStart.toISOString().split('T')[0];
+  const endISO = projectEnd.toISOString().split('T')[0];
+  
+  console.log(`[TemporalIntegrity] Enforcing project envelope: ${startISO} → ${endISO} (${months} months)`);
+  
+  let fixCount = 0;
+  
+  activities.forEach((wp, wpIdx) => {
+    // Fix tasks
+    if (wp.tasks && Array.isArray(wp.tasks)) {
+      wp.tasks.forEach((task: any) => {
+        if (task.startDate) {
+          const taskStart = new Date(task.startDate);
+          if (taskStart < projectStart) {
+            console.warn(`[TemporalIntegrity] FIX: ${task.id} startDate ${task.startDate} → ${startISO} (before project start)`);
+            task.startDate = startISO;
+            fixCount++;
+          }
+        }
+        if (task.endDate) {
+          const taskEnd = new Date(task.endDate);
+          if (taskEnd > projectEnd) {
+            console.warn(`[TemporalIntegrity] FIX: ${task.id} endDate ${task.endDate} → ${endISO} (after project end)`);
+            task.endDate = endISO;
+            fixCount++;
+          }
+        }
+        // Ensure startDate <= endDate after clamping
+        if (task.startDate && task.endDate && task.startDate > task.endDate) {
+          console.warn(`[TemporalIntegrity] FIX: ${task.id} startDate > endDate after clamping → setting startDate = endDate`);
+          task.startDate = task.endDate;
+          fixCount++;
+        }
+      });
     }
+    
+    // Fix milestones
+    if (wp.milestones && Array.isArray(wp.milestones)) {
+      wp.milestones.forEach((ms: any) => {
+        if (ms.date) {
+          const msDate = new Date(ms.date);
+          if (msDate < projectStart) {
+            console.warn(`[TemporalIntegrity] FIX: milestone ${ms.id} date ${ms.date} → ${startISO}`);
+            ms.date = startISO;
+            fixCount++;
+          }
+          if (msDate > projectEnd) {
+            console.warn(`[TemporalIntegrity] FIX: milestone ${ms.id} date ${ms.date} → ${endISO}`);
+            ms.date = endISO;
+            fixCount++;
+          }
+        }
+      });
+    }
+  });
+  
+  // Ensure PM WP (last) and Dissemination WP (second-to-last) span full project
+  if (activities.length >= 2) {
+    const pmWP = activities[activities.length - 1];
+    const dissWP = activities[activities.length - 2];
+    
+    [pmWP, dissWP].forEach((wp) => {
+      if (wp.tasks && wp.tasks.length > 0) {
+        // Sort tasks by startDate
+        const sorted = [...wp.tasks].sort((a: any, b: any) => 
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
+        // First task should start at projectStart
+        if (sorted[0].startDate !== startISO) {
+          console.warn(`[TemporalIntegrity] FIX: ${wp.id} first task startDate → ${startISO}`);
+          sorted[0].startDate = startISO;
+          fixCount++;
+        }
+        // Last task should end at projectEnd
+        const lastTask = sorted[sorted.length - 1];
+        if (lastTask.endDate !== endISO) {
+          console.warn(`[TemporalIntegrity] FIX: ${wp.id} last task endDate → ${endISO}`);
+          lastTask.endDate = endISO;
+          fixCount++;
+        }
+      }
+    });
+  }
+  
+  if (fixCount > 0) {
+    console.log(`[TemporalIntegrity] Applied ${fixCount} date corrections.`);
+  } else {
+    console.log(`[TemporalIntegrity] All dates within envelope. No corrections needed.`);
+  }
+  
+  return activities;
+};
+  }
   });
   activities.forEach(wp => {
     if (wp.tasks) {
