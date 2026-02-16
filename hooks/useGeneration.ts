@@ -1131,6 +1131,8 @@ export const useGeneration = ({
 
           // ────────────────────────────────────────────────────────
           // v3.5.2 FIX: Auto-generate projectManagement
+          // ★ v4.1 FIX: Add delay after per-WP generation to avoid rate limits
+          await new Promise(r => setTimeout(r, 3000));
           // (Kakovost in učinkovitost izvedbe — description + structure)
           // Generated BEFORE risks so it has full activities context,
           // and risks in turn have full projectManagement context.
