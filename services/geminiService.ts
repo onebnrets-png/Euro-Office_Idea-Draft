@@ -568,8 +568,6 @@ const enforceTemporalIntegrity = (activities: any[], projectData: any): any[] =>
 
   console.log(`[TemporalIntegrity] Enforcing project envelope: ${startISO} → ${endISO} (${months} months)`);
 
-  console.log(`[TemporalIntegrity] Enforcing project envelope: ${startISO} → ${endISO} (${months} months)`);
-
   let fixCount = 0;
 
   activities.forEach((wp) => {
