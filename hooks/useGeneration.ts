@@ -1177,8 +1177,42 @@ export const useGeneration = ({
             } else {
               console.warn('[executeGeneration] risks: unexpected format, keeping original');
             }
-          } catch (e) {
-            console.error(e);
+          } catch (e: any) {
+            console.error('[Auto-gen risks]:', e);
+            const emsg = e.message || '';
+            const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+            if (isRateLimit) {
+              // ★ v4.1: Retry once after 20s delay for rate limit
+              console.warn('[Auto-gen risks] Rate limit hit — retrying in 20s...');
+              setIsLoading(
+                language === 'si'
+                  ? 'Čakam na API kvoto... 20s → Obvladovanje tveganj'
+                  : 'Waiting for API quota... 20s → Risk Mitigation'
+              );
+              await new Promise(r => setTimeout(r, 20000));
+              setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
+              try {
+                const risksRetry = await generateSectionContent('risks', newData, language, mode);
+                if (Array.isArray(risksRetry)) {
+                  newData.risks = risksRetry;
+                } else if (risksRetry && Array.isArray((risksRetry as any).risks)) {
+                  newData.risks = (risksRetry as any).risks;
+                }
+              } catch (e2) {
+                console.error('[Auto-gen risks] Retry also failed:', e2);
+                setError(
+                  language === 'si'
+                    ? 'Tveganja niso bila generirana (omejitev API). Generirajte jih ročno v koraku 5 → Obvladovanje tveganj.'
+                    : 'Risks were not generated (API limit). Generate them manually in Step 5 → Risk Mitigation.'
+                );
+              }
+            } else {
+              setError(
+                language === 'si'
+                  ? 'Tveganja niso bila generirana. Generirajte jih ročno v koraku 5 → Obvladovanje tveganj.'
+                  : 'Risks were not generated. Generate them manually in Step 5 → Risk Mitigation.'
+              );
+            }
           }
         }
 
