@@ -732,15 +732,11 @@ const buildTaskInstruction = (
       break;
     }
 
-    case 'activities': {
+      case 'activities': {
       const today = new Date().toISOString().split('T')[0];
       placeholders.projectStart = projectData.projectIdea?.startDate || today;
-      const startDate = new Date(placeholders.projectStart);
       const months = projectData.projectIdea?.durationMonths || 24;
-      const endDate = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + months);
-      endDate.setDate(endDate.getDate() - 1);
-      placeholders.projectEnd = endDate.toISOString().split('T')[0];
+      placeholders.projectEnd = calculateProjectEndDate(placeholders.projectStart, months);
       placeholders.projectDurationMonths = String(months);
       break;
     }
