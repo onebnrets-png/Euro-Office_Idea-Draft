@@ -431,39 +431,7 @@ export const useGeneration = ({
     },
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
-      if (msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
-        setError(
-          language === 'si'
-            ? 'AI je vrnil nepravilen format. Poskusite ponovno.'
-            : 'AI returned an invalid format. Please try again.'
-        );
-        return;
-      }
-
-      if (
-        msg.includes('fetch') ||
-        msg.includes('network') ||
-        msg.includes('Failed to fetch') ||
-        msg.includes('ERR_')
-      ) {
-        setError(
-          language === 'si'
-            ? 'Omrežna napaka. Preverite internetno povezavo in poskusite ponovno.'
-            : 'Network error. Check your internet connection and try again.'
-        );
-        return;
-      }
-
-      console.error(`[AI Error] ${context}:`, e);
-      setError(
-        language === 'si'
-          ? 'Napaka pri generiranju. Preverite konzolo (F12) za podrobnosti.'
-          : 'Generation error. Check console (F12) for details.'
-      );
-    },
-    [language, setIsSettingsOpen, setModalConfig, closeModal]
-  );
-
+      
   // ─── Check if other language has content FOR THIS SECTION (v3.5) ──
 
   const checkOtherLanguageHasContent = useCallback(
