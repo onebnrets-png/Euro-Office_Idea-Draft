@@ -10,6 +10,15 @@
 //  - Calling the AI provider
 //  - Post-processing (JSON parsing, sanitization, merging)
 //
+// v5.4 — 2026-02-16 — SUB-SECTION GENERATION
+//   - NEW: Schemas, mappings, and prompt focus for 9 sub-sections:
+//     coreProblem, causes, consequences, projectTitleAcronym, mainAim,
+//     stateOfTheArt, proposedSolution, readinessLevels, policies.
+//   - NEW: SUB_SECTION_FOCUS instructions injected at beginning and end of prompt.
+//   - NEW: buildTaskInstruction maps sub-keys to parent for task instruction reuse.
+//   - NEW: Post-processing unwraps string sub-sections (mainAim, stateOfTheArt, proposedSolution).
+//   - All previous v5.0 changes preserved.
+//
 // v5.0 — 2026-02-16 — PER-WP GENERATION + DATE FIX + SUMMARY FIX + ACRONYM
 //   - NEW: generateActivitiesPerWP() — 2-phase generation: first scaffold
 //     (WP ids, titles, date ranges), then each WP individually with full
@@ -26,22 +35,7 @@
 //   - All previous changes preserved.
 //
 // v4.7 — 2026-02-15 — TARGETED FILL
-//   - NEW: generateTargetedFill() — generates content ONLY for
-//     specific empty items in an array section. Sends a focused
-//     prompt with only the empty indices, then inserts generated
-//     items at the correct positions. 100% deterministic fill.
-//   - All previous changes preserved.
-//
 // v4.6 — 2026-02-15 — TEMPORAL INTEGRITY ENFORCER
-//   - NEW: enforceTemporalIntegrity() post-processor — programmatically
-//     forces ALL task/milestone dates within the project envelope
-//     [projectStart, projectEnd] after AI generation. AI models cannot
-//     reliably calculate dates, so this is the safety net.
-//   - NEW: TEMPORAL_INTEGRITY_RULE imported from Instructions.ts and
-//     injected at BEGINNING and END of activities prompt for maximum
-//     AI attention to date constraints.
-//   - All previous changes preserved.
-//
 // v4.5 — 2026-02-14 — DYNAMIC MAX_TOKENS
 // v4.4 — 2026-02-14 — DELIVERABLE TITLE SCHEMA
 // v4.3 — 2026-02-14 — PROMPT ORDER + SCHEMA FIX
@@ -481,7 +475,7 @@ const schemas: Record<string, any> = {
       required: ['id', 'category', 'title', 'description', 'likelihood', 'impact', 'mitigation']
     }
   },
-    kers: {
+  kers: {
     type: Type.ARRAY,
     items: {
       type: Type.OBJECT,
@@ -546,6 +540,7 @@ const schemas: Record<string, any> = {
 
 
 // ─── MAPPINGS ────────────────────────────────────────────────────
+// ★ v5.4: Added sub-section mappings
 
 const SECTION_TO_CHAPTER: Record<string, string> = {
   problemAnalysis: 'chapter1_problemAnalysis',
@@ -560,6 +555,16 @@ const SECTION_TO_CHAPTER: Record<string, string> = {
   impacts: 'chapter6_results',
   kers: 'chapter6_results',
   expectedResults: 'chapter6_results',
+  // ★ v5.4: Sub-section mappings
+  coreProblem: 'chapter1_problemAnalysis',
+  causes: 'chapter1_problemAnalysis',
+  consequences: 'chapter1_problemAnalysis',
+  projectTitleAcronym: 'chapter2_projectIdea',
+  mainAim: 'chapter2_projectIdea',
+  stateOfTheArt: 'chapter2_projectIdea',
+  proposedSolution: 'chapter2_projectIdea',
+  readinessLevels: 'chapter2_projectIdea',
+  policies: 'chapter2_projectIdea',
 };
 
 const SECTION_TO_SCHEMA: Record<string, string> = {
@@ -569,8 +574,12 @@ const SECTION_TO_SCHEMA: Record<string, string> = {
   outputs: 'results', outcomes: 'results', impacts: 'results',
   risks: 'risks', kers: 'kers',
   expectedResults: 'results',
+  // ★ v5.4: Sub-section schema mappings
+  coreProblem: 'coreProblem', causes: 'causes', consequences: 'consequences',
+  projectTitleAcronym: 'projectTitleAcronym', mainAim: 'mainAim',
+  stateOfTheArt: 'stateOfTheArt', proposedSolution: 'proposedSolution',
+  readinessLevels: 'readinessLevels', policies: 'policies',
 };
-
 // ─── HELPERS ─────────────────────────────────────────────────────
 
 const isValidDate = (d: any): boolean => d instanceof Date && !isNaN(d.getTime());
@@ -749,6 +758,7 @@ const getRulesForSection = (sectionKey: string, language: 'en' | 'si'): string =
 };
 
 // ─── TASK INSTRUCTION BUILDER ────────────────────────────────────
+// ★ v5.4: Maps sub-section keys to parent for task instruction lookup
 
 const buildTaskInstruction = (
   sectionKey: string,
@@ -757,7 +767,16 @@ const buildTaskInstruction = (
 ): string => {
   const placeholders: Record<string, string> = {};
 
-  switch (sectionKey) {
+  // ★ v5.4: Map sub-section keys to parent for task instruction lookup
+  const SUB_TO_PARENT_TASK: Record<string, string> = {
+    coreProblem: 'problemAnalysis', causes: 'problemAnalysis', consequences: 'problemAnalysis',
+    projectTitleAcronym: 'projectIdea', mainAim: 'projectIdea', stateOfTheArt: 'projectIdea',
+    proposedSolution: 'projectIdea', readinessLevels: 'projectIdea', policies: 'projectIdea',
+  };
+
+  const effectiveKey = SUB_TO_PARENT_TASK[sectionKey] || sectionKey;
+
+  switch (effectiveKey) {
     case 'problemAnalysis': {
       const cp = projectData.problemAnalysis?.coreProblem;
       const titleStr = cp?.title?.trim() || '';
@@ -793,10 +812,11 @@ const buildTaskInstruction = (
     }
   }
 
-  return getSectionTaskInstruction(sectionKey, language, placeholders);
+  return getSectionTaskInstruction(effectiveKey, language, placeholders);
 };
 
 // ─── PROMPT BUILDER ──────────────────────────────────────────────
+// ★ v5.4: Added SUB_SECTION_FOCUS for sub-section specific prompts
 
 const getPromptAndSchemaForSection = (
   sectionKey: string,
@@ -822,7 +842,7 @@ const getPromptAndSchemaForSection = (
   const langMismatchNotice = detectInputLanguageMismatch(projectData, language);
   const academicRules = getAcademicRigorRules(language);
   const humanRules = getHumanizationRules(language);
-  const titleRules = sectionKey === 'projectIdea' ? getProjectTitleRules(language) : '';
+  const titleRules = (sectionKey === 'projectIdea' || sectionKey === 'projectTitleAcronym') ? getProjectTitleRules(language) : '';
 
   let modeInstruction = getModeInstruction(mode, language);
   if ((mode === 'fill' || mode === 'enhance') && currentSectionData) {
@@ -849,7 +869,50 @@ const getPromptAndSchemaForSection = (
       .replace(/\{\{projectDurationMonths\}\}/g, String(pMonths));
   }
 
+  // ★ v5.4: Sub-section focus instruction — tells AI to generate ONLY the specific sub-part
+  const SUB_SECTION_FOCUS: Record<string, Record<string, string>> = {
+    coreProblem: {
+      en: 'FOCUS: Generate ONLY the Core Problem (title + description). Do NOT generate causes or consequences.',
+      si: 'FOKUS: Generiraj SAMO Osrednji problem (naslov + opis). NE generiraj vzrokov ali posledic.'
+    },
+    causes: {
+      en: 'FOCUS: Generate ONLY the Causes array (4-6 causes, each with title + description + citation). Do NOT generate core problem or consequences.',
+      si: 'FOKUS: Generiraj SAMO array Vzrokov (4-6 vzrokov, vsak z naslovom + opisom + citatom). NE generiraj osrednjega problema ali posledic.'
+    },
+    consequences: {
+      en: 'FOCUS: Generate ONLY the Consequences array (4-6 consequences, each with title + description + citation). Do NOT generate core problem or causes.',
+      si: 'FOKUS: Generiraj SAMO array Posledic (4-6 posledic, vsaka z naslovom + opisom + citatom). NE generiraj osrednjega problema ali vzrokov.'
+    },
+    projectTitleAcronym: {
+      en: 'FOCUS: Generate ONLY projectTitle and projectAcronym. Follow the PROJECT TITLE RULES and ACRONYM RULES strictly. Return JSON object with exactly 2 fields.',
+      si: 'FOKUS: Generiraj SAMO projectTitle in projectAcronym. Strogo upoštevaj PRAVILA ZA NAZIV PROJEKTA in PRAVILA ZA AKRONIM. Vrni JSON objekt z natanko 2 poljema.'
+    },
+    mainAim: {
+      en: 'FOCUS: Generate ONLY the Main Aim — one comprehensive sentence starting with an infinitive verb. Return JSON object: { "mainAim": "..." }',
+      si: 'FOKUS: Generiraj SAMO Glavni cilj — en celovit stavek, ki se začne z nedoločnikom. Vrni JSON objekt: { "mainAim": "..." }'
+    },
+    stateOfTheArt: {
+      en: 'FOCUS: Generate ONLY the State of the Art — a thorough analysis of the current situation with ≥3 citations from real sources. Return JSON object: { "stateOfTheArt": "..." }',
+      si: 'FOKUS: Generiraj SAMO Stanje tehnike — temeljito analizo trenutnega stanja z ≥3 citati iz realnih virov. Vrni JSON objekt: { "stateOfTheArt": "..." }'
+    },
+    proposedSolution: {
+      en: 'FOCUS: Generate ONLY the Proposed Solution — start with 5-8 sentence introduction, then phases with plain text headers. Return JSON object: { "proposedSolution": "..." }',
+      si: 'FOKUS: Generiraj SAMO Predlagano rešitev — začni s 5-8 stavkov dolgim uvodom, nato faze z golimi naslovi. Vrni JSON objekt: { "proposedSolution": "..." }'
+    },
+    readinessLevels: {
+      en: 'FOCUS: Generate ONLY the Readiness Levels (TRL, SRL, ORL, LRL) — each with a level number and specific justification. Return JSON object with TRL/SRL/ORL/LRL sub-objects.',
+      si: 'FOKUS: Generiraj SAMO Stopnje pripravljenosti (TRL, SRL, ORL, LRL) — vsaka s številko stopnje in specifično utemeljitvijo. Vrni JSON objekt s TRL/SRL/ORL/LRL pod-objekti.'
+    },
+    policies: {
+      en: 'FOCUS: Generate ONLY the EU Policies array (3-5 relevant policies, each with name + description explaining alignment). Do NOT generate other project idea fields.',
+      si: 'FOKUS: Generiraj SAMO array EU politik (3-5 relevantnih politik, vsaka z imenom + opisom usklajenosti). NE generiraj drugih polj projektne ideje.'
+    },
+  };
+
+  const subSectionFocus = SUB_SECTION_FOCUS[sectionKey]?.[language] || SUB_SECTION_FOCUS[sectionKey]?.['en'] || '';
+
   const prompt = [
+    subSectionFocus,                            // ★ v5.4: Sub-section focus FIRST
     temporalRuleBlock,                          // ★ FIRST for activities — highest priority
     langDirective,
     langMismatchNotice,
@@ -863,12 +926,12 @@ const getPromptAndSchemaForSection = (
     humanRules,
     `${globalRulesHeader}:\n${globalRules}`,
     sectionRules,
+    subSectionFocus,                            // ★ v5.4: ALSO at end for emphasis
     temporalRuleBlock ? temporalRuleBlock : '', // ★ ALSO LAST — AI attends to end too
   ].filter(Boolean).join('\n\n');
 
   return { prompt, schema };
 };
-
 // ═══════════════════════════════════════════════════════════════
 // ★ v4.7: TARGETED FILL — generates ONLY specific empty items
 // ═══════════════════════════════════════════════════════════════
@@ -1255,6 +1318,25 @@ export const generateSectionContent = async (
     throw new Error("API returned an array for projectIdea section, expected an object.");
   }
 
+  // ★ v5.4: Post-process sub-section results — unwrap string sub-sections
+  if (sectionKey === 'projectTitleAcronym' && parsedData.projectTitle) {
+    parsedData.projectTitle = sanitizeProjectTitle(parsedData.projectTitle);
+  }
+
+  if (sectionKey === 'mainAim' && typeof parsedData === 'object' && parsedData.mainAim) {
+    parsedData = parsedData.mainAim; // Unwrap from { mainAim: "..." } to just the string
+  }
+
+  if (sectionKey === 'stateOfTheArt' && typeof parsedData === 'object' && parsedData.stateOfTheArt) {
+    parsedData = parsedData.stateOfTheArt;
+  }
+
+  if (sectionKey === 'proposedSolution' && typeof parsedData === 'object' && parsedData.proposedSolution) {
+    let text = parsedData.proposedSolution;
+    text = text.replace(/([^\n])\s*((?:Faza|Phase)\s+\d+(?::|\.))/g, '$1\n\n$2');
+    parsedData = text;
+  }
+
   if (sectionKey === 'activities' && Array.isArray(parsedData)) {
     parsedData = sanitizeActivities(parsedData);
     // ★ v4.6: FORCE all dates within project envelope
@@ -1286,7 +1368,6 @@ export const generateSectionContent = async (
 
   return parsedData;
 };
-
 // ─── FIELD CONTENT GENERATION ────────────────────────────────────
 
 export const generateFieldContent = async (
@@ -1891,4 +1972,3 @@ export const translateProjectContent = async (
 // ─── RE-EXPORTS ──────────────────────────────────────────────────
 
 export const detectProjectLanguage = detectLanguage;
-
