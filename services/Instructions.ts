@@ -1,12 +1,21 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 4.4 – 2026-02-14
+// Version 4.5 – 2026-02-16
 //
 // ARCHITECTURE PRINCIPLE:
 //   This file is the ONLY place where content rules are defined.
 //   geminiService.ts reads from here — it has ZERO own rules.
 //   Anything changed here IS THE LAW — no exceptions.
+//
+// CHANGES v4.5:
+//   - NEW: projectAcronym field rule added to FIELD_RULES (EN+SI) [3A]
+//   - NEW: ACRONYM RULES block added to SECTION_TASK_INSTRUCTIONS.projectIdea EN [3B]
+//   - NEW: PRAVILA ZA AKRONIM block added to SECTION_TASK_INSTRUCTIONS.projectIdea SI [3C]
+//   - NEW: Acronym quality checks added to QUALITY_GATES.projectIdea EN+SI [3D]
+//   - NEW: SUMMARY_RULES moved here (condensation engine)
+//   - NEW: TEMPORAL_INTEGRITY_RULE added for activities
+//   - All previous v4.4 changes preserved.
 //
 // CHANGES v4.4:
 //   - FIXED: projectManagement.si — added full FORMATIRANJE OPISA block
@@ -433,9 +442,13 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Dolžine stavkov se razlikujejo — brez 3+ zaporednih stavkov enake dolžine',
     ]
   },
+  // ═══════════════════════════════════════════════════════════════
+  // v4.5 FIX [3D]: Added projectAcronym quality checks
+  // ═══════════════════════════════════════════════════════════════
   projectIdea: {
     en: [
       'projectTitle is a concise noun phrase (30–200 chars), NO acronym, NO full sentence',
+      'projectAcronym is 3–8 uppercase letters, derived from projectTitle keywords, is pronounceable or a recognisable abbreviation, and is NOT a generic word (e.g., PROJECT, EUROPE)',
       'State of the Art references ≥3 specific existing projects/studies with names and years',
       'Proposed Solution BEGINS with a 5–8 sentence introductory paragraph BEFORE any phases',
       'Proposed Solution phases use plain text headers (no ** or ## markdown)',
@@ -448,6 +461,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
     ],
     si: [
       'projectTitle je jedrnata imenski izraz (30–200 znakov), BREZ akronima, BREZ celega stavka',
+      'projectAcronym je 3–8 velikih črk, izpeljan iz ključnih besed projectTitle, je izgovorljiv ali prepoznavna kratica, in NI generična beseda (npr. PROJEKT, EVROPA)',
       'Stanje tehnike navaja ≥3 specifične obstoječe projekte/študije z imeni in letnicami',
       'Predlagana rešitev se ZAČNE s 5–8 stavkov dolgim uvodnim odstavkom PRED fazami',
       'Faze predlagane rešitve uporabljajo golo besedilo za naslove (brez ** ali ## markdown)',
@@ -576,8 +590,21 @@ OBVEZNE ZAHTEVE:
 - BREZ markdown (**, ##, \`).
 - Piši kot izkušen človeški svetovalec — variraj stavke.`
   },
+  // ═══════════════════════════════════════════════════════════════
+  // v4.5 FIX [3B + 3C]: Added ACRONYM RULES blocks
+  // ═══════════════════════════════════════════════════════════════
   projectIdea: {
     en: `{{titleContext}}Based on the problem analysis, develop (or complete) a comprehensive project idea.
+
+ACRONYM RULES (projectAcronym field):
+- Generate a project ACRONYM derived from the key words of the projectTitle.
+- LENGTH: 3–8 uppercase letters. Example: "GREENTRANS", "DIGI-CRAFT", "ALPSUST".
+- The acronym MUST be pronounceable or a recognisable abbreviation.
+- The acronym MUST NOT be a generic word (e.g., "PROJECT", "EUROPE", "DIGITAL").
+- The acronym MUST NOT duplicate the full title — it is a SHORT code.
+- If the title contains a geographic or thematic keyword, try to include it.
+- Hyphens are allowed (e.g., "DIGI-CRAFT") but not required.
+- Place the acronym ONLY in the "projectAcronym" field — NOT inside projectTitle.
 
 MANDATORY:
 - State of the Art MUST reference at least 3 REAL existing projects/studies with names and years.
@@ -588,6 +615,16 @@ MANDATORY:
 - NO markdown (**, ##, \`).
 - Write like an experienced human consultant — vary sentences, avoid AI phrases.`,
     si: `{{titleContext}}Na podlagi analize problemov razvij (ali dopolni) celovito projektno idejo.
+
+PRAVILA ZA AKRONIM (polje projectAcronym):
+- Generiraj projektni AKRONIM, izpeljan iz ključnih besed polja projectTitle.
+- DOLŽINA: 3–8 velikih črk. Primer: "GREENTRANS", "DIGI-CRAFT", "ALPSUST".
+- Akronim MORA biti izgovorljiv ali prepoznavna kratica.
+- Akronim NE SME biti generična beseda (npr. "PROJEKT", "EVROPA", "DIGITAL").
+- Akronim NE SME podvajati celotnega naziva — je KRATKA koda.
+- Če naziv vsebuje geografsko ali tematsko ključno besedo, jo poskusi vključiti.
+- Vezaji so dovoljeni (npr. "DIGI-CRAFT"), ampak niso obvezni.
+- Akronim vstavi SAMO v polje "projectAcronym" — NE v projectTitle.
 
 OBVEZNE ZAHTEVE:
 - Stanje tehnike MORA navajati vsaj 3 RESNIČNE obstoječe projekte/študije z imeni in letnicami.
@@ -894,9 +931,11 @@ STRUCTURE:
 3. Proposed Solution — begins with 5–8 sentence overview paragraph, then phases.
 4. Readiness Levels — TRL, SRL, ORL, LRL with justifications.
 5. EU Policies — at least 3 relevant EU policies with alignment descriptions.
+6. Project Acronym — a short, memorable code (3–8 uppercase letters) derived from the project title keywords.
 
 TITLE RULES:
-- Project title: noun phrase, 30–200 characters, no acronym, no verb.`,
+- Project title: noun phrase, 30–200 characters, no acronym, no verb.
+- Project acronym: 3–8 uppercase letters, pronounceable or recognisable, placed ONLY in projectAcronym field.`,
 
   chapter3_4_objectives: `CHAPTERS 3–4 — OBJECTIVES
 
@@ -983,6 +1022,9 @@ const GLOBAL_RULES = `
 
 // ───────────────────────────────────────────────────────────────
 // FIELD-SPECIFIC RULES
+// ═══════════════════════════════════════════════════════════════
+// v4.5 FIX [3A]: Added projectAcronym field rule
+// ═══════════════════════════════════════════════════════════════
 // ───────────────────────────────────────────────────────────────
 
 const FIELD_RULES: Record<string, Record<string, string>> = {
@@ -1013,6 +1055,10 @@ const FIELD_RULES: Record<string, Record<string, string>> = {
   projectTitle: {
     en: 'Generate a project title following the STRICT PROJECT TITLE RULES: noun phrase, 30–200 characters, no acronym, no verb, no generic AI phrases. Must be a project brand.',
     si: 'Generiraj naziv projekta po STROGIH PRAVILIH ZA NAZIV: imenski izraz, 30–200 znakov, brez akronima, brez glagola, brez generičnih AI fraz. Mora biti blagovna znamka projekta.'
+  },
+  projectAcronym: {
+    en: 'Generate a project acronym: 3–8 uppercase letters derived from the project title keywords. Must be pronounceable or a recognisable abbreviation. Must NOT be a generic word (e.g., PROJECT, EUROPE). Place ONLY in projectAcronym field, never inside projectTitle. Hyphens allowed (e.g., DIGI-CRAFT).',
+    si: 'Generiraj projektni akronim: 3–8 velikih črk, izpeljanih iz ključnih besed naziva projekta. Mora biti izgovorljiv ali prepoznavna kratica. NE sme biti generična beseda (npr. PROJEKT, EVROPA). Vstavi SAMO v polje projectAcronym, nikoli v projectTitle. Vezaji dovoljeni (npr. DIGI-CRAFT).'
   }
 };
 
@@ -1192,7 +1238,7 @@ export const getSectionTaskInstruction = (
   return template;
 };
 // ═══════════════════════════════════════════════════════════════════
-// SETTINGS MODAL SUPPORT — v4.4
+// SETTINGS MODAL SUPPORT — v4.5
 // Exports consumed by SettingsModal.tsx (Instructions editor tab)
 // Storage via storageService.getCustomInstructions / saveCustomInstructions
 // ═══════════════════════════════════════════════════════════════════
@@ -1213,9 +1259,10 @@ export const FIELD_RULE_LABELS: Record<string, string> = {
   exploitationStrategy: 'Exploitation Strategy',
   mainAim: 'Main Aim',
   projectTitle: 'Project Title',
+  projectAcronym: 'Project Acronym',
 };
 
-const INSTRUCTIONS_VERSION = '4.4';
+const INSTRUCTIONS_VERSION = '4.5';
 
 function buildDefaultInstructions() {
   return {
@@ -1262,9 +1309,6 @@ export async function resetAppInstructions(): Promise<any> {
 // ───────────────────────────────────────────────────────────────
 // ★ v4.5 NEW: TEMPORAL INTEGRITY RULE
 // ───────────────────────────────────────────────────────────────
-// SUPREME time-boundary rule. Injected into activities prompt
-// as the FIRST block. Also enforced programmatically in
-// geminiService.ts via enforceTemporalIntegrity() post-processor.
 
 export const TEMPORAL_INTEGRITY_RULE: Record<string, string> = {
   en: `═══ TEMPORAL INTEGRITY RULE (SUPREME — OVERRIDES ALL OTHER SCHEDULING) ═══
@@ -1348,8 +1392,6 @@ KRŠITEV KATEREGAKOLI ZGORNJEGA = CELOTEN JSON JE ZAVRNJEN.
 // ───────────────────────────────────────────────────────────────
 // OPENROUTER SYSTEM PROMPT
 // ───────────────────────────────────────────────────────────────
-// Moved from aiProvider.ts to keep Instructions.ts as the
-// SINGLE SOURCE OF TRUTH for all AI instructions.
 
 export const OPENROUTER_SYSTEM_PROMPT = `You are a professional EU project proposal writing assistant with deep expertise in EU funding programmes (Horizon Europe, Interreg, Erasmus+, LIFE, Digital Europe, etc.).
 
