@@ -381,16 +381,39 @@ export const useGeneration = ({
         let generatedData;
 
                 // ★ v3.8: Smart per-WP generation for activities (all modes)
-        if (sectionKey === 'activities') {
+                if (sectionKey === 'activities') {
           const existingWPs = projectData.activities || [];
           const emptyWPIndices: number[] = [];
+          let missingMandatoryWPs = false;
           
+          // ★ v3.8: Check for mandatory WPs (PM and Dissemination)
+          const hasPMWP = existingWPs.some((wp: any) => {
+            const title = (wp.title || '').toLowerCase();
+            return title.includes('management') || title.includes('coordination') 
+              || title.includes('upravljanje') || title.includes('koordinacija');
+          });
+          const hasDissWP = existingWPs.some((wp: any) => {
+            const title = (wp.title || '').toLowerCase();
+            return title.includes('dissemination') || title.includes('communication') 
+              || title.includes('diseminacija') || title.includes('komunikacija');
+          });
+
+          if (!hasPMWP || !hasDissWP) {
+            missingMandatoryWPs = true;
+            const missingNames = [];
+            if (!hasPMWP) missingNames.push(language === 'si' ? 'Upravljanje projekta' : 'Project Management');
+            if (!hasDissWP) missingNames.push(language === 'si' ? 'Diseminacija' : 'Dissemination');
+            
+            console.warn(`[Activities] Missing mandatory WPs: ${missingNames.join(', ')} — forcing full regeneration`);
+          }
+
           // Detect which WPs are empty or missing content
           existingWPs.forEach((wp: any, idx: number) => {
             const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0 
               && wp.tasks.some((t: any) => t.title && t.title.trim().length > 0);
             const hasMilestones = wp.milestones && Array.isArray(wp.milestones) && wp.milestones.length > 0;
-            const hasDeliverables = wp.deliverables && Array.isArray(wp.deliverables) && wp.deliverables.length > 0;
+            const hasDeliverables = wp.deliverables && wp.deliverables.length > 0
+              && wp.deliverables.some((d: any) => d.title && d.title.trim().length > 0);
             if (!hasTasks || !hasMilestones || !hasDeliverables) {
               emptyWPIndices.push(idx);
             }
