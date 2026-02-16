@@ -1165,7 +1165,7 @@ export const getTranslationRules = (language: 'en' | 'si' = 'en'): string[] => {
   return TRANSLATION_RULES[language] || TRANSLATION_RULES.en;
 };
 
-export const getSummaryRules = (language: 'en' | 'si' = 'en'): string[] => {
+export const getSummaryRules = (language: 'en' | 'si' = 'en'): string => {
   return SUMMARY_RULES[language] || SUMMARY_RULES.en;
 };
 
