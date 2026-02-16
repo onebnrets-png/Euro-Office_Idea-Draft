@@ -1380,8 +1380,9 @@ NO tasks, milestones, or deliverables — ONLY scaffold.`,
     const isSecondToLast = i === scaffold.length - 2;
     const wpNum = wp.id.replace('WP', '');
 
-    console.log(`[PerWP] Phase 2: Generating ${wp.id} "${wp.title}" (${i + 1}/${scaffold.length})...`);
-    if (onProgress) onProgress(i, scaffold.length, wp.title);
+    const progressIdx = indicesToGenerate.indexOf(i);
+    console.log(`[PerWP] Phase 2: Generating ${wp.id} "${wp.title}" (${progressIdx + 1}/${indicesToGenerate.length})...`);
+    if (onProgress) onProgress(progressIdx, indicesToGenerate.length, wp.title);
 
     // Determine WP type for focused instructions
     let wpTypeInstruction: string;
@@ -1486,7 +1487,7 @@ Return ONE JSON object (not array): { "id": "${wp.id}", "title": "${wp.title}", 
     console.log(`[PerWP] ${wp.id} generated: ${wpData.tasks?.length || 0} tasks, ${wpData.milestones?.length || 0} milestones, ${wpData.deliverables?.length || 0} deliverables`);
 
     // Rate limit pause between WPs (except after last)
-    if (i < scaffold.length - 1) {
+    if (progressIdx < indicesToGenerate.length - 1) {
       await new Promise(r => setTimeout(r, 2000));
     }
   }
@@ -1497,7 +1498,38 @@ Return ONE JSON object (not array): { "id": "${wp.id}", "title": "${wp.title}", 
 
   console.log(`[PerWP] Phase 3: Post-processing ${fullActivities.length} WPs...`);
 
-  let result = sanitizeActivities(fullActivities);
+    // If we only generated specific WPs, merge them back into existing activities
+  let mergedActivities: any[];
+  if (onlyIndices && existingScaffold) {
+    mergedActivities = [...(projectData.activities || [])];
+    for (const wpData of fullActivities) {
+      const idx = mergedActivities.findIndex((w: any) => w.id === wpData.id);
+      if (idx >= 0) {
+        // Smart merge: keep existing non-empty parts, fill missing
+        const existing = mergedActivities[idx];
+        const hasTasks = existing.tasks && existing.tasks.length > 0
+          && existing.tasks.some((t: any) => t.title && t.title.trim().length > 0);
+        const hasMilestones = existing.milestones && existing.milestones.length > 0
+          && existing.milestones.some((m: any) => m.description && m.description.trim().length > 0);
+        const hasDeliverables = existing.deliverables && existing.deliverables.length > 0
+          && existing.deliverables.some((d: any) => d.title && d.title.trim().length > 0);
+
+        mergedActivities[idx] = {
+          ...existing,
+          tasks: hasTasks ? existing.tasks : (wpData.tasks || existing.tasks || []),
+          milestones: hasMilestones ? existing.milestones : (wpData.milestones || existing.milestones || []),
+          deliverables: hasDeliverables ? existing.deliverables : (wpData.deliverables || existing.deliverables || []),
+        };
+      } else {
+        mergedActivities.push(wpData);
+      }
+    }
+  } else {
+    mergedActivities = fullActivities;
+  }
+
+  let result = sanitizeActivities(mergedActivities);
+
   result = enforceTemporalIntegrity(result, projectData);
 
   console.log(`[PerWP] Complete! ${result.length} WPs with ${result.reduce((sum: number, wp: any) => sum + (wp.tasks?.length || 0), 0)} total tasks.`);
