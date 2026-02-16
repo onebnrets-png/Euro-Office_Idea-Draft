@@ -324,23 +324,83 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
 }
 
 // ─── ERROR HANDLING ──────────────────────────────────────────────
+// ★ v2.1: All errors now have specific, human-readable error codes
+// that useGeneration.ts can match and display appropriate modals.
+// Error format: ERROR_CODE|Provider|Details
 
 function handleProviderError(e: any, provider: string): never {
   const msg = e.message || e.toString();
+  const msgLower = msg.toLowerCase();
 
-  if (msg === 'MISSING_API_KEY' || msg.includes('400') || msg.includes('403') || msg.includes('API key not valid') || msg.includes('401')) {
+  // ── AUTH ERRORS (400, 401, 403) ──
+  if (msg === 'MISSING_API_KEY' || msgLower.includes('api key not valid') ||
+      msg.includes('401') || msg.includes('403') ||
+      (msg.includes('400') && (msgLower.includes('key') || msgLower.includes('auth')))) {
     throw new Error('MISSING_API_KEY');
   }
 
-  if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('rate limit')) {
-    throw new Error("API Quota Exceeded. You have reached the rate limit. Please try again later or switch to a different model/plan.");
+  // ── RATE LIMIT (429) ──
+  if (msg.includes('429') || msgLower.includes('quota') ||
+      msgLower.includes('resource_exhausted') || msgLower.includes('rate limit') ||
+      msgLower.includes('too many requests')) {
+    throw new Error(`RATE_LIMIT|${provider}|${msg.substring(0, 200)}`);
   }
 
-  // ★ FIX v2.0: Pass through 402 / credits errors without wrapping
-  if (msg.includes('402') || msg.includes('credits') || msg.includes('Insufficient')) {
-    throw e;
+  // ── INSUFFICIENT CREDITS (402) ──
+  if (msg.includes('402') || msgLower.includes('credits') ||
+      msgLower.includes('insufficient') || msgLower.includes('afford') ||
+      msgLower.includes('payment required') || msgLower.includes('billing')) {
+    throw new Error(`INSUFFICIENT_CREDITS|${provider}|${msg.substring(0, 200)}`);
   }
 
-  console.error(`${provider} API Error:`, e);
-  throw new Error(`AI Generation Failed (${provider}): ${msg.substring(0, 150)}...`);
+  // ── MODEL OVERLOADED (503) ──
+  if (msg.includes('503') || msgLower.includes('unavailable') ||
+      msgLower.includes('overloaded') || msgLower.includes('high demand') ||
+      msgLower.includes('capacity') || msgLower.includes('temporarily')) {
+    throw new Error(`MODEL_OVERLOADED|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── SERVER ERROR (500, 502) ──
+  if (msg.includes('500') || msg.includes('502') ||
+      msgLower.includes('internal server error') || msgLower.includes('bad gateway')) {
+    throw new Error(`SERVER_ERROR|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── TIMEOUT (408, ETIMEDOUT, ECONNABORTED) ──
+  if (msg.includes('408') || msgLower.includes('timeout') ||
+      msgLower.includes('etimedout') || msgLower.includes('econnaborted') ||
+      msgLower.includes('deadline exceeded')) {
+    throw new Error(`TIMEOUT|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── NETWORK ERROR ──
+  if (msgLower.includes('fetch') || msgLower.includes('network') ||
+      msgLower.includes('failed to fetch') || msgLower.includes('err_') ||
+      msgLower.includes('enotfound') || msgLower.includes('econnrefused') ||
+      msgLower.includes('cors')) {
+    throw new Error(`NETWORK_ERROR|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── CONTENT FILTER / SAFETY ──
+  if (msgLower.includes('safety') || msgLower.includes('blocked') ||
+      msgLower.includes('content filter') || msgLower.includes('harmful') ||
+      msgLower.includes('recitation')) {
+    throw new Error(`CONTENT_BLOCKED|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── CONTEXT TOO LONG ──
+  if (msgLower.includes('context length') || msgLower.includes('too long') ||
+      msgLower.includes('token limit') || msgLower.includes('max.*token')) {
+    throw new Error(`CONTEXT_TOO_LONG|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── JSON PARSE ERROR (from AI response) ──
+  if (msgLower.includes('json') || msgLower.includes('unexpected token') ||
+      msgLower.includes('parse error') || msgLower.includes('invalid json')) {
+    throw new Error(`INVALID_JSON|${provider}|${msg.substring(0, 200)}`);
+  }
+
+  // ── UNKNOWN ERROR (fallback) ──
+  console.error(`[${provider}] Unclassified API Error:`, e);
+  throw new Error(`UNKNOWN_ERROR|${provider}|${msg.substring(0, 200)}`);
 }
