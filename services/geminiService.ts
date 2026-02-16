@@ -1218,19 +1218,19 @@ export const generateProjectSummary = async (
   const langDirective = getLanguageDirective(language);
 
   const extractionReminder = language === 'si'
-    ? `KLJUČNO NAVODILO: Si POVZEMALNI mehanizem. IZVLECI in KONDENZIRAJ SAMO vsebino, ki JE že zapisana v projektnih podatkih spodaj. NE dodajaj, NE interpretiraj, NE razširjaj. Če podatek ne obstaja, napiši "V projektu še ni opredeljeno."`
-    : `KEY INSTRUCTION: You are a SUMMARISATION engine. EXTRACT and CONDENSE ONLY content that IS already written in the project data below. Do NOT add, do NOT interpret, do NOT expand. If data does not exist, write "Not yet defined in the project."`;
+    ? `KRITIČNO NAVODILO: Si KONDENZACIJSKI mehanizem. DESTILIRAJ projektne podatke v KRATEK povzetek — NAJVEČ 800 besed skupaj, 5 sekcij, brez alinej, brez kopiranja celih odstavkov. Zajemi samo BISTVO vsake sekcije.`
+    : `CRITICAL INSTRUCTION: You are a CONDENSATION engine. DISTILL the project data into a SHORT summary — MAXIMUM 800 words total, 5 sections, no bullet points, no copy-pasting whole paragraphs. Capture only the ESSENCE of each section.`;
 
   const prompt = [
     langDirective,
     extractionReminder,
     summaryRules,
-    `\n---\n`,
+    `\n---\nPROJECT DATA TO SUMMARISE:\n---\n`,
     context,
     `\n---\n`,
     language === 'si'
-      ? `KONČNI OPOMNIK: Izpiši SAMO 5 sekcij z ## naslovi. Brez uvoda, brez zaključka, brez JSON. Uporabi IZKLJUČNO besedilo iz zgornjih projektnih podatkov.`
-      : `FINAL REMINDER: Output ONLY the 5 sections with ## headings. No preamble, no closing, no JSON. Use EXCLUSIVELY text from the project data above.`
+      ? `KONČNI OPOMNIK: NAJVEČ 800 besed. 5 sekcij z ## naslovi. BREZ alinej. BREZ krepkega tiska. Samo tekoči odstavki proze. NE kopiraj — KONDENZIRAJ.`
+      : `FINAL REMINDER: MAXIMUM 800 words. 5 sections with ## headings. NO bullet points. NO bold text. Only flowing prose paragraphs. Do NOT copy — CONDENSE.`
   ].filter(Boolean).join('\n\n');
 
   const result = await generateContent({
@@ -1239,7 +1239,6 @@ export const generateProjectSummary = async (
   });
   return result.text;
 };
-
 
 // ─── TRANSLATION ─────────────────────────────────────────────────
 
