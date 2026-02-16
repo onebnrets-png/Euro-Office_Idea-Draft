@@ -215,43 +215,222 @@ export const useGeneration = ({
 
   // ─── Friendly error handler ────────────────────────────────────
 
+    // ─── ★ v4.0: Comprehensive error handler with specific modals ──
+  // All AI errors are now classified with ERROR_CODE|provider|details
+  // format from aiProvider.ts. Each error type gets its own clear
+  // message in both SI and EN.
+
   const handleAIError = useCallback(
     (e: any, context: string = '') => {
       const msg = e.message || e.toString();
+      const parts = msg.split('|');
+      const errorCode = parts[0] || '';
+      const provider = parts[1] || '';
+      const providerLabel = provider === 'gemini' ? 'Google Gemini' : provider === 'openrouter' ? 'OpenRouter' : 'AI';
 
-      if (msg === 'MISSING_API_KEY') {
-        setIsSettingsOpen(true);
-        return;
-      }
+      console.warn(`[AI Error] ${context}: ${errorCode} (${provider})`, e);
 
-      if (
-        msg.includes('Quota') ||
-        msg.includes('credits') ||
-        msg.includes('429') ||
-        msg.includes('RESOURCE_EXHAUSTED') ||
-        msg.includes('rate limit') ||
-        msg.includes('afford')
-      ) {
+      // ── MISSING API KEY ──
+      if (msg === 'MISSING_API_KEY' || errorCode === 'MISSING_API_KEY') {
         setModalConfig({
           isOpen: true,
-          title: language === 'si' ? 'Nezadostna sredstva AI' : 'Insufficient AI Credits',
-          message:
-            language === 'si'
-              ? 'Vaš AI ponudnik nima dovolj sredstev za to zahtevo. Možne rešitve:\n\n• Dopolnite kredit pri vašem AI ponudniku\n• V Nastavitvah zamenjajte na cenejši model\n• V Nastavitvah preklopite na drugega AI ponudnika'
-              : 'Your AI provider does not have enough credits for this request. Possible solutions:\n\n• Top up credits with your AI provider\n• Switch to a cheaper model in Settings\n• Switch to a different AI provider in Settings',
+          title: language === 'si' ? 'Manjkajoč API ključ' : 'Missing API Key',
+          message: language === 'si'
+            ? 'API ključ za AI ponudnika ni nastavljen ali ni veljaven.\n\nOdprite Nastavitve in vnesite veljaven API ključ.'
+            : 'The AI provider API key is not set or is invalid.\n\nOpen Settings and enter a valid API key.',
           confirmText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
           secondaryText: '',
           cancelText: language === 'si' ? 'Zapri' : 'Close',
-          onConfirm: () => {
-            closeModal();
-            setIsSettingsOpen(true);
-          },
+          onConfirm: () => { closeModal(); setIsSettingsOpen(true); },
           onSecondary: null,
           onCancel: closeModal,
         });
         return;
       }
 
+      // ── RATE LIMIT (429) ──
+      if (errorCode === 'RATE_LIMIT') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Omejitev hitrosti dosežena' : 'Rate Limit Reached',
+          message: language === 'si'
+            ? `${providerLabel} je začasno omejil število zahtevkov.\n\nTo se zgodi pri brezplačnih načrtih (npr. 15 zahtevkov/minuto pri Gemini).\n\nMožne rešitve:\n• Počakajte 1–2 minuti in poskusite ponovno\n• V Nastavitvah zamenjajte na drug model\n• Nadgradite na plačljiv načrt pri ${providerLabel}`
+            : `${providerLabel} has temporarily limited the number of requests.\n\nThis happens on free plans (e.g., 15 requests/minute on Gemini).\n\nPossible solutions:\n• Wait 1–2 minutes and try again\n• Switch to a different model in Settings\n• Upgrade to a paid plan with ${providerLabel}`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── INSUFFICIENT CREDITS (402) ──
+      if (errorCode === 'INSUFFICIENT_CREDITS') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Nezadostna sredstva' : 'Insufficient Credits',
+          message: language === 'si'
+            ? `${providerLabel} nima dovolj sredstev za to zahtevo.\n\nMožne rešitve:\n• Dopolnite kredit pri ${providerLabel}\n• V Nastavitvah izberite cenejši ali brezplačen model\n• Preklopite na drugega AI ponudnika (npr. Gemini ima brezplačen načrt)`
+            : `${providerLabel} does not have enough credits for this request.\n\nPossible solutions:\n• Top up credits with ${providerLabel}\n• Choose a cheaper or free model in Settings\n• Switch to another AI provider (e.g., Gemini has a free plan)`,
+          confirmText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          secondaryText: '',
+          cancelText: language === 'si' ? 'Zapri' : 'Close',
+          onConfirm: () => { closeModal(); setIsSettingsOpen(true); },
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── MODEL OVERLOADED (503) ──
+      if (errorCode === 'MODEL_OVERLOADED') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Model začasno nedosegljiv' : 'Model Temporarily Unavailable',
+          message: language === 'si'
+            ? `Model pri ${providerLabel} je trenutno preobremenjen z visoko obremenitvijo.\n\nTo je začasna težava — model bo kmalu spet dosegljiv.\n\nMožne rešitve:\n• Počakajte 2–5 minut in poskusite ponovno\n• V Nastavitvah zamenjajte na drug model (npr. Gemini 2.5 Flash)`
+            : `The model at ${providerLabel} is currently experiencing high demand.\n\nThis is a temporary issue — the model will be available again shortly.\n\nPossible solutions:\n• Wait 2–5 minutes and try again\n• Switch to a different model in Settings (e.g., Gemini 2.5 Flash)`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── SERVER ERROR (500, 502) ──
+      if (errorCode === 'SERVER_ERROR') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Napaka strežnika' : 'Server Error',
+          message: language === 'si'
+            ? `Strežnik ${providerLabel} je vrnil napako.\n\nTo je običajno začasna težava na strani ponudnika.\n\nMožne rešitve:\n• Poskusite ponovno čez 1–2 minuti\n• Če se napaka ponavlja, zamenjajte model v Nastavitvah`
+            : `The ${providerLabel} server returned an error.\n\nThis is usually a temporary issue on the provider's side.\n\nPossible solutions:\n• Try again in 1–2 minutes\n• If the error persists, switch models in Settings`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── TIMEOUT (408) ──
+      if (errorCode === 'TIMEOUT') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Zahteva je potekla' : 'Request Timed Out',
+          message: language === 'si'
+            ? `Zahteva do ${providerLabel} je trajala predolgo in je potekla.\n\nTo se lahko zgodi pri velikih sekcijah (npr. aktivnosti z 8+ delovnimi sklopi).\n\nMožne rešitve:\n• Poskusite ponovno — včasih je strežnik le začasno počasen\n• V Nastavitvah izberite hitrejši model (npr. Gemini Flash)`
+            : `The request to ${providerLabel} took too long and timed out.\n\nThis can happen with large sections (e.g., activities with 8+ work packages).\n\nPossible solutions:\n• Try again — sometimes the server is just temporarily slow\n• Choose a faster model in Settings (e.g., Gemini Flash)`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── NETWORK ERROR ──
+      if (errorCode === 'NETWORK_ERROR' ||
+          msg.includes('fetch') || msg.includes('network') ||
+          msg.includes('Failed to fetch') || msg.includes('ERR_')) {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Omrežna napaka' : 'Network Error',
+          message: language === 'si'
+            ? 'Ni bilo mogoče vzpostaviti povezave z AI strežnikom.\n\nMožni vzroki:\n• Internetna povezava je prekinjena\n• Požarni zid ali VPN blokira dostop\n• AI strežnik je začasno nedosegljiv\n\nPreverite internetno povezavo in poskusite ponovno.'
+            : 'Could not connect to the AI server.\n\nPossible causes:\n• Internet connection is down\n• Firewall or VPN is blocking access\n• AI server is temporarily unreachable\n\nCheck your internet connection and try again.',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── CONTENT BLOCKED BY SAFETY FILTER ──
+      if (errorCode === 'CONTENT_BLOCKED') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Vsebina blokirana' : 'Content Blocked',
+          message: language === 'si'
+            ? 'AI varnostni filter je blokiral generiranje vsebine.\n\nTo se lahko zgodi, če projektna tema vsebuje občutljive izraze.\n\nMožne rešitve:\n• Preoblikujte opis projekta z manj občutljivimi izrazi\n• Poskusite z drugim AI modelom v Nastavitvah'
+            : 'The AI safety filter blocked the content generation.\n\nThis can happen if the project topic contains sensitive terms.\n\nPossible solutions:\n• Rephrase the project description with less sensitive terms\n• Try a different AI model in Settings',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── CONTEXT TOO LONG ──
+      if (errorCode === 'CONTEXT_TOO_LONG') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Projekt prevelik za model' : 'Project Too Large for Model',
+          message: language === 'si'
+            ? 'Projektni podatki presegajo kontekstno okno izbranega AI modela.\n\nTo se zgodi pri zelo obsežnih projektih z veliko delovnimi sklopi.\n\nMožne rešitve:\n• V Nastavitvah izberite model z večjim kontekstom (npr. Gemini 2.5 Pro — 1M tokenov)\n• Generirajte posamezne razdelke namesto celotnega projekta'
+            : 'The project data exceeds the context window of the selected AI model.\n\nThis happens with very large projects with many work packages.\n\nPossible solutions:\n• Choose a model with a larger context in Settings (e.g., Gemini 2.5 Pro — 1M tokens)\n• Generate individual sections instead of the entire project',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── INVALID JSON (AI returned unparseable response) ──
+      if (errorCode === 'INVALID_JSON' ||
+          msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Napaka formata odgovora' : 'Response Format Error',
+          message: language === 'si'
+            ? 'AI je vrnil nepravilen format odgovora (neveljaven JSON).\n\nTo se občasno zgodi — AI modeli niso vedno 100% zanesljivi pri strukturiranih odgovorih.\n\nPoskusite ponovno — naslednji poskus bo verjetno uspešen.'
+            : 'The AI returned an invalid response format (invalid JSON).\n\nThis happens occasionally — AI models are not always 100% reliable with structured responses.\n\nPlease try again — the next attempt will likely succeed.',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      // ── UNKNOWN / UNCLASSIFIED ERROR ──
+      console.error(`[AI Error] Unclassified: ${context}:`, e);
+      setModalConfig({
+        isOpen: true,
+        title: language === 'si' ? 'Nepričakovana napaka' : 'Unexpected Error',
+        message: language === 'si'
+          ? `Pri komunikaciji z AI ponudnikom (${providerLabel}) je prišlo do nepričakovane napake.\n\nPodrobnosti: ${msg.substring(0, 200)}\n\nMožne rešitve:\n• Poskusite ponovno čez nekaj sekund\n• Če se napaka ponavlja, zamenjajte model ali ponudnika v Nastavitvah\n• Preverite konzolo brskalnika (F12) za več podrobnosti`
+          : `An unexpected error occurred while communicating with the AI provider (${providerLabel}).\n\nDetails: ${msg.substring(0, 200)}\n\nPossible solutions:\n• Try again in a few seconds\n• If the error persists, switch models or providers in Settings\n• Check the browser console (F12) for more details`,
+        confirmText: language === 'si' ? 'V redu' : 'OK',
+        secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+        cancelText: '',
+        onConfirm: closeModal,
+        onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+        onCancel: closeModal,
+      });
+    },
+    [language, setIsSettingsOpen, setModalConfig, closeModal]
+  );
       if (msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
         setError(
           language === 'si'
