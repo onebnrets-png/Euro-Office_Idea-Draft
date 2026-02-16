@@ -232,12 +232,8 @@ const getContext = (projectData: any): string => {
   const pi = projectData.projectIdea;
   if (pi?.mainAim || pi?.stateOfTheArt || pi?.proposedSolution || pi?.projectTitle) {
     let endDateStr = '';
-    if (pi?.startDate && pi?.durationMonths) {
-      const start = new Date(pi.startDate);
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + pi.durationMonths);
-      end.setDate(end.getDate() - 1);
-      endDateStr = end.toISOString().split('T')[0];
+        if (pi?.startDate && pi?.durationMonths) {
+      endDateStr = calculateProjectEndDate(pi.startDate, pi.durationMonths);
     }
     const piWithDates = {
       ...pi,
