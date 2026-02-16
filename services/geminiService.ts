@@ -1253,6 +1253,244 @@ export const generateProjectSummary = async (
   });
   return result.text;
 };
+// ═══════════════════════════════════════════════════════════════
+// ★ v5.0: PER-WP GENERATION — generates activities one WP at a time
+// Phase 1: Scaffold (WP ids, titles, date ranges)
+// Phase 2: Each WP individually with cross-WP dependency context
+// Phase 3: Post-processing (sanitize + temporal integrity)
+// ═══════════════════════════════════════════════════════════════
+
+export const generateActivitiesPerWP = async (
+  projectData: any,
+  language: 'en' | 'si' = 'en',
+  mode: string = 'regenerate',
+  onProgress?: (wpIndex: number, wpTotal: number, wpTitle: string) => void
+): Promise<any[]> => {
+
+  const config = getProviderConfig();
+  const useNativeSchema = config.provider === 'gemini';
+
+  // ── Calculate project dates ──
+  const today = new Date().toISOString().split('T')[0];
+  const projectStart = projectData.projectIdea?.startDate || today;
+  const durationMonths = projectData.projectIdea?.durationMonths || 24;
+  const projectEnd = calculateProjectEndDate(projectStart, durationMonths);
+
+  const context = getContext(projectData);
+  const langDirective = getLanguageDirective(language);
+  const academicRules = getAcademicRigorRules(language);
+  const humanRules = getHumanizationRules(language);
+  const sectionRules = getRulesForSection('activities', language);
+  const qualityGate = getQualityGate('activities', language);
+
+  // Build temporal rule with actual dates
+  const temporalRule = (TEMPORAL_INTEGRITY_RULE[language] || TEMPORAL_INTEGRITY_RULE.en)
+    .replace(/\{\{projectStart\}\}/g, projectStart)
+    .replace(/\{\{projectEnd\}\}/g, projectEnd)
+    .replace(/\{\{projectDurationMonths\}\}/g, String(durationMonths));
+
+  // Build task instruction with placeholders filled
+  const taskInstruction = getSectionTaskInstruction('activities', language, {
+    projectStart,
+    projectEnd,
+    projectDurationMonths: String(durationMonths),
+  });
+
+  // ════════════════════════════════════════════════════════════
+  // PHASE 1: Generate WP scaffold (ids, titles, date ranges)
+  // ════════════════════════════════════════════════════════════
+
+  console.log(`[PerWP] Phase 1: Generating scaffold...`);
+  if (onProgress) onProgress(-1, 0, language === 'si' ? 'Generiranje strukture DS...' : 'Generating WP structure...');
+
+  const scaffoldPrompt = [
+    temporalRule,
+    langDirective,
+    language === 'si'
+      ? `NALOGA: Generiraj SAMO strukturo delovnih sklopov (scaffold) — BREZ nalog, mejnikov ali dosežkov.
+Za vsak DS vrni: id (WP1, WP2...), title (samostalniška zveza), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD).
+Projekt traja od ${projectStart} do ${projectEnd} (${durationMonths} mesecev).
+Med 6 in 10 DS. Upoštevaj pravila za vrstni red DS (prvi je temeljni/analitični, predzadnji diseminacija, zadnji upravljanje).
+Vrni JSON array: [{ "id": "WP1", "title": "...", "startDate": "...", "endDate": "..." }, ...]
+BREZ nalog, mejnikov ali dosežkov — SAMO scaffold.`
+      : `TASK: Generate ONLY the work package structure (scaffold) — WITHOUT tasks, milestones, or deliverables.
+For each WP return: id (WP1, WP2...), title (noun phrase), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD).
+Project runs from ${projectStart} to ${projectEnd} (${durationMonths} months).
+Between 6 and 10 WPs. Follow WP ordering rules (first is foundational/analytical, second-to-last is dissemination, last is project management).
+Return a JSON array: [{ "id": "WP1", "title": "...", "startDate": "...", "endDate": "..." }, ...]
+NO tasks, milestones, or deliverables — ONLY scaffold.`,
+    taskInstruction,
+    context,
+    temporalRule,
+  ].filter(Boolean).join('\n\n');
+
+  const scaffoldSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        title: { type: Type.STRING },
+        startDate: { type: Type.STRING },
+        endDate: { type: Type.STRING },
+      },
+      required: ['id', 'title', 'startDate', 'endDate']
+    }
+  };
+
+  const scaffoldResult = await generateContent({
+    prompt: scaffoldPrompt,
+    jsonSchema: useNativeSchema ? scaffoldSchema : undefined,
+    jsonMode: !useNativeSchema,
+    sectionKey: 'activities',
+  });
+
+  const scaffoldStr = scaffoldResult.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+  let scaffold: any[] = JSON.parse(scaffoldStr);
+
+  if (!Array.isArray(scaffold) || scaffold.length === 0) {
+    throw new Error('AI returned invalid scaffold for per-WP generation');
+  }
+
+  console.log(`[PerWP] Phase 1 complete: ${scaffold.length} WPs scaffolded: ${scaffold.map(w => w.id).join(', ')}`);
+
+  // ════════════════════════════════════════════════════════════
+  // PHASE 2: Generate each WP's content individually
+  // ════════════════════════════════════════════════════════════
+
+  const fullActivities: any[] = [];
+  const wpItemSchema = schemas.activities.items;
+
+  for (let i = 0; i < scaffold.length; i++) {
+    const wp = scaffold[i];
+    const isLast = i === scaffold.length - 1;
+    const isSecondToLast = i === scaffold.length - 2;
+    const wpNum = wp.id.replace('WP', '');
+
+    console.log(`[PerWP] Phase 2: Generating ${wp.id} "${wp.title}" (${i + 1}/${scaffold.length})...`);
+    if (onProgress) onProgress(i, scaffold.length, wp.title);
+
+    // Determine WP type for focused instructions
+    let wpTypeInstruction: string;
+    if (isLast) {
+      wpTypeInstruction = language === 'si'
+        ? `Ta DS je "Upravljanje in koordinacija projekta" (ZADNJI DS). MORA trajati od ${projectStart} do ${projectEnd}. Naloge vključujejo: koordinacijo konzorcija, spremljanje napredka, poročanje, zagotavljanje kakovosti, finančno upravljanje, zaključno poročilo. Vključi zaključni mejnik na ali pred ${projectEnd}.`
+        : `This WP is "Project Management and Coordination" (LAST WP). It MUST span from ${projectStart} to ${projectEnd}. Tasks include: consortium coordination, progress monitoring, reporting, quality assurance, financial management, final report. Include a closing milestone on or before ${projectEnd}.`;
+    } else if (isSecondToLast) {
+      wpTypeInstruction = language === 'si'
+        ? `Ta DS je "Diseminacija, komunikacija in izkoriščanje rezultatov" (PREDZADNJI DS). MORA trajati od ${projectStart} do ${projectEnd}. Naloge vključujejo: vizualno identiteto in komunikacijske kanale, spletno stran in družbena omrežja, strokovne dogodke in delavnice, publikacije in poročila, eksploatacijsko strategijo, odprtokodno skupnost.`
+        : `This WP is "Dissemination, Communication and Exploitation of Results" (SECOND-TO-LAST WP). It MUST span from ${projectStart} to ${projectEnd}. Tasks include: visual identity and communication channels, website and social media, professional events and workshops, publications and reports, exploitation strategy, open-source community.`;
+    } else {
+      wpTypeInstruction = language === 'si'
+        ? `Ta DS je vsebinski/tehnični DS. Traja od ${wp.startDate} do ${wp.endDate}. NE sme trajati celotno obdobje projekta. Naloge so zaporedne ali zamaknjene znotraj tega obdobja.`
+        : `This is a content/thematic WP. It runs from ${wp.startDate} to ${wp.endDate}. It MUST NOT span the entire project duration. Tasks are sequential or staggered within this period.`;
+    }
+
+    // Build cross-WP dependency context from already-generated WPs
+    let prevWPsContext = '';
+    if (fullActivities.length > 0) {
+      const prevSummary = fullActivities.map(w => ({
+        id: w.id,
+        title: w.title,
+        tasks: w.tasks?.map((t: any) => ({ id: t.id, title: t.title, startDate: t.startDate, endDate: t.endDate }))
+      }));
+      prevWPsContext = language === 'si'
+        ? `\nŽE GENERIRANI DS (uporabi za cross-WP odvisnosti — tvoje naloge se MORAJO sklicevati na predhodnike iz teh DS kjer je logično):\n${JSON.stringify(prevSummary, null, 2)}`
+        : `\nALREADY GENERATED WPs (use for cross-WP dependencies — your tasks MUST reference predecessors from these WPs where logical):\n${JSON.stringify(prevSummary, null, 2)}`;
+    }
+
+    // Build scaffold overview
+    const scaffoldOverview = language === 'si'
+      ? `\nCELOTEN SCAFFOLD PROJEKTA:\n${scaffold.map(s => `  ${s.id}: "${s.title}" (${s.startDate} → ${s.endDate})`).join('\n')}`
+      : `\nFULL PROJECT SCAFFOLD:\n${scaffold.map(s => `  ${s.id}: "${s.title}" (${s.startDate} → ${s.endDate})`).join('\n')}`;
+
+    const firstTaskId = `T${wpNum}.1`;
+    const isFirstWP = i === 0;
+
+    const wpPrompt = [
+      temporalRule,
+      langDirective,
+      language === 'si'
+        ? `NALOGA: Generiraj CELOTEN delovni sklop ${wp.id}: "${wp.title}" z nalogami, mejniki in dosežki.
+Vrni EN JSON objekt (ne array) s strukturo: { "id": "${wp.id}", "title": "${wp.title}", "tasks": [...], "milestones": [...], "deliverables": [...] }`
+        : `TASK: Generate the COMPLETE work package ${wp.id}: "${wp.title}" with tasks, milestones, and deliverables.
+Return ONE JSON object (not array): { "id": "${wp.id}", "title": "${wp.title}", "tasks": [...], "milestones": [...], "deliverables": [...] }`,
+      wpTypeInstruction,
+      scaffoldOverview,
+      prevWPsContext,
+      language === 'si'
+        ? `\nPRAVILA ZA ${wp.id}:
+- 2–5 nalog z zaporednimi/zamaknjenimi datumi znotraj ${wp.startDate} do ${wp.endDate}
+- Task ID format: T${wpNum}.1, T${wpNum}.2, T${wpNum}.3...
+- Vsaj 1 mejnik z datumom v YYYY-MM-DD
+- Vsaj 1 dosežek s polji: title (samostalniška zveza), description (2–4 stavki), indicator (specifičen, merljiv)
+- ${isFirstWP ? `Naloga ${firstTaskId} NIMA odvisnosti (je izhodišče projekta)` : `Naloga ${firstTaskId} MORA imeti vsaj 1 cross-WP odvisnost na nalogo iz predhodnega DS`}
+- Vse ostale naloge v tem DS imajo vsaj 1 odvisnost (FS, SS, FF ali SF)
+- Naslovi nalog: samostalniške zveze, NE nedoločniki
+- BREZ markdown (**, ##, \`)
+- Piši kot izkušen EU projektni svetovalec`
+        : `\nRULES FOR ${wp.id}:
+- 2–5 tasks with sequential/staggered dates within ${wp.startDate} to ${wp.endDate}
+- Task ID format: T${wpNum}.1, T${wpNum}.2, T${wpNum}.3...
+- At least 1 milestone with date in YYYY-MM-DD
+- At least 1 deliverable with fields: title (noun phrase), description (2–4 sentences), indicator (specific, measurable)
+- ${isFirstWP ? `Task ${firstTaskId} has NO dependencies (it is the project starting point)` : `Task ${firstTaskId} MUST have at least 1 cross-WP dependency on a task from a previous WP`}
+- All other tasks in this WP have at least 1 dependency (FS, SS, FF, or SF)
+- Task titles: noun phrases, NOT infinitive verbs
+- NO markdown (**, ##, \`)
+- Write like an experienced EU project consultant`,
+      context,
+      academicRules,
+      humanRules,
+      sectionRules,
+      temporalRule,
+    ].filter(Boolean).join('\n\n');
+
+    const wpResult = await generateContent({
+      prompt: wpPrompt,
+      jsonSchema: useNativeSchema ? wpItemSchema : undefined,
+      jsonMode: !useNativeSchema,
+      sectionKey: 'activities',
+    });
+
+    const wpStr = wpResult.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+    let wpData = JSON.parse(wpStr);
+
+    // Handle AI returning an array instead of object
+    if (Array.isArray(wpData)) {
+      wpData = wpData[0] || {};
+    }
+
+    // Ensure correct id and title from scaffold
+    wpData.id = wp.id;
+    wpData.title = wpData.title || wp.title;
+
+    // Strip markdown from all text fields
+    wpData = stripMarkdown(wpData);
+
+    fullActivities.push(wpData);
+
+    console.log(`[PerWP] ${wp.id} generated: ${wpData.tasks?.length || 0} tasks, ${wpData.milestones?.length || 0} milestones, ${wpData.deliverables?.length || 0} deliverables`);
+
+    // Rate limit pause between WPs (except after last)
+    if (i < scaffold.length - 1) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // PHASE 3: Post-processing
+  // ════════════════════════════════════════════════════════════
+
+  console.log(`[PerWP] Phase 3: Post-processing ${fullActivities.length} WPs...`);
+
+  let result = sanitizeActivities(fullActivities);
+  result = enforceTemporalIntegrity(result, projectData);
+
+  console.log(`[PerWP] Complete! ${result.length} WPs with ${result.reduce((sum: number, wp: any) => sum + (wp.tasks?.length || 0), 0)} total tasks.`);
+
+  return result;
+};
 
 // ─── TRANSLATION ─────────────────────────────────────────────────
 
