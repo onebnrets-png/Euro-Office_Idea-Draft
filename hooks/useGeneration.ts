@@ -1154,8 +1154,44 @@ export const useGeneration = ({
                 ...(pmContent?.structure || {}),
               },
             };
-          } catch (e) {
+          } catch (e: any) {
             console.error('[Auto-gen projectManagement]:', e);
+            const emsg = e.message || '';
+            const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+            if (isRateLimit) {
+              console.warn('[Auto-gen projectManagement] Rate limit hit — retrying in 20s...');
+              setIsLoading(
+                language === 'si'
+                  ? 'Čakam na API kvoto... 20s → Implementacija'
+                  : 'Waiting for API quota... 20s → Implementation'
+              );
+              await new Promise(r => setTimeout(r, 20000));
+              setIsLoading(`${t.generating} ${t.subSteps.implementation}...`);
+              try {
+                const pmRetry = await generateSectionContent('projectManagement', newData, language, mode);
+                newData.projectManagement = {
+                  ...newData.projectManagement,
+                  ...pmRetry,
+                  structure: {
+                    ...(newData.projectManagement?.structure || {}),
+                    ...(pmRetry?.structure || {}),
+                  },
+                };
+              } catch (e2) {
+                console.error('[Auto-gen projectManagement] Retry also failed:', e2);
+                setError(
+                  language === 'si'
+                    ? 'Implementacija ni bila generirana (omejitev API). Generirajte jo ročno v koraku 5 → Implementacija.'
+                    : 'Implementation was not generated (API limit). Generate it manually in Step 5 → Implementation.'
+                );
+              }
+            } else {
+              setError(
+                language === 'si'
+                  ? 'Implementacija ni bila generirana. Generirajte jo ročno v koraku 5 → Implementacija.'
+                  : 'Implementation was not generated. Generate it manually in Step 5 → Implementation.'
+              );
+            }
           }
 
           // Auto-generate risks after activities + projectManagement
