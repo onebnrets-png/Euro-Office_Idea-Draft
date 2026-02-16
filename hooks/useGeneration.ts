@@ -1,6 +1,16 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v4.2 — 2026-02-16 — SUB-SECTION GENERATION
+//   - NEW: SUB_SECTION_MAP for mapping sub-section keys to parent/path.
+//   - NEW: executeGeneration handles sub-section keys — generates only
+//     the specific sub-part and inserts at correct path in ProjectData.
+//   - NEW: handleGenerateSection checks sub-section content specifically
+//     while using parent key for cross-language content lookup.
+//   - Supports: coreProblem, causes, consequences, projectTitleAcronym,
+//     mainAim, stateOfTheArt, proposedSolution, readinessLevels, policies.
+//   - All previous v3.9 changes preserved.
+//
 // v3.9 — 2026-02-16 — PER-WP GENERATION COMPLETE
 //   - FIX: Fill mode for incomplete WPs now uses generateActivitiesPerWP()
 //     with existingScaffold + onlyIndices instead of broken generateSectionContent()
@@ -11,42 +21,9 @@
 //   - All previous v3.8 changes preserved.
 //
 // v3.8 — 2026-02-16 — PER-WP GENERATION
-//   - Activities in 'regenerate' mode now use generateActivitiesPerWP()
-//     which generates each WP individually for better quality.
-//   - Progress callback shows current WP being generated.
-//   - 'fill' and 'enhance' modes still use generateSectionContent().
-//   - All previous v3.7 changes preserved.
-//
-// v3.7 — 2026-02-15 — CHANGES:
-//   - FIX: runComposite in FILL mode now detects which sections
-//     actually need filling and generates ONLY those sections.
-//   - FIX: Loading messages adapted to show actual work being done:
-//     "Dopolnjujem Outputs (1/2)..." instead of always showing all 4.
-//   - NEW: sectionNeedsGeneration() helper detects empty items in arrays
-//     and empty fields in objects.
-//   - All previous v3.6 changes preserved (retry, backoff, friendly modals).
-//
-// v3.6 — 2026-02-15 — CHANGES:
-//   - FIX: runComposite — try/catch moved INSIDE the for loop so that
-//     a single failed section (e.g. kers hitting 429 rate limit) does
-//     NOT abort generation of remaining sections.
-//   - FIX: runComposite — delay between API calls increased from 100ms
-//     to 1500ms to reduce Gemini free-tier rate limit hits.
-//   - FIX: runComposite — partial success reporting: user sees
-//     "3/4 sections generated" instead of silent failure.
-//   - All previous v3.5.2 changes preserved.
-//
-// v3.5.2 — 2026-02-14 — CHANGES:
-//   - FIXED: Auto-generate projectManagement (Kakovost in učinkovitost
-//     izvedbe) when generating activities — description field was left
-//     empty because projectManagement is a separate key in ProjectData.
-//   - FIXED: robustCheckSectionHasContent replaces broken parent check
-//   - FIXED: checkOtherLanguageHasContent deep-checks ONLY the specific section
-//   - FIXED: Level 2 modal — primary button is now "Generate/Enhance current"
-//     (most common action), "Translate from XX" is secondary
-//   - Clearer modal messages for better UX
-//   - 3-option modal: Enhance Existing / Fill Missing / Regenerate All
-//   - 'enhance' mode passed to geminiService for professional deepening
+// v3.7 — 2026-02-15 — SMART FILL COMPOSITE
+// v3.6 — 2026-02-15 — RETRY + BACKOFF + FRIENDLY MODALS
+// v3.5.2 — 2026-02-14 — AUTO PM + ROBUST CHECKS + 3-OPTION MODAL
 //
 // SMART 4-LEVEL LOGIC for "Generate with AI" button:
 //   1. OTHER language has content for THIS SECTION, CURRENT is empty
@@ -98,7 +75,7 @@ export const useGeneration = ({
   setIsSettingsOpen,
   setHasUnsavedTranslationChanges,
   handleUpdateData,
-  checkSectionHasContent, // kept in interface for compatibility, overridden below
+  checkSectionHasContent,
   setModalConfig,
   closeModal,
   currentProjectId,
@@ -117,8 +94,6 @@ export const useGeneration = ({
   const t = TEXT[language] || TEXT['en'];
 
   // ─── DEEP CONTENT CHECKER (shared utility) ─────────────────────
-  // Returns true only if the given data contains actual meaningful
-  // text — not just empty strings, empty arrays, or empty objects.
 
   const hasDeepContent = useCallback((data: any): boolean => {
     if (!data) return false;
@@ -149,12 +124,10 @@ export const useGeneration = ({
     (sectionKey: string): { needsFill: boolean; needsFullGeneration: boolean; emptyIndices: number[] } => {
       const section = projectData[sectionKey];
 
-      // No data at all → needs full generation
       if (!section) {
         return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
       }
 
-      // Array sections (outputs, outcomes, impacts, kers)
       if (Array.isArray(section)) {
         if (section.length === 0) {
           return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
@@ -165,12 +138,10 @@ export const useGeneration = ({
 
         section.forEach((item: any, index: number) => {
           if (!item || !hasDeepContent(item)) {
-            // Completely empty item
             emptyIndices.push(index);
           } else {
-            // Check if item has empty required fields
             const hasEmptyFields = Object.entries(item).some(([key, val]) => {
-              if (key === 'id') return false; // id is auto-generated
+              if (key === 'id') return false;
               return typeof val === 'string' && val.trim().length === 0;
             });
             if (hasEmptyFields) {
@@ -188,17 +159,14 @@ export const useGeneration = ({
           return { needsFill: true, needsFullGeneration: false, emptyIndices };
         }
 
-        // All items have content — no generation needed
         return { needsFill: false, needsFullGeneration: false, emptyIndices: [] };
       }
 
-      // Object sections
       if (typeof section === 'object') {
         const hasContent = hasDeepContent(section);
         if (!hasContent) {
           return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
         }
-        // Check for empty fields
         const hasEmptyFields = Object.entries(section).some(([_key, val]) => {
           return typeof val === 'string' && val.trim().length === 0;
         });
@@ -213,12 +181,21 @@ export const useGeneration = ({
     [projectData, hasDeepContent]
   );
 
-  // ─── Friendly error handler ────────────────────────────────────
+  // ─── ★ v4.2: Sub-section mapping — maps sub-section keys to their parent and data path ──
 
-    // ─── ★ v4.0: Comprehensive error handler with specific modals ──
-  // All AI errors are now classified with ERROR_CODE|provider|details
-  // format from aiProvider.ts. Each error type gets its own clear
-  // message in both SI and EN.
+  const SUB_SECTION_MAP: Record<string, { parent: string; path: string[]; isString?: boolean }> = {
+    coreProblem:        { parent: 'problemAnalysis', path: ['problemAnalysis', 'coreProblem'] },
+    causes:             { parent: 'problemAnalysis', path: ['problemAnalysis', 'causes'] },
+    consequences:       { parent: 'problemAnalysis', path: ['problemAnalysis', 'consequences'] },
+    projectTitleAcronym:{ parent: 'projectIdea',     path: ['projectIdea'] }, // merges projectTitle + projectAcronym
+    mainAim:            { parent: 'projectIdea',     path: ['projectIdea', 'mainAim'], isString: true },
+    stateOfTheArt:      { parent: 'projectIdea',     path: ['projectIdea', 'stateOfTheArt'], isString: true },
+    proposedSolution:   { parent: 'projectIdea',     path: ['projectIdea', 'proposedSolution'], isString: true },
+    readinessLevels:    { parent: 'projectIdea',     path: ['projectIdea', 'readinessLevels'] },
+    policies:           { parent: 'projectIdea',     path: ['projectIdea', 'policies'] },
+  };
+
+  // ─── ★ v4.0: Comprehensive error handler with specific modals ──
 
   const handleAIError = useCallback(
     (e: any, context: string = '') => {
@@ -230,7 +207,6 @@ export const useGeneration = ({
 
       console.warn(`[AI Error] ${context}: ${errorCode} (${provider})`, e);
 
-      // ── MISSING API KEY ──
       if (msg === 'MISSING_API_KEY' || errorCode === 'MISSING_API_KEY') {
         setModalConfig({
           isOpen: true,
@@ -248,7 +224,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── RATE LIMIT (429) ──
       if (errorCode === 'RATE_LIMIT') {
         setModalConfig({
           isOpen: true,
@@ -266,7 +241,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── INSUFFICIENT CREDITS (402) ──
       if (errorCode === 'INSUFFICIENT_CREDITS') {
         setModalConfig({
           isOpen: true,
@@ -284,7 +258,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── MODEL OVERLOADED (503) ──
       if (errorCode === 'MODEL_OVERLOADED') {
         setModalConfig({
           isOpen: true,
@@ -302,7 +275,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── SERVER ERROR (500, 502) ──
       if (errorCode === 'SERVER_ERROR') {
         setModalConfig({
           isOpen: true,
@@ -320,7 +292,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── TIMEOUT (408) ──
       if (errorCode === 'TIMEOUT') {
         setModalConfig({
           isOpen: true,
@@ -338,7 +309,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── NETWORK ERROR ──
       if (errorCode === 'NETWORK_ERROR' ||
           msg.includes('fetch') || msg.includes('network') ||
           msg.includes('Failed to fetch') || msg.includes('ERR_')) {
@@ -358,7 +328,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── CONTENT BLOCKED BY SAFETY FILTER ──
       if (errorCode === 'CONTENT_BLOCKED') {
         setModalConfig({
           isOpen: true,
@@ -376,7 +345,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── CONTEXT TOO LONG ──
       if (errorCode === 'CONTEXT_TOO_LONG') {
         setModalConfig({
           isOpen: true,
@@ -394,7 +362,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── INVALID JSON (AI returned unparseable response) ──
       if (errorCode === 'INVALID_JSON' ||
           msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
         setModalConfig({
@@ -413,7 +380,6 @@ export const useGeneration = ({
         return;
       }
 
-      // ── UNKNOWN / UNCLASSIFIED ERROR ──
       console.error(`[AI Error] Unclassified: ${context}:`, e);
       setModalConfig({
         isOpen: true,
@@ -431,31 +397,25 @@ export const useGeneration = ({
     },
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
-      
   // ─── Check if other language has content FOR THIS SECTION (v3.5) ──
 
   const checkOtherLanguageHasContent = useCallback(
     async (sectionKey: string): Promise<any | null> => {
       const otherLang = language === 'en' ? 'si' : 'en';
 
-      // Helper: check if a specific project version has content
-      // in the EXACT section we're asking about — not anywhere else
       const checkVersion = (projectVersion: any): any | null => {
         if (!projectVersion) return null;
         const sectionData = projectVersion[sectionKey];
         if (!sectionData) return null;
-        // Only return the project if THIS SPECIFIC SECTION has real content
         if (hasDeepContent(sectionData)) {
           return projectVersion;
         }
         return null;
       };
 
-      // First check in-memory versions
       const cachedResult = checkVersion(projectVersions[otherLang]);
       if (cachedResult) return cachedResult;
 
-      // If not in memory, try loading from storage
       try {
         const loaded = await storageService.loadProject(otherLang, currentProjectId);
         const loadedResult = checkVersion(loaded);
@@ -524,6 +484,7 @@ export const useGeneration = ({
   );
 
   // ─── Execute section generation ────────────────────────────────
+  // ★ v4.2: Added sub-section support via SUB_SECTION_MAP
   // v3.9 FIX: Fill mode now uses generateActivitiesPerWP() with
   // existingScaffold + onlyIndices. Mandatory WP detection adds
   // only missing WPs instead of destroying existing ones.
@@ -537,8 +498,20 @@ export const useGeneration = ({
       try {
         let generatedData;
 
+        // ★ v4.2: Check if this is a sub-section key
+        const subMapping = SUB_SECTION_MAP[sectionKey];
+
+        // ★ v4.2: Sub-section generation — generate ONLY a specific sub-part
+        if (subMapping) {
+          generatedData = await generateSectionContent(
+            sectionKey,
+            projectData,
+            language,
+            mode
+          );
+
         // ★ v3.8/v3.9: Smart per-WP generation for activities
-        if (sectionKey === 'activities') {
+        } else if (sectionKey === 'activities') {
           const existingWPs = projectData.activities || [];
           const emptyWPIndices: number[] = [];
 
@@ -573,9 +546,6 @@ export const useGeneration = ({
           });
 
           if (mode === 'regenerate' || existingWPs.length === 0) {
-            // ──────────────────────────────────────────────────────
-            // REGENERATE: Generate all WPs from scratch via per-WP
-            // ──────────────────────────────────────────────────────
             generatedData = await generateActivitiesPerWP(
               projectData,
               language,
@@ -594,10 +564,6 @@ export const useGeneration = ({
             );
 
           } else if (hasMissingMandatory && mode !== 'enhance') {
-            // ──────────────────────────────────────────────────────
-            // ★ v3.9: MISSING MANDATORY WPs — add only missing ones
-            // Does NOT destroy existing WPs.
-            // ──────────────────────────────────────────────────────
             const durationMonths = projectData.projectIdea?.durationMonths || 24;
             const augmentedWPs = [...existingWPs];
             const mandatoryIndicesToGenerate: number[] = [];
@@ -607,12 +573,11 @@ export const useGeneration = ({
             if (missingPM) {
               missingNames.push(language === 'si' ? 'Upravljanje projekta' : 'Project Management');
 
-              // PM goes as LAST WP (convention: last = PM)
               const pmPlaceholder = {
                 id: `WP${augmentedWPs.length + 1}`,
                 title: language === 'si' ? 'Upravljanje in koordinacija projekta' : 'Project Management and Coordination',
                 startDate: projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0],
-                endDate: '', // will be filled by generator
+                endDate: '',
                 startMonth: 1,
                 endMonth: durationMonths,
                 tasks: [],
@@ -628,14 +593,12 @@ export const useGeneration = ({
             if (missingDiss) {
               missingNames.push(language === 'si' ? 'Diseminacija' : 'Dissemination');
 
-              // Dissemination goes as SECOND-TO-LAST WP
-              // If PM was just added as last, insert Diss before PM
               const dissInsertIdx = missingPM ? augmentedWPs.length - 1 : augmentedWPs.length;
               const dissPlaceholder = {
-                id: '', // will be renumbered below
+                id: '',
                 title: language === 'si' ? 'Diseminacija, komunikacija in izkoriščanje rezultatov' : 'Dissemination, Communication and Exploitation of Results',
                 startDate: projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0],
-                endDate: '', // will be filled by generator
+                endDate: '',
                 startMonth: 1,
                 endMonth: durationMonths,
                 tasks: [],
@@ -647,23 +610,18 @@ export const useGeneration = ({
 
               augmentedWPs.splice(dissInsertIdx, 0, dissPlaceholder);
 
-              // If PM was added, its index shifted by 1 due to splice
               if (missingPM) {
-                // PM index was augmentedWPs.length - 1 before splice, now it's augmentedWPs.length - 1 again
-                // But mandatoryIndicesToGenerate already has the old index, update it
                 mandatoryIndicesToGenerate[mandatoryIndicesToGenerate.length - 1] = augmentedWPs.length - 1;
               }
               mandatoryIndicesToGenerate.push(dissInsertIdx);
             }
 
-            // Renumber ALL WP ids sequentially
             augmentedWPs.forEach((wp, idx) => {
               wp.id = `WP${idx + 1}`;
             });
 
             console.warn(`[Activities] Adding missing mandatory WPs: ${missingNames.join(', ')} — generating only indices [${mandatoryIndicesToGenerate.join(', ')}]`);
 
-           // Re-detect empty indices in the augmented array (safer approach)
             const finalIndicesToGenerate: number[] = [];
             augmentedWPs.forEach((wp: any, idx: number) => {
               const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0
@@ -695,15 +653,11 @@ export const useGeneration = ({
                   );
                 }
               },
-              augmentedWPs,           // existingScaffold
-              finalIndicesToGenerate   // onlyIndices
+              augmentedWPs,
+              finalIndicesToGenerate
             );
 
           } else if (emptyWPIndices.length > 0) {
-            // ──────────────────────────────────────────────────────
-            // ★ v3.9 FIX: FILL incomplete WPs via per-WP generator
-            // Uses existingScaffold + onlyIndices for focused generation
-            // ──────────────────────────────────────────────────────
             generatedData = await generateActivitiesPerWP(
               projectData,
               language,
@@ -723,14 +677,11 @@ export const useGeneration = ({
                   );
                 }
               },
-              existingWPs,      // existingScaffold — keep all existing WPs
-              emptyWPIndices    // onlyIndices — generate ONLY the incomplete ones
+              existingWPs,
+              emptyWPIndices
             );
 
           } else if (mode === 'enhance') {
-            // ──────────────────────────────────────────────────────
-            // ENHANCE: All WPs have content — enhance via standard generation
-            // ──────────────────────────────────────────────────────
             generatedData = await generateSectionContent(
               sectionKey,
               projectData,
@@ -739,9 +690,6 @@ export const useGeneration = ({
             );
 
           } else {
-            // ──────────────────────────────────────────────────────
-            // All WPs complete, fill mode — nothing to do
-            // ──────────────────────────────────────────────────────
             generatedData = existingWPs;
           }
 
@@ -752,21 +700,15 @@ export const useGeneration = ({
           typeof projectData[sectionKey] === 'object' &&
           !Array.isArray(projectData[sectionKey])
         ) {
-          // ──────────────────────────────────────────────────────
-          // ★ v4.0: SMART OBJECT FILL — identify empty fields,
-          // generate ONLY those, show user which fields are being filled
-          // ──────────────────────────────────────────────────────
           const sectionData = projectData[sectionKey];
           const emptyFields: string[] = [];
 
-          // Identify empty string fields (top level)
           for (const [key, val] of Object.entries(sectionData)) {
             if (typeof val === 'string' && val.trim().length === 0) {
               emptyFields.push(key);
             }
           }
 
-          // Also check for missing expected fields from schema
           const expectedFields: Record<string, string[]> = {
             projectIdea: ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution'],
             problemAnalysis: [],
@@ -781,16 +723,13 @@ export const useGeneration = ({
             }
           }
 
-          // Also check nested objects (e.g., readinessLevels, policies)
           if (sectionKey === 'projectIdea') {
-            // Check readinessLevels
             const rl = sectionData.readinessLevels;
             if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
               if (!emptyFields.includes('readinessLevels')) {
                 emptyFields.push('readinessLevels');
               }
             } else {
-              // Check if any level has empty justification
               for (const level of ['TRL', 'SRL', 'ORL', 'LRL']) {
                 if (rl[level] && typeof rl[level].justification === 'string' && rl[level].justification.trim().length === 0) {
                   if (!emptyFields.includes('readinessLevels')) {
@@ -801,7 +740,6 @@ export const useGeneration = ({
               }
             }
 
-            // Check policies
             const policies = sectionData.policies;
             if (!policies || !Array.isArray(policies) || policies.length === 0) {
               if (!emptyFields.includes('policies')) {
@@ -811,7 +749,6 @@ export const useGeneration = ({
           }
 
           if (emptyFields.length === 0) {
-            // Nothing to fill — show modal
             setModalConfig({
               isOpen: true,
               title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
@@ -827,7 +764,6 @@ export const useGeneration = ({
             });
             generatedData = sectionData;
           } else {
-            // Show which fields are being generated
             const fieldNames = emptyFields.join(', ');
             console.log(`[ObjectFill] ${sectionKey}: Empty fields detected: [${fieldNames}]`);
             setIsLoading(
@@ -845,16 +781,9 @@ export const useGeneration = ({
           }
 
                 } else if (mode === 'fill') {
-          // ──────────────────────────────────────────────────────
-          // ★ v4.0: UNIVERSAL SMART FILL for non-activities sections
-          // Handles both OBJECT sections (projectIdea, problemAnalysis,
-          // projectManagement) and ARRAY sections (generalObjectives,
-          // specificObjectives, risks).
-          // ──────────────────────────────────────────────────────
           const sectionData = projectData[sectionKey];
 
           if (!sectionData || (Array.isArray(sectionData) && sectionData.length === 0) || !hasDeepContent(sectionData)) {
-            // ── No data at all → full regeneration ──
             console.log(`[SmartFill] ${sectionKey}: No data → full regeneration`);
             setIsLoading(
               language === 'si'
@@ -869,7 +798,6 @@ export const useGeneration = ({
             );
 
           } else if (Array.isArray(sectionData)) {
-            // ── Array section (generalObjectives, specificObjectives, risks) ──
             const emptyIndices: number[] = [];
             sectionData.forEach((item: any, index: number) => {
               if (!item || !hasDeepContent(item)) {
@@ -886,7 +814,6 @@ export const useGeneration = ({
             });
 
             if (emptyIndices.length === 0) {
-              // All items complete → show modal
               console.log(`[SmartFill] ${sectionKey}: All ${sectionData.length} items complete → nothing to fill`);
               setModalConfig({
                 isOpen: true,
@@ -918,19 +845,15 @@ export const useGeneration = ({
             }
 
           } else if (typeof sectionData === 'object') {
-            // ── Object section (projectIdea, problemAnalysis, projectManagement) ──
             const emptyFields: string[] = [];
 
-            // Deep check for empty fields based on section type
             if (sectionKey === 'projectIdea') {
-              // Top-level string fields
               for (const field of ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution']) {
                 const val = sectionData[field];
                 if (!val || (typeof val === 'string' && val.trim().length === 0)) {
                   emptyFields.push(field);
                 }
               }
-              // Nested: readinessLevels
               const rl = sectionData.readinessLevels;
               if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
                 emptyFields.push('readinessLevels');
@@ -942,7 +865,6 @@ export const useGeneration = ({
                   }
                 }
               }
-              // Nested: policies
               const policies = sectionData.policies;
               if (!policies || !Array.isArray(policies) || policies.length === 0) {
                 emptyFields.push('policies');
@@ -956,12 +878,10 @@ export const useGeneration = ({
               }
 
             } else if (sectionKey === 'problemAnalysis') {
-              // coreProblem
               const cp = sectionData.coreProblem;
               if (!cp || !cp.title || cp.title.trim().length === 0 || !cp.description || cp.description.trim().length === 0) {
                 emptyFields.push('coreProblem');
               }
-              // causes array
               const causes = sectionData.causes;
               if (!causes || !Array.isArray(causes) || causes.length === 0) {
                 emptyFields.push('causes');
@@ -973,7 +893,6 @@ export const useGeneration = ({
                   emptyFields.push('causes');
                 }
               }
-              // consequences array
               const consequences = sectionData.consequences;
               if (!consequences || !Array.isArray(consequences) || consequences.length === 0) {
                 emptyFields.push('consequences');
@@ -987,11 +906,9 @@ export const useGeneration = ({
               }
 
             } else if (sectionKey === 'projectManagement') {
-              // description
               if (!sectionData.description || sectionData.description.trim().length === 0) {
                 emptyFields.push('description');
               }
-              // structure fields
               const structure = sectionData.structure;
               if (!structure) {
                 emptyFields.push('structure');
@@ -1005,7 +922,6 @@ export const useGeneration = ({
               }
 
             } else {
-              // Generic object: check all top-level string fields
               for (const [key, val] of Object.entries(sectionData)) {
                 if (typeof val === 'string' && val.trim().length === 0) {
                   emptyFields.push(key);
@@ -1046,7 +962,6 @@ export const useGeneration = ({
             }
 
           } else {
-            // ── Fallback: unknown section type ──
             generatedData = await generateSectionContent(
               sectionKey,
               projectData,
@@ -1056,9 +971,6 @@ export const useGeneration = ({
           }
 
         } else {
-          // ──────────────────────────────────────────────────────
-          // Non-activities, non-fill mode (regenerate, enhance)
-          // ──────────────────────────────────────────────────────
           generatedData = await generateSectionContent(
             sectionKey,
             projectData,
@@ -1066,11 +978,41 @@ export const useGeneration = ({
             mode
           );
         }
+
+        // ═══════════════════════════════════════════════════════════
+        // ★ v4.2: DATA INSERTION — sub-section aware
+        // ═══════════════════════════════════════════════════════════
         let newData = { ...projectData };
-        if (['problemAnalysis', 'projectIdea'].includes(sectionKey)) {
+
+        if (subMapping) {
+          // ★ v4.2: Sub-section data insertion
+          if (sectionKey === 'projectTitleAcronym') {
+            // Merge projectTitle + projectAcronym into projectIdea
+            newData.projectIdea = {
+              ...newData.projectIdea,
+              projectTitle: generatedData.projectTitle || newData.projectIdea.projectTitle,
+              projectAcronym: generatedData.projectAcronym || newData.projectIdea.projectAcronym,
+            };
+          } else if (subMapping.isString) {
+            // String sub-sections (mainAim, stateOfTheArt, proposedSolution)
+            const parentKey = subMapping.path[0];
+            const fieldKey = subMapping.path[1];
+            newData[parentKey] = {
+              ...newData[parentKey],
+              [fieldKey]: generatedData,
+            };
+          } else if (subMapping.path.length === 2) {
+            // Object/Array sub-sections (coreProblem, causes, consequences, readinessLevels, policies)
+            const parentKey = subMapping.path[0];
+            const fieldKey = subMapping.path[1];
+            newData[parentKey] = {
+              ...newData[parentKey],
+              [fieldKey]: generatedData,
+            };
+          }
+        } else if (['problemAnalysis', 'projectIdea'].includes(sectionKey)) {
           newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
         } else if (sectionKey === 'activities') {
-          // ★ FIX: AI sometimes returns { activities: [...] } wrapper or single object
           if (Array.isArray(generatedData)) {
             newData[sectionKey] = generatedData;
           } else if (generatedData && Array.isArray(generatedData.activities)) {
@@ -1081,7 +1023,6 @@ export const useGeneration = ({
             console.warn('[executeGeneration] activities: unexpected format, keeping original');
           }
         } else if (sectionKey === 'expectedResults') {
-          // ★ FIX v4.5: Composite result — unpack outputs/outcomes/impacts
           const compositeData = generatedData as any;
           if (compositeData.outputs) newData.outputs = compositeData.outputs;
           if (compositeData.outcomes) newData.outcomes = compositeData.outcomes;
@@ -1097,14 +1038,7 @@ export const useGeneration = ({
             console.warn('Schedule warnings:', schedResult.warnings);
           }
 
-          // ────────────────────────────────────────────────────────
-          // v3.5.2 FIX: Auto-generate projectManagement
-          // ★ v4.1 FIX: Add delay after per-WP generation to avoid rate limits
           await new Promise(r => setTimeout(r, 3000));
-          // (Kakovost in učinkovitost izvedbe — description + structure)
-          // Generated BEFORE risks so it has full activities context,
-          // and risks in turn have full projectManagement context.
-          // ────────────────────────────────────────────────────────
           setIsLoading(`${t.generating} ${t.subSteps.implementation}...`);
           try {
             const pmContent = await generateSectionContent(
@@ -1113,7 +1047,6 @@ export const useGeneration = ({
               language,
               mode
             );
-            // Deep merge to preserve any manually entered structure fields
             newData.projectManagement = {
               ...newData.projectManagement,
               ...pmContent,
@@ -1162,8 +1095,6 @@ export const useGeneration = ({
             }
           }
 
-          // Auto-generate risks after activities + projectManagement
-          // ★ v4.1 FIX: Add delay between PM and risks to avoid rate limits
           await new Promise(r => setTimeout(r, 3000));
           setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
           try {
@@ -1173,7 +1104,6 @@ export const useGeneration = ({
               language,
               mode
             );
-            // ★ FIX: Ensure risks is always an array
             if (Array.isArray(risksContent)) {
               newData.risks = risksContent;
             } else if (risksContent && Array.isArray(risksContent.risks)) {
@@ -1186,7 +1116,6 @@ export const useGeneration = ({
             const emsg = e.message || '';
             const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
             if (isRateLimit) {
-              // ★ v4.1: Retry once after 20s delay for rate limit
               console.warn('[Auto-gen risks] Rate limit hit — retrying in 20s...');
               setIsLoading(
                 language === 'si'
@@ -1255,7 +1184,6 @@ export const useGeneration = ({
       handleAIError,
     ]
   );
-
   // ─── 3-option generation modal helper ──────────────────────────
 
   const show3OptionModal = useCallback(
@@ -1265,17 +1193,14 @@ export const useGeneration = ({
         title: t.modals.generationChoiceTitle,
         message: t.modals.generationChoiceMsg,
 
-        // Option 1: Enhance Existing (green — primary)
         confirmText: t.modals.enhanceExistingBtn,
         confirmDesc: t.modals.enhanceExistingDesc,
         onConfirm: onEnhance,
 
-        // Option 2: Fill Missing (blue — secondary)
         secondaryText: t.modals.fillMissingBtn,
         secondaryDesc: t.modals.fillMissingDesc,
         onSecondary: onFill,
 
-        // Option 3: Regenerate All (amber — tertiary)
         tertiaryText: t.modals.regenerateAllBtn,
         tertiaryDesc: t.modals.regenerateAllDesc,
         onTertiary: onRegenerate,
@@ -1288,6 +1213,7 @@ export const useGeneration = ({
   );
 
   // ─── SMART Handle generate (4-level logic — v3.5.1) ────────────
+  // ★ v4.2: Sub-section aware — checks sub-section content specifically
 
   const handleGenerateSection = useCallback(
     async (sectionKey: string) => {
@@ -1298,15 +1224,27 @@ export const useGeneration = ({
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
-      // v3.4/3.5 FIX: Use robust check
-      const currentHasContent = robustCheckSectionHasContent(sectionKey);
+      // ★ v4.2: For sub-sections, check content of the specific sub-part
+      // but use parent key for cross-language storage lookup
+      const subMapping = SUB_SECTION_MAP[sectionKey];
+      const contentCheckKey = subMapping ? subMapping.parent : sectionKey;
 
-      // Check if other language has content FOR THIS SPECIFIC SECTION
-      const otherLangData = await checkOtherLanguageHasContent(sectionKey);
+      // v3.4/3.5 FIX: Use robust check — for sub-sections, check specific sub-part
+      const currentHasContent = subMapping
+        ? (() => {
+            // Check if THIS specific sub-section has content
+            let data: any = projectData;
+            for (const key of subMapping.path) {
+              data = data?.[key];
+            }
+            return hasDeepContent(data);
+          })()
+        : robustCheckSectionHasContent(sectionKey);
+
+      // Check if other language has content — use parent key for storage lookup
+      const otherLangData = await checkOtherLanguageHasContent(contentCheckKey);
 
       if (otherLangData && !currentHasContent) {
-        // LEVEL 1: Other language has content for THIS section, current is empty
-        // → Primary action: Translate (most useful when current is empty)
         setModalConfig({
           isOpen: true,
           title:
@@ -1331,9 +1269,6 @@ export const useGeneration = ({
       }
 
       if (otherLangData && currentHasContent) {
-        // LEVEL 2: Both languages have content for THIS section
-        // v3.5.1 FIX: Primary button = "Generate/Enhance" (most common action)
-        //             Secondary button = "Translate" (less common)
         setModalConfig({
           isOpen: true,
           title:
@@ -1354,7 +1289,6 @@ export const useGeneration = ({
               : `Translate from ${otherLang}`,
           cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
           onConfirm: () => {
-            // Primary action: show 3-option modal
             closeModal();
             setTimeout(() => {
               show3OptionModal(
@@ -1370,7 +1304,6 @@ export const useGeneration = ({
         return;
       }
 
-      // LEVEL 3: Only current language has content → 3-option modal
       if (currentHasContent) {
         show3OptionModal(
           () => executeGeneration(sectionKey, 'enhance'),
@@ -1380,12 +1313,13 @@ export const useGeneration = ({
         return;
       }
 
-      // LEVEL 4: Nothing exists anywhere → just generate
       executeGeneration(sectionKey, 'regenerate');
     },
     [
       ensureApiKey,
       language,
+      projectData,
+      hasDeepContent,
       robustCheckSectionHasContent,
       checkOtherLanguageHasContent,
       executeGeneration,
@@ -1398,9 +1332,6 @@ export const useGeneration = ({
   );
 
   // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
-  // ★ v3.7 SMART FILL: Only generates sections that actually need it.
-  //   In fill mode, uses targeted fill for sections with empty items.
-  // ★ v3.6: try/catch INSIDE for loop + retry with backoff + friendly modals
 
   const handleGenerateCompositeSection = useCallback(
     async (_sectionKey: string) => {
@@ -1432,11 +1363,9 @@ export const useGeneration = ({
         let skippedCount = 0;
         let lastError: any = null;
 
-        // ★ v3.7: Determine which sections actually need generation
         let sectionsToProcess: { key: string; action: 'fill' | 'generate' | 'enhance' | 'regenerate'; emptyIndices: number[] }[] = [];
 
         if (mode === 'fill') {
-          // SMART FILL: Only process sections that have empty items
           for (const s of allSections) {
             const status = sectionNeedsGeneration(s);
             if (status.needsFullGeneration) {
@@ -1444,11 +1373,9 @@ export const useGeneration = ({
             } else if (status.needsFill) {
               sectionsToProcess.push({ key: s, action: 'fill', emptyIndices: status.emptyIndices });
             }
-            // else: section is complete → skip
           }
 
           if (sectionsToProcess.length === 0) {
-            // Everything is already filled!
             setModalConfig({
               isOpen: true,
               title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
@@ -1466,14 +1393,11 @@ export const useGeneration = ({
             return;
           }
         } else if (mode === 'enhance') {
-          // ENHANCE: Only process sections that have content (skip empty ones)
           for (const s of allSections) {
             const status = sectionNeedsGeneration(s);
             if (!status.needsFullGeneration) {
-              // Has some content → enhance it
               sectionsToProcess.push({ key: s, action: 'enhance', emptyIndices: [] });
             }
-            // Empty sections are skipped in enhance mode
           }
           if (sectionsToProcess.length === 0) {
             setModalConfig({
@@ -1493,7 +1417,6 @@ export const useGeneration = ({
             return;
           }
         } else {
-          // REGENERATE: Process all sections
           sectionsToProcess = allSections.map(s => ({ key: s, action: 'regenerate' as const, emptyIndices: [] }));
         }
 
@@ -1525,7 +1448,6 @@ export const useGeneration = ({
               let generatedData: any;
 
               if (action === 'fill' && emptyIndices.length > 0) {
-                // ★ v3.7: TARGETED FILL — only generate empty items
                 generatedData = await generateTargetedFill(
                   s,
                   projectData,
@@ -1533,7 +1455,6 @@ export const useGeneration = ({
                   emptyIndices
                 );
               } else {
-                // Standard generation (generate, enhance, regenerate)
                 const genMode = action === 'generate' ? 'regenerate' : action;
                 generatedData = await generateSectionContent(
                   s,
@@ -1579,9 +1500,7 @@ export const useGeneration = ({
           setHasUnsavedTranslationChanges(true);
         }
 
-        // ★ v3.7: Show success modal with skip info
         if (!lastError && successCount === totalToProcess) {
-          // Complete success
           if (skippedCount > 0) {
             const skippedNames = allSections
               .filter(s => !sectionsToProcess.find(sp => sp.key === s))
