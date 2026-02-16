@@ -1159,6 +1159,8 @@ export const useGeneration = ({
           }
 
           // Auto-generate risks after activities + projectManagement
+          // ★ v4.1 FIX: Add delay between PM and risks to avoid rate limits
+          await new Promise(r => setTimeout(r, 3000));
           setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
           try {
             const risksContent = await generateSectionContent(
