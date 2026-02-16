@@ -789,11 +789,8 @@ const getPromptAndSchemaForSection = (
     const today = new Date().toISOString().split('T')[0];
     const pStart = projectData.projectIdea?.startDate || today;
     const pMonths = projectData.projectIdea?.durationMonths || 24;
-    const pStartDate = new Date(pStart);
-    const pEndDate = new Date(pStartDate);
-    pEndDate.setMonth(pEndDate.getMonth() + pMonths);
-    pEndDate.setDate(pEndDate.getDate() - 1);
-    const pEnd = pEndDate.toISOString().split('T')[0];
+    const pEnd = calculateProjectEndDate(pStart, pMonths);
+
 
     temporalRuleBlock = (TEMPORAL_INTEGRITY_RULE[language] || TEMPORAL_INTEGRITY_RULE.en)
       .replace(/\{\{projectStart\}\}/g, pStart)
