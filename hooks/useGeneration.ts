@@ -598,9 +598,109 @@ export const useGeneration = ({
             generatedData = existingWPs;
           }
 
+                } else if (
+          mode === 'fill' &&
+          ['projectIdea', 'problemAnalysis', 'projectManagement'].includes(sectionKey) &&
+          projectData[sectionKey] &&
+          typeof projectData[sectionKey] === 'object' &&
+          !Array.isArray(projectData[sectionKey])
+        ) {
+          // ──────────────────────────────────────────────────────
+          // ★ v4.0: SMART OBJECT FILL — identify empty fields,
+          // generate ONLY those, show user which fields are being filled
+          // ──────────────────────────────────────────────────────
+          const sectionData = projectData[sectionKey];
+          const emptyFields: string[] = [];
+
+          // Identify empty string fields (top level)
+          for (const [key, val] of Object.entries(sectionData)) {
+            if (typeof val === 'string' && val.trim().length === 0) {
+              emptyFields.push(key);
+            }
+          }
+
+          // Also check for missing expected fields from schema
+          const expectedFields: Record<string, string[]> = {
+            projectIdea: ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution'],
+            problemAnalysis: [],
+            projectManagement: ['description'],
+          };
+          const expected = expectedFields[sectionKey] || [];
+          for (const field of expected) {
+            if (!sectionData[field] || (typeof sectionData[field] === 'string' && sectionData[field].trim().length === 0)) {
+              if (!emptyFields.includes(field)) {
+                emptyFields.push(field);
+              }
+            }
+          }
+
+          // Also check nested objects (e.g., readinessLevels, policies)
+          if (sectionKey === 'projectIdea') {
+            // Check readinessLevels
+            const rl = sectionData.readinessLevels;
+            if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
+              if (!emptyFields.includes('readinessLevels')) {
+                emptyFields.push('readinessLevels');
+              }
+            } else {
+              // Check if any level has empty justification
+              for (const level of ['TRL', 'SRL', 'ORL', 'LRL']) {
+                if (rl[level] && typeof rl[level].justification === 'string' && rl[level].justification.trim().length === 0) {
+                  if (!emptyFields.includes('readinessLevels')) {
+                    emptyFields.push('readinessLevels');
+                  }
+                  break;
+                }
+              }
+            }
+
+            // Check policies
+            const policies = sectionData.policies;
+            if (!policies || !Array.isArray(policies) || policies.length === 0) {
+              if (!emptyFields.includes('policies')) {
+                emptyFields.push('policies');
+              }
+            }
+          }
+
+          if (emptyFields.length === 0) {
+            // Nothing to fill — show modal
+            setModalConfig({
+              isOpen: true,
+              title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
+              message: language === 'si'
+                ? 'Vsa polja v tem razdelku so že izpolnjena. Če želite izboljšati vsebino, uporabite možnost "Izboljšaj obstoječe".'
+                : 'All fields in this section are already filled. To improve content, use the "Enhance existing" option.',
+              confirmText: language === 'si' ? 'V redu' : 'OK',
+              secondaryText: '',
+              cancelText: '',
+              onConfirm: () => closeModal(),
+              onSecondary: null,
+              onCancel: () => closeModal(),
+            });
+            generatedData = sectionData;
+          } else {
+            // Show which fields are being generated
+            const fieldNames = emptyFields.join(', ');
+            console.log(`[ObjectFill] ${sectionKey}: Empty fields detected: [${fieldNames}]`);
+            setIsLoading(
+              language === 'si'
+                ? `Dopolnjujem ${emptyFields.length} praznih polj: ${fieldNames}...`
+                : `Filling ${emptyFields.length} empty fields: ${fieldNames}...`
+            );
+
+            generatedData = await generateObjectFill(
+              sectionKey,
+              projectData,
+              language,
+              emptyFields
+            );
+          }
+
         } else {
           // ──────────────────────────────────────────────────────
           // Non-activities section — standard generation
+          // (regenerate, enhance, or fill for array sections)
           // ──────────────────────────────────────────────────────
           generatedData = await generateSectionContent(
             sectionKey,
