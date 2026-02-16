@@ -1543,63 +1543,139 @@ NO tasks, milestones, or deliverables — ONLY scaffold.`,
     if (onProgress) onProgress(progressIdx, indicesToGenerate.length, wp.title);
 
     let wpTypeInstruction: string;
-      if (isLast) {
-      wpTypeInstruction = language === 'si'
-        ? `Ta DS je "Upravljanje in koordinacija projekta" (ZADNJI DS). MORA trajati od ${projectStart} do ${projectEnd}.
-KRITIČNO PRAVILO ZA RAZPOREDITEV NALOG:
-- Naloge MORAJO ENAKOMERNO pokrivati CELOTNO obdobje projekta od ${projectStart} do ${projectEnd}.
-- NE stiskaj vseh nalog v prvo polovico — razporedi jih čez celotno trajanje.
-- Vsaka naloga traja vsaj 30-50% celotnega projekta ali več — naloge se prekrivajo.
-- Primer za 36-mesečni projekt:
-  T.1 "Koordinacija konzorcija in operativno upravljanje" od M1 do M36
-  T.2 "Spremljanje napredka in poročanje" od M1 do M36
-  T.3 "Zagotavljanje kakovosti in obvladovanje tveganj" od M3 do M36
-  T.4 "Finančno upravljanje" od M1 do M36
-  T.5 "Zaključno poročilo in zaprtje projekta" od M30 do M36
-- Naloge T.1–T.4 so VZPOREDNE in trajajo skoraj celotno obdobje.
-- SAMO zaključno poročilo je kratka naloga na koncu.
-- Vključi zaključni mejnik na ali pred ${projectEnd}.`
-        : `This WP is "Project Management and Coordination" (LAST WP). It MUST span from ${projectStart} to ${projectEnd}.
-CRITICAL TASK DISTRIBUTION RULE:
-- Tasks MUST EVENLY cover the ENTIRE project duration from ${projectStart} to ${projectEnd}.
-- Do NOT compress all tasks into the first half — distribute them across the full duration.
-- Each task should last at least 30-50% of the total project or more — tasks overlap.
-- Example for a 36-month project:
-  T.1 "Consortium coordination and operational management" from M1 to M36
-  T.2 "Progress monitoring and reporting" from M1 to M36
-  T.3 "Quality assurance and risk management" from M3 to M36
-  T.4 "Financial management" from M1 to M36
-  T.5 "Final report and project closure" from M30 to M36
-- Tasks T.1–T.4 are PARALLEL and span nearly the entire duration.
-- ONLY the final report is a short task at the end.
-- Include a closing milestone on or before ${projectEnd}.`;
+           if (isLast) {
+      // ★ v5.3: Expert identity + concrete dates + JSON example for PM WP
+      const pmStart = new Date(projectStart + 'T00:00:00Z');
+      const pmEnd = new Date(projectEnd + 'T00:00:00Z');
+      const pmTotal = pmEnd.getTime() - pmStart.getTime();
+      const toISO = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      const pm_m3 = toISO(new Date(pmStart.getTime() + pmTotal * 0.08));
+      const pm_closing = toISO(new Date(pmEnd.getTime() - pmTotal * 0.08));
+      const pmWpNum = scaffold.length;
 
-        } else if (isSecondToLast) {
       wpTypeInstruction = language === 'si'
-        ? `Ta DS je "Diseminacija, komunikacija in izkoriščanje rezultatov" (PREDZADNJI DS). MORA trajati od ${projectStart} do ${projectEnd}.
-KRITIČNO PRAVILO ZA RAZPOREDITEV NALOG:
-- Naloge MORAJO pokrivati CELOTNO obdobje projekta — NE stiskaj v prvo ali drugo polovico.
-- Nekatere naloge (npr. vizualna identiteta, spletna stran) se začnejo na začetku in trajajo dalj časa.
-- Druge naloge (npr. eksploatacijska strategija) se začnejo pozneje ampak trajajo do konca.
-- Naloge se prekrivajo — niso strogo zaporedne.
-- Primer za 36-mesečni projekt:
-  T.1 "Vzpostavitev vizualne identitete in komunikacijskih kanalov" od M1 do M6
-  T.2 "Upravljanje spletne strani in družbenih omrežij" od M2 do M36
-  T.3 "Organizacija strokovnih dogodkov in delavnic" od M6 do M36
-  T.4 "Priprava publikacij in poročil za diseminacijo" od M6 do M36
-  T.5 "Razvoj strategije za izkoriščanje rezultatov" od M12 do M36`
-        : `This WP is "Dissemination, Communication and Exploitation of Results" (SECOND-TO-LAST WP). It MUST span from ${projectStart} to ${projectEnd}.
-CRITICAL TASK DISTRIBUTION RULE:
-- Tasks MUST cover the ENTIRE project duration — do NOT compress into the first or second half.
-- Some tasks (e.g., visual identity, website) start early and run for a longer period.
-- Other tasks (e.g., exploitation strategy) start later but run until the end.
-- Tasks overlap — they are NOT strictly sequential.
-- Example for a 36-month project:
-  T.1 "Establishment of visual identity and communication channels" from M1 to M6
-  T.2 "Website and social media management" from M2 to M36
-  T.3 "Organisation of professional events and workshops" from M6 to M36
-  T.4 "Preparation of dissemination publications and reports" from M6 to M36
-  T.5 "Development of results exploitation strategy" from M12 to M36`;
+        ? `SI IZKUŠEN STROKOVNJAK ZA PROJEKTNO VODENJE (PMP/PRINCE2) z 20+ leti izkušenj pri EU projektih.
+KOT STROKOVNJAK VEŠ: naloge projektnega vodenja (koordinacija, monitoring, kakovost, finance) TEČEJO VZPOREDNO skozi CELOTNO trajanje projekta. Koordinacija se NIKOLI ne konča pred zaključkom projekta. Finančno upravljanje je STALNA aktivnost. Spremljanje napredka je CIKLIČNO skozi celoten projekt. EDINA kratka naloga je zaključno poročilo na koncu.
+NAPAČNO = zaporedne kratke naloge, naloge stisnjene v isto obdobje, naloge ki se končajo pred koncem projekta.
+
+Ta DS je "Upravljanje in koordinacija projekta" (ZADNJI DS).
+
+═══ ŽELEZNO PRAVILO ZA DATUME (KRŠITEV = ZAVRNITEV) ═══
+VSAKA naloga razen zaključnega poročila MORA imeti endDate = ${projectEnd}.
+
+OBVEZNI DATUMI:
+  T${pmWpNum}.1: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.2: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.3: startDate="${pm_m3}",         endDate="${projectEnd}"
+  T${pmWpNum}.4: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.5: startDate="${pm_closing}",    endDate="${projectEnd}"
+
+JSON PRIMER:
+{"tasks":[
+  {"id":"T${pmWpNum}.1","title":"Koordinacija konzorcija in operativno upravljanje","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[],"description":"Celostna koordinacija projektnih aktivnosti, vključno z vodenjem sestankov konzorcija, upravljanjem komunikacije med partnerji in zagotavljanjem skladnosti z zavezami iz pogodbe o sofinanciranju."},
+  {"id":"T${pmWpNum}.2","title":"Spremljanje napredka in ciklično poročanje","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Kontinuirano spremljanje projektnega napredka z rednimi vmesnimi poročili, letnimi pregledi in mehanizmi za zgodnje zaznavanje odstopanj od načrta."},
+  {"id":"T${pmWpNum}.3","title":"Zagotavljanje kakovosti in obvladovanje tveganj","startDate":"${pm_m3}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Vzpostavitev in izvajanje sistema kakovosti z notranjimi revizijami, medsebojnimi evalvacijami ter aktivnim upravljanjem registra tveganj."},
+  {"id":"T${pmWpNum}.4","title":"Finančno upravljanje in revizijska pripravljenost","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Upravljanje projektnega proračuna, spremljanje porabe po partnerjih, priprava finančnih poročil in zagotavljanje revizijske sledi."},
+  {"id":"T${pmWpNum}.5","title":"Zaključno poročilo in zaprtje projekta","startDate":"${pm_closing}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.2","type":"FF"}],"description":"Priprava zaključnega tehničnega in finančnega poročila, prenos znanja, arhiviranje dokumentacije in formalno zaprtje projekta."}
+]}
+Sledi temu vzorcu. Spremeni naslove in opise glede na kontekst projekta, ampak DATUMI morajo biti identični. Mejnik na ali pred ${projectEnd}.
+═══════════════════════════════════════════════════════════════════`
+
+        : `YOU ARE AN EXPERIENCED PROJECT MANAGEMENT EXPERT (PMP/PRINCE2) with 20+ years managing EU projects.
+AS AN EXPERT YOU KNOW: PM tasks (coordination, monitoring, quality, finance) RUN IN PARALLEL throughout the ENTIRE project. Coordination NEVER ends before project closure. Financial management is ONGOING. Progress monitoring is CYCLICAL. The ONLY short task is the final report at the end.
+WRONG = sequential short tasks, tasks compressed into same period, tasks ending before project end.
+
+This WP is "Project Management and Coordination" (LAST WP).
+
+═══ IRON RULE FOR DATES (VIOLATION = REJECTION) ═══
+EVERY task except the final report MUST have endDate = ${projectEnd}.
+
+MANDATORY DATES:
+  T${pmWpNum}.1: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.2: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.3: startDate="${pm_m3}",         endDate="${projectEnd}"
+  T${pmWpNum}.4: startDate="${projectStart}", endDate="${projectEnd}"
+  T${pmWpNum}.5: startDate="${pm_closing}",    endDate="${projectEnd}"
+
+JSON EXAMPLE:
+{"tasks":[
+  {"id":"T${pmWpNum}.1","title":"Consortium Coordination and Operational Management","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[],"description":"Overall coordination of project activities including consortium meetings, partner communication management, and compliance with grant agreement obligations."},
+  {"id":"T${pmWpNum}.2","title":"Progress Monitoring and Reporting Cycle Execution","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Continuous monitoring of project progress through regular interim reports, annual reviews, and early warning mechanisms for deviations from the work plan."},
+  {"id":"T${pmWpNum}.3","title":"Quality Assurance and Risk Management Framework","startDate":"${pm_m3}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Establishment and execution of the quality management system including internal audits, peer evaluations, and active risk register management."},
+  {"id":"T${pmWpNum}.4","title":"Financial Management and Audit Preparation","startDate":"${projectStart}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.1","type":"SS"}],"description":"Budget management, expenditure tracking per partner, financial reporting preparation, and audit trail maintenance."},
+  {"id":"T${pmWpNum}.5","title":"Final Project Closure and Knowledge Transfer","startDate":"${pm_closing}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${pmWpNum}.2","type":"FF"}],"description":"Preparation of final technical and financial reports, knowledge transfer activities, documentation archiving, and formal project closure."}
+]}
+Follow this pattern. Adapt titles and descriptions to the project context, but DATES must be identical. Milestone on or before ${projectEnd}.
+═══════════════════════════════════════════════════════════════════`;
+
+            } else if (isSecondToLast) {
+      // ★ v5.3: Expert identity + concrete dates + JSON example for Dissemination WP
+      const dissStart = new Date(projectStart + 'T00:00:00Z');
+      const dissEnd = new Date(projectEnd + 'T00:00:00Z');
+      const dissTotal = dissEnd.getTime() - dissStart.getTime();
+      const toISOd = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      const diss_setup_end = toISOd(new Date(dissStart.getTime() + dissTotal * 0.15));
+      const diss_m2 = toISOd(new Date(dissStart.getTime() + dissTotal * 0.05));
+      const diss_m6 = toISOd(new Date(dissStart.getTime() + dissTotal * 0.15));
+      const diss_m12 = toISOd(new Date(dissStart.getTime() + dissTotal * 0.33));
+      const dissWpNum = scaffold.length - 1;
+
+      wpTypeInstruction = language === 'si'
+        ? `SI IZKUŠEN STROKOVNJAK ZA DISEMINACIJO IN KOMUNIKACIJO V EU PROJEKTIH z 20+ leti izkušenj.
+KOT STROKOVNJAK VEŠ: vizualna identiteta se vzpostavi NA ZAČETKU (kratka setup naloga). Spletna stran se upravlja od vzpostavitve DO KONCA. Dogodki se organizirajo od zgodnje faze DO KONCA. Publikacije se pripravljajo od sredine DO KONCA. Eksploatacijska strategija se razvija od ~33% projekta DO KONCA.
+NAPAČNO = vse naloge stisnjene na konec, vse na začetek, naloge ki se končajo pred koncem projekta.
+
+Ta DS je "Diseminacija, komunikacija in izkoriščanje rezultatov" (PREDZADNJI DS).
+
+═══ ŽELEZNO PRAVILO ZA DATUME (KRŠITEV = ZAVRNITEV) ═══
+Vse naloge RAZEN T${dissWpNum}.1 (setup) MORAJO imeti endDate = ${projectEnd}.
+
+OBVEZNI DATUMI:
+  T${dissWpNum}.1: startDate="${projectStart}", endDate="${diss_setup_end}"  ← SAMO ta je kratka
+  T${dissWpNum}.2: startDate="${diss_m2}",      endDate="${projectEnd}"      ← do konca!
+  T${dissWpNum}.3: startDate="${diss_m6}",      endDate="${projectEnd}"      ← do konca!
+  T${dissWpNum}.4: startDate="${diss_m6}",      endDate="${projectEnd}"      ← do konca!
+  T${dissWpNum}.5: startDate="${diss_m12}",     endDate="${projectEnd}"      ← do konca!
+
+JSON PRIMER:
+{"tasks":[
+  {"id":"T${dissWpNum}.1","title":"Vzpostavitev vizualne identitete in komunikacijskih kanalov","startDate":"${projectStart}","endDate":"${diss_setup_end}","dependencies":[{"predecessorId":"T1.1","type":"SS"}],"description":"Oblikovanje projektne vizualne identitete, logotipa, grafične predloge in vzpostavitev komunikacijskih kanalov (spletna stran, profili na družbenih omrežjih)."},
+  {"id":"T${dissWpNum}.2","title":"Upravljanje spletne strani in družbenih omrežij","startDate":"${diss_m2}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.1","type":"FS"}],"description":"Tekoče upravljanje projektne spletne strani z rednimi objavami napredka, rezultatov in dogodkov ter aktivno upravljanje profilov na družbenih omrežjih."},
+  {"id":"T${dissWpNum}.3","title":"Organizacija strokovnih dogodkov in delavnic","startDate":"${diss_m6}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.1","type":"FS"}],"description":"Načrtovanje in izvedba strokovnih dogodkov, delavnic, seminarjev in zaključne konference za diseminacijo rezultatov med ciljnimi skupinami."},
+  {"id":"T${dissWpNum}.4","title":"Priprava publikacij in diseminacijskih poročil","startDate":"${diss_m6}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.2","type":"SS"}],"description":"Priprava strokovnih publikacij, policy briefov, newsletterjev in diseminacijskih poročil za različne ciljne skupine."},
+  {"id":"T${dissWpNum}.5","title":"Razvoj strategije za izkoriščanje rezultatov","startDate":"${diss_m12}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.3","type":"SS"}],"description":"Razvoj celovite strategije za izkoriščanje projektnih rezultatov, vključno z načrtom komercializacije, odprtega dostopa in integracije v politike."}
+]}
+Sledi temu vzorcu. Spremeni naslove in opise glede na kontekst, ampak DATUMI morajo biti identični. Mejnik na ali pred ${projectEnd}.
+═══════════════════════════════════════════════════════════════════`
+
+        : `YOU ARE AN EXPERIENCED EU PROJECT DISSEMINATION AND COMMUNICATION EXPERT with 20+ years of experience.
+AS AN EXPERT YOU KNOW: visual identity is established AT THE START (short setup task). Website is managed from setup UNTIL THE END. Events are organised from early phase UNTIL THE END. Publications from mid-project UNTIL THE END. Exploitation strategy from ~33% UNTIL THE END.
+WRONG = all tasks compressed to the end, all to the start, tasks ending before project end.
+
+This WP is "Dissemination, Communication and Exploitation of Results" (SECOND-TO-LAST WP).
+
+═══ IRON RULE FOR DATES (VIOLATION = REJECTION) ═══
+All tasks EXCEPT T${dissWpNum}.1 (setup) MUST have endDate = ${projectEnd}.
+
+MANDATORY DATES:
+  T${dissWpNum}.1: startDate="${projectStart}", endDate="${diss_setup_end}"  ← ONLY this one is short
+  T${dissWpNum}.2: startDate="${diss_m2}",      endDate="${projectEnd}"      ← to the end!
+  T${dissWpNum}.3: startDate="${diss_m6}",      endDate="${projectEnd}"      ← to the end!
+  T${dissWpNum}.4: startDate="${diss_m6}",      endDate="${projectEnd}"      ← to the end!
+  T${dissWpNum}.5: startDate="${diss_m12}",     endDate="${projectEnd}"      ← to the end!
+
+JSON EXAMPLE:
+{"tasks":[
+  {"id":"T${dissWpNum}.1","title":"Establishment of Visual Identity and Communication Channels","startDate":"${projectStart}","endDate":"${diss_setup_end}","dependencies":[{"predecessorId":"T1.1","type":"SS"}],"description":"Design of project visual identity, logo, graphic templates, and establishment of communication channels (website, social media profiles)."},
+  {"id":"T${dissWpNum}.2","title":"Website and Social Media Management","startDate":"${diss_m2}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.1","type":"FS"}],"description":"Ongoing management of project website with regular updates on progress, results, and events, plus active social media profile management."},
+  {"id":"T${dissWpNum}.3","title":"Organisation of Professional Events and Workshops","startDate":"${diss_m6}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.1","type":"FS"}],"description":"Planning and execution of professional events, workshops, seminars, and a closing conference for disseminating results to target groups."},
+  {"id":"T${dissWpNum}.4","title":"Preparation of Publications and Dissemination Reports","startDate":"${diss_m6}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.2","type":"SS"}],"description":"Preparation of professional publications, policy briefs, newsletters, and dissemination reports for various target audiences."},
+  {"id":"T${dissWpNum}.5","title":"Development of Results Exploitation Strategy","startDate":"${diss_m12}","endDate":"${projectEnd}","dependencies":[{"predecessorId":"T${dissWpNum}.3","type":"SS"}],"description":"Development of a comprehensive exploitation strategy including commercialisation plan, open access provisions, and policy integration roadmap."}
+]}
+Follow this pattern. Adapt titles and descriptions to the project context, but DATES must be identical. Milestone on or before ${projectEnd}.
+═══════════════════════════════════════════════════════════════════`;
+
+
 
     } else {
       wpTypeInstruction = language === 'si'
