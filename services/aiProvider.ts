@@ -297,13 +297,21 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
         throw new Error('MISSING_API_KEY');
       }
       if (response.status === 429) {
-        throw new Error('API Quota Exceeded. You have reached the rate limit. Please try again later or switch to a different model/plan.');
+        throw new Error(`RATE_LIMIT|openrouter|Rate limit reached for model ${config.model}. ${errorMsg}`);
       }
-      // ★ FIX v2.0: Handle 402 (insufficient credits) with clear message
       if (response.status === 402) {
-        throw new Error(`Insufficient OpenRouter credits. Requested ${maxTokens} max_tokens for "${options.sectionKey || 'unknown'}" section. Please add credits at https://openrouter.ai/settings/credits or switch to a free/cheaper model.`);
+        throw new Error(`INSUFFICIENT_CREDITS|openrouter|Requested ${maxTokens} tokens for "${options.sectionKey || 'unknown'}". ${errorMsg}`);
       }
-      throw new Error(`OpenRouter Error: ${errorMsg}`);
+      if (response.status === 503) {
+        throw new Error(`MODEL_OVERLOADED|openrouter|Model ${config.model} is temporarily unavailable. ${errorMsg}`);
+      }
+      if (response.status === 500 || response.status === 502) {
+        throw new Error(`SERVER_ERROR|openrouter|${errorMsg}`);
+      }
+      if (response.status === 408) {
+        throw new Error(`TIMEOUT|openrouter|Request timed out. ${errorMsg}`);
+      }
+      throw new Error(`UNKNOWN_ERROR|openrouter|HTTP ${response.status}: ${errorMsg}`);
     }
 
     const data = await response.json();
