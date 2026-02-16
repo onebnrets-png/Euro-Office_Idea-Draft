@@ -433,10 +433,9 @@ export const useGeneration = ({
 
               setIsLoading(
                 language === 'si'
-                  ? `Dopolnjujem DS ${i + 1}/${emptyWPIndices.length}: ${wp.title || wp.id}...`
-                  : `Filling WP ${i + 1}/${emptyWPIndices.length}: ${wp.title || wp.id}...`
-              );
-
+                  ? `Dopolnjujem ${wp.id} (${i + 1}/${emptyWPIndices.length}): ${wp.title || wp.id}...`
+                  : `Filling ${wp.id} (${i + 1}/${emptyWPIndices.length}): ${wp.title || wp.id}...`
+               );
               // Determine WP type
               const isLast = wpIdx === existingWPs.length - 1;
               const isSecondToLast = wpIdx === existingWPs.length - 2;
