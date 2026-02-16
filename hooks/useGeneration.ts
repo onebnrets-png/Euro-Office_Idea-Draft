@@ -515,15 +515,7 @@ export const useGeneration = ({
 
             console.warn(`[Activities] Adding missing mandatory WPs: ${missingNames.join(', ')} — generating only indices [${mandatoryIndicesToGenerate.join(', ')}]`);
 
-            // Also include any previously empty WPs in the generation
-            const allIndicesToGenerate = [...new Set([...mandatoryIndicesToGenerate, ...emptyWPIndices.map(idx => {
-              // emptyWPIndices were calculated before we inserted new WPs
-              // Need to recalculate: if we inserted WPs before these indices, shift them
-              // Simple approach: re-detect empty WPs in augmented array
-              return idx; // indices of original WPs haven't moved if we only appended/inserted at end
-            })])];
-
-            // Re-detect empty indices in the augmented array (safer approach)
+           // Re-detect empty indices in the augmented array (safer approach)
             const finalIndicesToGenerate: number[] = [];
             augmentedWPs.forEach((wp: any, idx: number) => {
               const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0
