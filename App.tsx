@@ -548,14 +548,15 @@ useEffect(() => {
               onCollapseChange={setSidebarCollapsed}
             />
 
-            {/* ═══ MAIN CONTENT ═══ */}
-            {/* ★ v2.1: Reactive marginLeft follows sidebar collapse state */}
+                        {/* ═══ MAIN CONTENT ═══ */}
+            {/* ★ v2.2: Reactive margins follow both sidebar and dashboard collapse */}
             <main style={{
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
               marginLeft: sidebarCollapsed ? 64 : 280,
+              marginRight: 0, // dashboard is in flex flow, no margin needed
               transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}>
               {/* ═══ TOOLBAR ═══ */}
@@ -576,9 +577,8 @@ useEffect(() => {
                   </div>
                 </div>
 
-                {/* Right: Action buttons — ★ FIX #3: pass colors prop */}
+                {/* Right: Action buttons */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                  {/* Group 1: Dashboard */}
                   <ToolbarButton
                     colors={colors}
                     onClick={() => setIsDashboardOpen(true)}
@@ -593,7 +593,6 @@ useEffect(() => {
 
                   <ToolbarSeparator colors={colors} />
 
-                  {/* Group 2: Save + Import */}
                   <ToolbarButton
                     colors={colors}
                     onClick={pm.handleSaveToStorage}
@@ -617,7 +616,6 @@ useEffect(() => {
 
                   <ToolbarSeparator colors={colors} />
 
-                  {/* Group 3: Export (DOCX + Summary + Print) */}
                   <ToolbarButton
                     colors={colors}
                     onClick={handleExportDocx}
@@ -656,6 +654,14 @@ useEffect(() => {
                 error={generation.error}
                 missingApiKey={auth.showAiWarning}
               />
+            </main>
+
+            {/* ═══ DASHBOARD PANEL (right side) ═══ */}
+            <DashboardPanel
+              projectData={pm.projectData}
+              language={language}
+              onCollapseChange={setDashboardCollapsed}
+            />
             </main>
           </div>
         </div>
