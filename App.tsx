@@ -548,7 +548,7 @@ useEffect(() => {
               onCollapseChange={setSidebarCollapsed}
             />
 
-                        {/* ═══ MAIN CONTENT ═══ */}
+          {/* ═══ MAIN CONTENT ═══ */}
             {/* ★ v2.2: Reactive margins follow both sidebar and dashboard collapse */}
             <main style={{
               flex: 1,
@@ -662,8 +662,7 @@ useEffect(() => {
               language={language}
               onCollapseChange={setDashboardCollapsed}
             />
-            </main>
-          </div>
+           </div>
         </div>
       )}
 
