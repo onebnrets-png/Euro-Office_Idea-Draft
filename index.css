@@ -382,3 +382,23 @@
 
 /* ─── WelcomeScreen / AuthScreen background ─── */
 .dark .bg-slate-200 { background-color: #0F172A !important; }
+/* ═══ Step-colored cards — subtle tint per chapter ═══ */
+.step-content .bg-white {
+  background: color-mix(in srgb, var(--step-card-bg, #FFFFFF) 35%, white 65%) !important;
+  border-color: color-mix(in srgb, var(--step-card-border, #E2E8F0) 50%, #E2E8F0 50%) !important;
+}
+
+.step-content .bg-white:hover {
+  background: color-mix(in srgb, var(--step-card-bg, #FFFFFF) 50%, white 50%) !important;
+}
+
+/* Dark mode variant */
+.dark .step-content .bg-white {
+  background: color-mix(in srgb, var(--step-card-bg, #1E293B) 15%, #1E293B 85%) !important;
+  border-color: color-mix(in srgb, var(--step-card-border, #334155) 30%, #334155 70%) !important;
+}
+
+.dark .step-content .bg-white:hover {
+  background: color-mix(in srgb, var(--step-card-bg, #1E293B) 25%, #1E293B 75%) !important;
+}
+
