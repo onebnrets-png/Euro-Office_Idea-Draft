@@ -531,7 +531,7 @@ const App = () => {
             />
 
             {/* ═══ MAIN CONTENT ═══ */}
-            <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginLeft: 280 }}>
               {/* ═══ TOOLBAR ═══ */}
               <div style={{
                 background: colors.surface.card,
