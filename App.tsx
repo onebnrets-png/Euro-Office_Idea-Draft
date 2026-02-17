@@ -164,6 +164,11 @@ const App = () => {
   // ─── Dark mode reactive state ────────────────────────────────────
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   const colors = isDark ? darkColors : lightColors;
+  useEffect(() => {
+  const unsub = onThemeChange((mode) => setIsDark(mode === 'dark'));
+  return unsub;
+}, []);
+  
   // ─── Sync isDark with theme toggle from Sidebar ───────────────
 useEffect(() => {
   const unsub = onThemeChange((mode) => {
