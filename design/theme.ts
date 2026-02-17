@@ -1,7 +1,7 @@
 // design/theme.ts
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Design System — Central Theme Configuration
-// v1.0 — 2026-02-17
+// v1.2 — 2026-02-17
 // 
 // Single source of truth for all visual tokens.
 // All components reference this file — NEVER hardcode colors/sizes.
@@ -313,10 +313,18 @@ export const chartColors = {
 } as const;
 
 // ─── DARK MODE COLORS ────────────────────────────────────────
+// v1.2 — 2026-02-17  Full dark palette with gradients
 
 export const darkColors = {
-  primary: { ...colors.primary },
-  secondary: { ...colors.secondary },
+  primary: {
+    ...colors.primary,
+    gradient: 'linear-gradient(135deg, #818CF8 0%, #A78BFA 100%)',
+    gradientHover: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
+  },
+  secondary: {
+    ...colors.secondary,
+    gradient: 'linear-gradient(135deg, #22D3EE 0%, #06B6D4 100%)',
+  },
   success: { ...colors.success },
   warning: { ...colors.warning },
   error: { ...colors.error },
@@ -327,6 +335,8 @@ export const darkColors = {
     sidebar: '#1A2332',
     overlay: 'rgba(0, 0, 0, 0.6)',
     overlayBlur: 'rgba(0, 0, 0, 0.5)',
+    hover: '#253348',
+    cardAlt: '#162032',
   },
 
   text: {
@@ -345,6 +355,9 @@ export const darkColors = {
     focus: '#818CF8',
   },
 } as const;
+
+// Re-export as lightColors alias for components that need explicit light ref
+export const lightColors = colors;
 
 // ─── EXPORT COMPLETE THEME ───────────────────────────────────
 
