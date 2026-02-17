@@ -329,7 +329,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     : (isUserAdmin ? 'users' : 'ai');
 
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
-
+  // ★ FIX: Re-check admin status every time the panel opens
+  useEffect(() => {
+    if (isOpen) {
+      admin.checkAdminStatus();
+    }
+  }, [isOpen]);
   // Reset active tab when panel opens or initialTab changes
   useEffect(() => {
     if (isOpen) {
