@@ -695,6 +695,81 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
         return 'No default rules available for this section.';
     }
   };
+  // ★ FIX: Build full default instructions for every section
+  const buildDefaultInstructions = (): Record<string, string> => {
+    const defaults: Record<string, string> = {};
+
+    // Global Rules
+    defaults['global'] = [
+      '═══ GLOBAL RULES ═══',
+      'These are the master rules that govern ALL AI content generation.',
+      '',
+      'ARCHITECTURE PRINCIPLE:',
+      '  Instructions.ts is the SINGLE SOURCE OF TRUTH for all AI rules.',
+      '  geminiService.ts reads from here — it has ZERO own rules.',
+      '',
+      'Edit below to customize. Click Save to apply to all users.',
+    ].join('\n');
+
+    // Language Rules
+    defaults['language'] = `═══ LANGUAGE DIRECTIVES ═══\n\n── English ──\n${LANGUAGE_DIRECTIVES.en}\n\n── Slovenščina ──\n${LANGUAGE_DIRECTIVES.si}`;
+
+    // Academic Writing
+    defaults['academic'] = `═══ ACADEMIC RIGOR & CITATION RULES ═══\n\n── English ──\n${ACADEMIC_RIGOR_RULES.en}\n\n── Slovenščina ──\n${ACADEMIC_RIGOR_RULES.si}`;
+
+    // Humanization
+    defaults['humanization'] = `═══ HUMANIZATION RULES ═══\n\n── English ──\n${HUMANIZATION_RULES.en}\n\n── Slovenščina ──\n${HUMANIZATION_RULES.si}`;
+
+    // Project Title
+    defaults['projectTitle'] = `═══ PROJECT TITLE RULES ═══\n\n── English ──\n${PROJECT_TITLE_RULES.en}\n\n── Slovenščina ──\n${PROJECT_TITLE_RULES.si}`;
+
+    // Mode Rules
+    defaults['mode'] = Object.entries(MODE_INSTRUCTIONS).map(([mode, langs]) =>
+      `═══ MODE: ${mode.toUpperCase()} ═══\n\n── English ──\n${langs.en}\n\n── Slovenščina ──\n${langs.si}`
+    ).join('\n\n════════════════════════════════════\n\n');
+
+    // Quality Gates
+    defaults['qualityGates'] = Object.entries(QUALITY_GATES).map(([section, langs]) =>
+      `═══ QUALITY GATES: ${section} ═══\n\n── English ──\n${(langs.en || []).map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')}\n\n── Slovenščina ──\n${(langs.si || []).map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')}`
+    ).join('\n\n════════════════════════════════════\n\n');
+
+    // Section Tasks
+    defaults['sectionTask'] = Object.entries(SECTION_TASK_INSTRUCTIONS).map(([section, langs]) =>
+      `═══ SECTION TASK: ${section} ═══\n\n── English ──\n${langs.en || '(empty)'}\n\n── Slovenščina ──\n${langs.si || '(empty)'}`
+    ).join('\n\n════════════════════════════════════\n\n');
+
+    // Field Rules
+    const fieldLabels = FIELD_RULE_LABELS || {};
+    const fullInstr = getFullInstructions();
+    const fieldRulesObj = fullInstr?.FIELD_RULES || {};
+    defaults['fieldRules'] = `═══ FIELD RULES ═══\n\n` + Object.entries(fieldRulesObj).map(([key, val]: [string, any]) => {
+      const label = (fieldLabels as Record<string, string>)[key] || key;
+      if (typeof val === 'string') return `── ${label} ──\n${val}`;
+      if (typeof val === 'object' && val !== null) {
+        return `── ${label} ──\nEN: ${val.en || '(empty)'}\nSI: ${val.si || '(empty)'}`;
+      }
+      return `── ${label} ──\n${JSON.stringify(val)}`;
+    }).join('\n\n');
+
+    // Translation
+    const transRules = fullInstr?.TRANSLATION_RULES;
+    defaults['translation'] = `═══ TRANSLATION RULES ═══\n\n${typeof transRules === 'string' ? transRules : (typeof transRules === 'object' ? `EN: ${transRules?.en || '(empty)'}\n\nSI: ${transRules?.si || '(empty)'}` : '(No translation rules defined)')}`;
+
+    // Summary
+    const summaryRules = fullInstr?.SUMMARY_RULES;
+    defaults['summary'] = `═══ SUMMARY RULES ═══\n\n${typeof summaryRules === 'string' ? summaryRules : (typeof summaryRules === 'object' ? `EN: ${summaryRules?.en || '(empty)'}\n\nSI: ${summaryRules?.si || '(empty)'}` : '(No summary rules defined)')}`;
+
+    // Chapter Mapping
+    const chapterLabels = CHAPTER_LABELS || {};
+    const chaptersObj = fullInstr?.CHAPTERS || {};
+    defaults['chapter'] = `═══ CHAPTER MAPPING ═══\n\n` + Object.entries(chaptersObj).map(([key, val]: [string, any]) => {
+      const label = (chapterLabels as Record<string, string>)[key] || key;
+      const text = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
+      return `── ${label} ──\n${text}`;
+    }).join('\n\n════════════════════════════════════\n\n');
+
+    return defaults;
+  };
   // ─── Tab save router ──────────────────────────────────────
 
   const handleSave = () => {
