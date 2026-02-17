@@ -239,48 +239,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     transform: mobileTransform,
   };
 
-  // ─── Collapse toggle button ────────────────────────────────
-
-  const CollapseToggle = () => (
-    <button
-      onClick={() => setIsCollapsed(!isCollapsed)}
-      style={{
-        position: 'absolute',
-        top: 12,
-        right: -12,
-        width: 24,
-        height: 24,
-        borderRadius: radii.full,
-        background: activeColors.primary[500],
-        border: `2px solid ${activeColors.surface.card}`,
-        color: activeColors.text.inverse,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: 10,
-        boxShadow: shadows.md,
-        transition: `transform ${animation.duration.fast} ${animation.easing.default}`,
-      }}
-      title={isCollapsed ? 'Expand' : 'Collapse'}
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-        <path
-          d={isCollapsed ? "M4 2L8 6L4 10" : "M8 2L4 6L8 10"}
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </button>
-  );
-
+  
   // ─── Render ────────────────────────────────────────────────
 
-    // ─── Render ────────────────────────────────────────────────
-
-  return (
+   return (
     <>
       {/* Mobile overlay */}
       {isSidebarOpen && (
