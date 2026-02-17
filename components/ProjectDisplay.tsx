@@ -1,5 +1,17 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v5.0 — 2026-02-17 — DESIGN SYSTEM CARD LAYOUT + MICRO ANIMATIONS:
+//   - FieldHeader: accent color bar, animate-fadeIn
+//   - SectionHeader: accent color bottom border + indicator bar, section-appear
+//   - GenerateButton: loading spinner, active:scale-95, hover:shadow-md
+//   - RemoveButton: rounded-lg, active:scale-95
+//   - TextArea: rounded-xl, border-slate-200, hover:shadow-md, tracking-wide label
+//   - All card wrappers: card-hover + animate-cardAppear with staggered delays
+//   - Step header: vertical accent bar from stepColors
+//   - Step content: step-transition keyed re-mount for fadeIn on step change
+//   - ReadinessLevelSelector: card-hover animation
+//   - Dark mode: fully covered by CSS .dark overrides in index.css v3.1
+//
 // v4.9 — 2026-02-17 — INLINE CHARTS FOR ALL DESCRIPTION FIELDS:
 //   - NEW: InlineChart added after each cause description (fieldContext=cause_N)
 //   - NEW: InlineChart added after each consequence description (fieldContext=consequence_N)
@@ -45,21 +57,34 @@ import Organigram from './Organigram.tsx';
 import { recalculateProjectSchedule } from '../utils.ts';
 import InlineChart from './InlineChart.tsx';
 
-const FieldHeader = ({ title, description, id = '' }) => (
-    <div className="mb-2 pt-4" id={id}>
-        <h3 className="text-lg font-semibold text-slate-700">{title}</h3>
-        <p className="text-sm text-slate-500">{description}</p>
+const FieldHeader = ({ title, description, id = '', accentColor = '' }) => (
+    <div className="mb-3 pt-5 animate-fadeIn" id={id}>
+        <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+            {accentColor && <span style={{ width: 3, height: 20, borderRadius: 2, background: accentColor, flexShrink: 0 }} />}
+            {title}
+        </h3>
+        {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
     </div>
 );
 
-const SectionHeader = ({ title, onAdd, addText, children }: { title: string; onAdd?: () => void; addText?: string; children?: React.ReactNode }) => (
-    <div className="flex justify-between items-end mb-3 pt-6 border-b border-slate-200 pb-2">
-        <h3 className="text-lg font-bold text-slate-700">{title}</h3>
+const SectionHeader = ({ title, onAdd, addText, children, accentColor = '' }: { title: string; onAdd?: () => void; addText?: string; children?: React.ReactNode; accentColor?: string }) => (
+    <div
+        className={`flex justify-between items-end mb-4 pt-6 pb-2 animate-fadeIn ${!accentColor ? 'border-b border-slate-200' : ''}`}
+        style={accentColor ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+    >
+        <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+            {accentColor && <span style={{ width: 4, height: 22, borderRadius: 3, background: accentColor, flexShrink: 0 }} />}
+            {title}
+        </h3>
         <div className="flex gap-2 items-center">
             {children}
             {onAdd && (
-                <button onClick={onAdd} className="px-3 py-1.5 text-sm font-medium bg-sky-600 text-white rounded-md hover:bg-sky-700 shadow-sm transition-colors flex items-center gap-1">
-                    <span className="text-lg leading-none">+</span> {addText}
+                <button
+                    onClick={onAdd}
+                    className="px-3 py-1.5 text-sm font-semibold text-white rounded-lg shadow-sm transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
+                    style={{ background: accentColor || '#0284c7' }}
+                >
+                    <span className="text-base leading-none font-bold">+</span> {addText}
                 </button>
             )}
         </div>
@@ -67,7 +92,7 @@ const SectionHeader = ({ title, onAdd, addText, children }: { title: string; onA
 );
 
 const RemoveButton = ({ onClick, text }) => (
-    <button onClick={onClick} className="ml-2 px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors border border-red-100">
+    <button onClick={onClick} className="ml-2 px-2.5 py-1 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all border border-red-100 hover:border-red-200 active:scale-95">
         {text}
     </button>
 );
@@ -76,15 +101,19 @@ const GenerateButton = ({ onClick, isLoading, isField = false, title, text = '',
     <button
         onClick={onClick}
         disabled={!!isLoading}
-        className={`flex items-center justify-center font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm
+        className={`flex items-center justify-center font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95
             ${isField 
-                ? (missingApiKey ? 'p-1.5 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100' : 'p-1.5 bg-white text-sky-600 border border-sky-200 hover:bg-sky-50')
-                : (missingApiKey ? 'px-3 py-1.5 text-sm bg-amber-500 text-white hover:bg-amber-600' : 'px-3 py-1.5 text-sm bg-white text-sky-700 border border-sky-200 hover:bg-sky-50')
+                ? (missingApiKey ? 'p-1.5 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100' : 'p-1.5 bg-white text-sky-600 border border-sky-200 hover:bg-sky-50 hover:shadow-md')
+                : (missingApiKey ? 'px-3 py-1.5 text-sm bg-amber-500 text-white hover:bg-amber-600' : 'px-3.5 py-1.5 text-sm bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 hover:shadow-md')
             }`
         }
         title={missingApiKey ? "Setup API Key" : title}
     >
-        {missingApiKey ? <ICONS.LOCK className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} /> : <ICONS.SPARKLES className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />}
+        {isLoading ? (
+            <div className={`mr-1.5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin ${isField ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+        ) : (
+            missingApiKey ? <ICONS.LOCK className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} /> : <ICONS.SPARKLES className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+        )}
         {isField ? '' : text}
     </button>
 );
@@ -130,7 +159,7 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
 
     return (
         <div className={className}>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+            <label className="block text-sm font-semibold text-slate-600 mb-1.5 tracking-wide">{label}</label>
             <div className="relative">
                 <textarea
                     ref={textAreaRef}
@@ -138,11 +167,11 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
                     value={value || ''}
                     onChange={(e) => onUpdate(path, e.target.value)}
                     onInput={adjustHeight}
-                    className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-10 resize-none overflow-hidden block text-base leading-relaxed shadow-sm transition-shadow hover:border-slate-400"
+                    className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-10 resize-none overflow-hidden block text-base leading-relaxed shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
                     rows={rows}
                     placeholder={placeholder}
                 />
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 focus-within:opacity-100">
                      <GenerateButton onClick={() => onGenerate(path)} isLoading={fieldIsLoading} isField title={generateTitle} missingApiKey={missingApiKey} />
                 </div>
             </div>
@@ -180,7 +209,7 @@ const ReadinessLevelSelector = ({ readinessLevels, onUpdateData, onGenerateField
                     const selectedLevelData = readinessLevels ? readinessLevels[levelKey] : { level: null, justification: '' };
 
                     return (
-                        <div key={key} className="p-5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col hover:shadow-md transition-shadow">
+                        <div key={key} className="p-5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col hover:shadow-md transition-all card-hover animate-fadeIn">
                             <div className="mb-3">
                                 <h4 className="font-bold text-slate-800 text-base">{def.name}</h4>
                                 <p className="text-xs text-slate-500 mt-1">{def.description}</p>
@@ -308,7 +337,7 @@ const renderProblemAnalysis = (props) => {
                     />
                 </SectionHeader>
                 {(causes || []).map((cause, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md">
+                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'causes'], index)} text={t.remove} /></div>
                         <TextArea label={`${t.causeTitle} #${index + 1}`} path={[...path, 'causes', index, 'title']} value={cause.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.causePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         <TextArea label={t.description} path={[...path, 'causes', index, 'description']} value={cause.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.causeDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
@@ -328,7 +357,7 @@ const renderProblemAnalysis = (props) => {
                     />
                 </SectionHeader>
                 {(consequences || []).map((consequence, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md">
+                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'consequences'], index)} text={t.remove} /></div>
                         <TextArea label={`${t.consequenceTitle} #${index + 1}`} path={[...path, 'consequences', index, 'title']} value={consequence.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.consequencePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         <TextArea label={t.description} path={[...path, 'consequences', index, 'description']} value={consequence.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.consequenceDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
@@ -478,7 +507,7 @@ const renderProjectIdea = (props) => {
                     />
                  </SectionHeader>
                  {(policies || []).map((policy, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all">
+                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'policies'], index)} text={t.remove} /></div>
                         <TextArea label={`${t.policyName} #${index + 1}`} path={[...path, 'policies', index, 'name']} value={policy.name} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.policyPlaceholder} generateTitle={`${t.generateField} ${t.policyName}`} missingApiKey={missingApiKey} />
                         <TextArea label={t.policyDesc} path={[...path, 'policies', index, 'description']} value={policy.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.policyDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
@@ -517,7 +546,7 @@ const renderGenericResults = (props, sectionKey) => {
                 />
              </SectionHeader>
              {(items || []).map((item, index) => (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all">
+                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
                     <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                     <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
@@ -548,7 +577,7 @@ const renderObjectives = (props, sectionKey) => {
                 />
              </SectionHeader>
              {(items || []).map((item, index) => (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all">
+                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
                     <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                     <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
@@ -642,7 +671,7 @@ const renderRisks = (props) => {
                 const impactLoading = isLoading === `${t.generating} impact...`;
 
                 return (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all">
+                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem(path, index)} text={t.remove} /></div>
                     
                     <div className="flex flex-wrap gap-4 mb-4">
@@ -720,7 +749,7 @@ const renderKERs = (props) => {
                 />
             </SectionHeader>
             {(kers || []).map((ker, index) => (
-                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all">
+                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem(path, index)} text={t.remove} /></div>
                      <div className="flex flex-wrap gap-4 mb-4">
                         <div className="w-28">
@@ -897,6 +926,15 @@ const ProjectDisplay = (props) => {
 
   const sectionKey = activeStep.key;
 
+  const stepColorMap: Record<string, string> = {
+    problemAnalysis: '#EF4444',
+    projectIdea: '#6366F1',
+    generalObjectives: '#06B6D4',
+    specificObjectives: '#8B5CF6',
+    activities: '#F59E0B',
+    expectedResults: '#10B981',
+  };
+
   const renderContent = () => {
     switch (sectionKey) {
         case 'problemAnalysis': return renderProblemAnalysis(props);
@@ -913,10 +951,13 @@ const ProjectDisplay = (props) => {
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-      <header className="bg-white border-b border-slate-200 px-6 py-5 flex justify-between items-center flex-shrink-0 sticky top-0 z-20 shadow-sm">
-          <div>
-              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
-              <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
+      <header className="bg-white border-b border-slate-200 px-6 py-5 flex justify-between items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn">
+          <div className="flex items-start gap-3">
+              <span style={{ width: 4, height: 36, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 4 }} />
+              <div>
+                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
+              </div>
           </div>
             <div className="flex items-center gap-4">
               {showGenerateButton && (
@@ -933,7 +974,9 @@ const ProjectDisplay = (props) => {
 
       <div id="main-scroll-container" className="flex-1 overflow-y-auto p-6 scroll-smooth relative">
         <div className="max-w-5xl mx-auto pb-20">
-          {renderContent()}
+          <div className="animate-fadeIn" key={activeStepId}>
+            {renderContent()}
+          </div>
         </div>
       </div>
     </main>
