@@ -278,6 +278,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // ─── Render ────────────────────────────────────────────────
 
+    // ─── Render ────────────────────────────────────────────────
+
   return (
     <>
       {/* Mobile overlay */}
@@ -297,8 +299,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       <aside
         style={responsiveStyle}
       >
-        <CollapseToggle />
-
         {/* ═══ HEADER ═══ */}
         <div style={{
           padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : `${spacing.lg} ${spacing.lg}`,
@@ -531,7 +531,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     title={isCollapsed ? step.title : undefined}
                   >
-                    {/* Step indicator: ProgressRing or icon */}
                     {isCollapsed ? (
                       <div style={{ position: 'relative' }}>
                         <ProgressRing
@@ -568,7 +567,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                       />
                     )}
 
-                    {/* Step title (hidden when collapsed) */}
                     {!isCollapsed && (
                       <span style={{
                         flex: 1,
@@ -584,7 +582,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                       </span>
                     )}
 
-                    {/* Completed check (expanded only) */}
                     {!isCollapsed && isCompleted && (
                       <ICONS.CHECK style={{
                         width: 18,
@@ -595,7 +592,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </button>
 
-                  {/* Sub-steps (expanded + active only) */}
                   {!isCollapsed && isActive && SUB_STEPS[step.key as keyof typeof SUB_STEPS] && (SUB_STEPS[step.key as keyof typeof SUB_STEPS] as any[]).length > 0 && (
                     <div style={{
                       paddingLeft: spacing['2xl'],
@@ -813,8 +809,43 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       </aside>
+
+      {/* ★ FIX #2: CollapseToggle OUTSIDE <aside> — position: fixed, never clipped */}
+      {(isDesktop || isSidebarOpen) && (
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          style={{
+            position: 'fixed',
+            top: 12,
+            left: sidebarWidth - 12,
+            width: 24,
+            height: 24,
+            borderRadius: radii.full,
+            background: activeColors.primary[500],
+            border: `2px solid ${activeColors.surface.card}`,
+            color: activeColors.text.inverse,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: zIndex.sidebar + 1,
+            boxShadow: shadows.md,
+            transition: `left ${animation.duration.normal} ${animation.easing.default}, transform ${animation.duration.fast} ${animation.easing.default}`,
+          }}
+          title={isCollapsed ? 'Expand' : 'Collapse'}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d={isCollapsed ? "M4 2L8 6L4 10" : "M8 2L4 6L8 10"}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
     </>
   );
-};
 
 export default Sidebar;
