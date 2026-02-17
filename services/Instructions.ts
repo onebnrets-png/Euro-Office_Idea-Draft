@@ -1,95 +1,36 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 4.6 – 2026-02-17
+// Version 5.0 – 2026-02-17
 //
 // ARCHITECTURE PRINCIPLE:
 //   This file is the ONLY place where content rules are defined.
 //   geminiService.ts reads from here — it has ZERO own rules.
 //   Anything changed here IS THE LAW — no exceptions.
 //
+// CHANGES v5.0:
+//   - EN-ONLY REFACTORING: All .si variants REMOVED from every constant
+//     EXCEPT LANGUAGE_DIRECTIVES (which tells AI "write in Slovenian").
+//   - All getter functions now ALWAYS return .en regardless of language param.
+//   - getLanguageDirective() is the ONLY function that respects language param.
+//   - Token savings: ~45,000 bytes removed (SI duplicates).
+//   - AdminPanel.tsx buildDefaultInstructions() shows EN only.
+//   - geminiService.ts remains UNCHANGED.
+//   - All previous v4.6 changes preserved.
+//
 // CHANGES v4.6:
-//   - NEW: Global Instructions override integration via globalInstructionsService.ts
-//   - Every exported accessor function now checks getGlobalOverrideSync() first.
-//   - If admin has set a global override for a specific key → that override is used.
-//   - If no override exists → hardcoded default from this file is used (unchanged behavior).
-//   - Key format: dot notation matching structure, e.g., "CHAPTERS.chapter1_problemAnalysis",
-//     "QUALITY_GATES.activities.en", "SECTION_TASK_INSTRUCTIONS.projectIdea.si", etc.
-//   - geminiService.ts remains UNCHANGED — zero modifications needed.
-//   - All previous v4.5 changes preserved.
+//   - Global Instructions override integration via globalInstructionsService.ts
+//   - Every exported accessor function checks getGlobalOverrideSync() first.
 //
-// CHANGES v4.5:
-//   - NEW: projectAcronym field rule added to FIELD_RULES (EN+SI) [3A]
-//   - NEW: ACRONYM RULES block added to SECTION_TASK_INSTRUCTIONS.projectIdea EN [3B]
-//   - NEW: PRAVILA ZA AKRONIM block added to SECTION_TASK_INSTRUCTIONS.projectIdea SI [3C]
-//   - NEW: Acronym quality checks added to QUALITY_GATES.projectIdea EN+SI [3D]
-//   - NEW: SUMMARY_RULES moved here (condensation engine)
-//   - NEW: TEMPORAL_INTEGRITY_RULE added for activities
-//   - All previous v4.4 changes preserved.
-//
-// CHANGES v4.4:
-//   - FIXED: projectManagement.si — added full FORMATIRANJE OPISA block
-//     (mirror of EN FORMATTING OF DESCRIPTION). AI now structures
-//     Slovenian implementation description into paragraphs with topic headers.
-//   - FIXED: activities EN/SI — added TASK DEPENDENCIES rules:
-//     every task (except first task T1.1) MUST have ≥1 dependency.
-//     Dependencies use predecessorId + type (FS/SS/FF/SF).
-//   - FIXED: activities EN/SI — added DELIVERABLE QUALITY rules:
-//     each deliverable must have separate title, description (2–4 sentences),
-//     and indicator (specific, measurable, includes verification method).
-//   - FIXED: activities EN/SI — added WP DURATION RULES:
-//     Project Management WP = M1–final month (full span).
-//     Dissemination WP = M1–final month (full span).
-//     Content/technical WPs are sequential with overlaps, none spans full period.
-//     Tasks within a WP are sequential, not all sharing identical dates.
-//   - FIXED: QUALITY_GATES.activities EN/SI — added 4 new checks for
-//     dependencies, deliverable quality, and WP duration compliance.
-//   - All previous v4.3 changes preserved.
-//
-// CHANGES v4.3:
-//   - FIXED: chapter5_activities section 5B — WP ordering corrected:
-//     Project Management WP is now defined as LAST (not WP1).
-//     Dissemination WP is SECOND-TO-LAST. This aligns with
-//     SECTION_TASK_INSTRUCTIONS.activities which already had
-//     the correct ordering rule.
-//   - FIXED: SECTION_TASK_INSTRUCTIONS.risks — added 'Environmental'
-//     / 'Okoljsko' risk category to instructions.
-//   - FIXED: chapter5_activities section 5C risk register — added
-//     'Environmental' category alongside Technical, Societal, Economic.
-//   - FIXED: chapter5_activities section 5B WP count — changed from
-//     "Minimum 5 work packages" to "Between 6 and 10 work packages"
-//     to match SECTION_TASK_INSTRUCTIONS.activities.
-//   - All previous v4.2 changes preserved.
-//
-// CHANGES v4.2:
-//   - FIXED: projectManagement section now has TWO distinct parts:
-//     * description field → ALL detailed narrative content (Implementation)
-//     * structure fields → SHORT role labels ONLY (for Organigram chart)
-//   - Updated SECTION_TASK_INSTRUCTIONS.projectManagement (EN + SI)
-//   - Updated CHAPTERS.chapter5_activities section 5A to enforce
-//     short labels in structure fields and full prose in description
-//   - All previous v4.1 changes preserved.
-//
-// CHANGES v4.1:
-//   - TITLE FORMAT RULES: Infinitive verb ONLY for objectives.
-//     Work packages, tasks, milestones, deliverables → noun phrase (action).
-//     Outputs, outcomes, impacts → result-oriented noun phrase.
-//     KERs → specific noun phrase (asset/product name).
-//   - Updated CHAPTERS 5 and 6 to enforce correct title formats.
-//   - Updated SECTION_TASK_INSTRUCTIONS for activities, outputs,
-//     outcomes, impacts, risks, kers to use noun phrases.
-//   - Updated QUALITY_GATES._default to enforce section-specific format.
-//   - All previous v4.0 changes preserved.
-//
-// English-only default text (AI interprets rules in English regardless
-// of output language). Slovenian prompt variants are stored alongside.
+// English-only rules — AI interprets in English regardless of output language.
+// LANGUAGE_DIRECTIVES tells the AI which language to WRITE in.
 // ═══════════════════════════════════════════════════════════════════
 
 import { storageService } from './storageService';
 import { getGlobalOverrideSync } from './globalInstructionsService.ts';
 
 // ───────────────────────────────────────────────────────────────
-// LANGUAGE DIRECTIVES
+// LANGUAGE DIRECTIVES — ★ ONLY constant that keeps .si ★
 // ───────────────────────────────────────────────────────────────
 
 export const LANGUAGE_DIRECTIVES: Record<string, string> = {
@@ -110,7 +51,7 @@ into Slovenian; do not copy English phrases.
 };
 
 // ───────────────────────────────────────────────────────────────
-// LANGUAGE MISMATCH TEMPLATE
+// LANGUAGE MISMATCH TEMPLATE — remains unchanged (string template)
 // ───────────────────────────────────────────────────────────────
 
 export const LANGUAGE_MISMATCH_TEMPLATE = `═══ INPUT LANGUAGE NOTICE ═══
@@ -125,7 +66,7 @@ INSTRUCTIONS:
 ═══════════════════════════════════════════════════════════════════`;
 
 // ───────────────────────────────────────────────────────────────
-// ACADEMIC RIGOR RULES
+// ACADEMIC RIGOR RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const ACADEMIC_RIGOR_RULES: Record<string, string> = {
@@ -155,39 +96,11 @@ These rules apply to ALL generated content WITHOUT EXCEPTION.
      b) Is this statistic plausible and from a credible source?
      c) Is the year/date accurate?
    - If ANY doubt exists, use the placeholder format from rule 3.
-═══════════════════════════════════════════════════════════════════`,
-
-  si: `═══ OBVEZNA PRAVILA AKADEMSKE STROGOSTI IN CITIRANJA ═══
-Ta pravila veljajo za VSO generirano vsebino BREZ IZJEME.
-
-1. VSEBINA TEMELJI IZKLJUČNO NA DOKAZIH
-   - Vsaka trditev, statistika ali trend MORA biti podprta s preverljivim virom.
-   - NE generiraj verjetno zvenečih, a nepreverivih izjav.
-   - Prednostni viri: Eurostat, OECD, Svetovna banka, poročila Evropske komisije,
-     agencije OZN, recenzirane revije, nacionalni statistični uradi, ACER, IEA,
-     JRC, EEA, CEDEFOP, Eurofound, WHO.
-
-2. FORMAT CITIRANJA
-   - Uporabi inline citate: (Avtor/Organizacija, Leto).
-   - MINIMUM 2–3 citati na večji odstavek ali skupino trditev.
-
-3. POLITIKA NIČELNE HALUCINACIJE
-   - NIKOLI ne izmišljuj imen organizacij, projektov ali študij.
-   - NIKOLI ne izmišljuj statistik ali odstotkov.
-   - Če ne poznaš specifičnega podatka, napiši:
-     "[Vstavite preverjen podatek: <opis potrebnega>]"
-
-4. STANDARD DVOJNE PREVERJAVE
-   - Pred vključitvijo katerekoli dejstvene trditve preveri:
-     a) Ali ta organizacija/poročilo dejansko obstaja?
-     b) Ali je ta statistika verjetna in iz verodostojnega vira?
-     c) Ali je leto/datum točen?
-   - Če obstaja KAKRŠENKOLI dvom, uporabi format označbe iz pravila 3.
 ═══════════════════════════════════════════════════════════════════`
 };
 
 // ───────────────────────────────────────────────────────────────
-// HUMANIZATION RULES
+// HUMANIZATION RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const HUMANIZATION_RULES: Record<string, string> = {
@@ -237,62 +150,11 @@ EU evaluators and AI detection tools easily identify machine-generated text.
    - Never "significant improvement" — say "a 23% reduction in processing time."
    - Never "multiple partners" — say "7 partners across 4 EU Member States."
    - Never "various activities" — say "3 workshops, 2 pilots, and 1 hackathon."
-═══════════════════════════════════════════════════════════════════`,
-
-  si: `═══ PRAVILA ZA HUMANIZACIJO BESEDILA (OBVEZNO) ═══
-Besedilo mora delovati kot da ga je napisal izkušen človeški EU svetovalec.
-EU ocenjevalci in AI detektorji zlahka prepoznajo strojno generirano besedilo.
-
-1. VARIACIJA STAVČNIH STRUKTUR
-   - Mešaj kratke stavke (8–12 besed) s srednje dolgimi (15–20) in občasno daljšimi (25–35).
-   - NIKOLI ne piši 3+ zaporednih stavkov enake dolžine ali strukture.
-   - Začni stavke z različnimi besednimi vrstami: samostalnik, predložna fraza, podredni odvisnik, prislov.
-
-2. PREPOVEDANE AI FRAZE — NE uporabljaj:
-   - "V današnjem hitro spreminjajočem se okolju..."
-   - "Pomembno je poudariti, da..."
-   - "igra ključno/odločilno vlogo"
-   - "celosten/holističen pristop"
-   - "izkoriščati sinergije"
-   - "služi kot katalizator"
-   - "utira pot"
-   - "večplasten pristop"
-   - "v luči zgoraj navedenega"
-   - "ni mogoče preceniti"
-   - Namesto tega piši neposredno, specifično, kot bi pisal izkušen svetovalec.
-
-3. PROFESIONALNA NEPOPOLNOST
-   - Resnično človeško pisanje ni simetrično. NE dajaj vsakemu elementu v seznamu
-     natančno enako strukturo stavkov ali enako število stavkov.
-   - Rahlo variraj dolžine opisov: nekateri vzroki imajo 3 stavke, drugi 4 ali 5.
-   - Občasno uporabi oklepaje (kot tukaj) za dodatni kontekst.
-   - Občasno uporabi pomišljaje — za poudarek ali stransko opombo.
-
-4. KONKRETNO NAD ABSTRAKTNIM
-   - Zamenjaj vsako abstraktno trditev s konkretno, specifično.
-   - NAPAČNO: "Različni deležniki bodo imeli koristi od izboljšanih zmogljivosti."
-   - PRAVILNO: "Občinski upravljavci energije v 12 partnerskih regijah bodo pridobili
-     praktične izkušnje z nadzorno ploščo, kar bo zmanjšalo odzivni čas s 48 ur na manj kot 4 ure."
-
-5. RAZNOVRSTNI LOGIČNI POVEZOVALCI
-   - Uporabljaj: "Posledično,", "Vzporedno s tem,", "Soroden izziv je",
-     "Na podlagi tega,", "Ob tem ozadju,", "Čeprav je bil dosežen napredek pri X,
-     stanje glede Y ostaja kritično."
-   - NE ponavljaj: "Poleg tega,", "Nadalje,", "Prav tako," — to so AI markerji.
-
-6. PREDNOST TVORNIKU
-   - "Konzorcij bo razvil..." NE "Platforma bo razvita..."
-   - Trpnik uporabi le kadar je akter resnično neznan ali nepomemben.
-
-7. KVANTIFICIRANA SPECIFIČNOST
-   - Nikoli "znatno izboljšanje" — ampak "23-odstotno zmanjšanje časa obdelave."
-   - Nikoli "številni partnerji" — ampak "7 partnerjev iz 4 držav članic EU."
-   - Nikoli "različne dejavnosti" — ampak "3 usposabljanja, 2 pilotni uvedbi in 1 hackathon."
 ═══════════════════════════════════════════════════════════════════`
 };
 
 // ───────────────────────────────────────────────────────────────
-// PROJECT TITLE RULES
+// PROJECT TITLE RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const PROJECT_TITLE_RULES: Record<string, string> = {
@@ -324,41 +186,11 @@ BAD TITLE EXAMPLES (FORBIDDEN):
 - "Innovative, sustainable, comprehensive and advanced solution" (adjective chain)
 - "GREENTRANS – Green Urban Transport Transformation" (contains acronym — FORBIDDEN)
 - "The project will establish a platform for..." (sentence with verb — FORBIDDEN)
-═══════════════════════════════════════════════════════════════════`,
-
-  si: `═══ STROGA PRAVILA ZA NAZIV PROJEKTA (projectTitle) ═══
-POZOR: To so pravila SAMO za polje "projectTitle" (naziv projekta).
-Akronim se generira LOČENO — naziv NE sme vsebovati akronima.
-
-1. DOLŽINA: med 30 in 200 znakov (NE krajši, NE daljši)
-2. OBLIKA: jedrnata IMENSKI IZRAZ — NE cel stavek, NE glagolska oblika
-3. BREZ AKRONIMA — ta se generira posebej
-4. BREZ GLAGOLOV v osebni obliki (NE "Projekt bo razvil...", NE "Razvijamo...")
-5. BREZ generičnih AI fraz ("Inovativen pristop k celovitemu razvoju...")
-6. BREZ naštevanja s vejicami ("razvoj, implementacija, testiranje in diseminacija...")
-7. BREZ naštevanja pridevnikov ("Inovativna, trajnostna, celovita in napredna rešitev")
-8. Naziv MORA odgovoriti na vprašanje: "Kaj ta projekt PRINESE / NAREDI?"
-9. Naziv je BLAGOVNA ZNAMKA projekta — jedrnat, zapomnljiv, strokoven
-
-VZORCI DOBRIH NAZIVOV:
-- "Digitalna preobrazba obrtniških veščin v čezmejnem prostoru"
-- "Krožno gospodarstvo v lesnopredelovalni industriji Podonavja"
-- "Zeleni prehod mobilnosti v srednje velikih mestih"
-- "Krepitev digitalnih kompetenc mladih na podeželju"
-- "Trajnostna prehranska veriga v alpskem prostoru"
-- "Medgeneracijski prenos znanj v kulturni dediščini"
-
-VZORCI SLABIH NAZIVOV (PREPOVEDANO):
-- "Projekt za razvoj inovativnih rešitev za trajnostno preobrazbo" (preveč generično)
-- "Razvijamo nove pristope k celovitemu reševanju izzivov" (stavek z glagolom)
-- "Inovativna, trajnostna, celovita in napredna rešitev" (naštevanje pridevnikov)
-- "GREENTRANS – Zelena preobrazba prometa" (vsebuje akronim — PREPOVEDANO)
-- "Projekt bo vzpostavil platformo za..." (stavek z glagolom — PREPOVEDANO)
 ═══════════════════════════════════════════════════════════════════`
 };
 
 // ───────────────────────────────────────────────────────────────
-// MODE INSTRUCTIONS (fill / enhance / regenerate)
+// MODE INSTRUCTIONS (fill / enhance / regenerate) — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const MODE_INSTRUCTIONS: Record<string, Record<string, string>> = {
@@ -368,13 +200,7 @@ RULES:
 1. KEEP all existing non-empty fields exactly as they are — do NOT modify them.
 2. GENERATE professional content ONLY for fields that are empty strings ("") or missing.
 3. If a list has fewer items than recommended, ADD NEW ITEMS.
-4. Ensure valid JSON output.`,
-    si: `NAČIN: DOPOLNJEVANJE MANJKAJOČEGA.
-PRAVILA:
-1. OHRANI vsa obstoječa neprazna polja natančno takšna, kot so — NE spreminjaj jih.
-2. GENERIRAJ strokovno vsebino SAMO za polja, ki so prazni nizi ("") ali manjkajoča.
-3. Če ima seznam manj elementov od priporočenega, DODAJ NOVE ELEMENTE.
-4. Zagotovi veljaven JSON objekt.`
+4. Ensure valid JSON output.`
   },
   enhance: {
     en: `MODE: PROFESSIONAL ENHANCEMENT OF EXISTING CONTENT.
@@ -392,34 +218,16 @@ RULES:
 8. ZERO HALLUCINATION — if unsure: "[Insert verified data: ...]".
 9. NO MARKDOWN: do not use ** ## \`.
 10. HUMANIZE: write like an experienced human consultant, vary sentence structure.
-11. Ensure valid JSON output.`,
-    si: `NAČIN: STROKOVNA IZBOLJŠAVA OBSTOJEČEGA BESEDILA.
-
-Naloga: STROKOVNO IZBOLJŠAJ, POGLOBI in DODELAJ obstoječo vsebino.
-
-PRAVILA:
-1. OHRANI pomen in tematiko — NE spreminjaj vsebinskega fokusa.
-2. IZBOLJŠAJ: dodaj strokovno EU terminologijo, poglobi argumente.
-3. DODAJ CITATE iz REALNIH virov.
-4. PODALJŠAJ: kratka polja razširi na vsaj 3–5 stavkov.
-5. DOPOLNI: če je seznam kratek, DODAJ NOVE ELEMENTE.
-6. POPRAVI napake.
-7. NE BRIŠI obstoječih elementov.
-8. NE HALUCINIRAJ — če nisi prepričan: "[Vstavite preverjen podatek: ...]".
-9. BREZ MARKDOWN: ne uporabljaj ** ## \`.
-10. HUMANIZIRAJ: piši kot izkušen človeški svetovalec, variraj stavke.
-11. Zagotovi veljaven JSON objekt.`
+11. Ensure valid JSON output.`
   },
   regenerate: {
     en: `MODE: FULL REGENERATION.
-Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown (**, ##, \`). Write like an experienced human consultant — vary sentence structures. If unknown: '[Insert verified data: ...]'.`,
-    si: `NAČIN: POPOLNA PONOVNA GENERACIJA.
-Generiraj popolnoma nov, celovit, strokoven odgovor. Vsak opis MORA vsebovati citate iz REALNIH virov. BREZ markdown (**, ##, \`). Piši kot izkušen človeški svetovalec — variraj stavčne strukture. Če ne poznaš podatka: '[Vstavite preverjen podatek: ...]'.`
+Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown (**, ##, \`). Write like an experienced human consultant — vary sentence structures. If unknown: '[Insert verified data: ...]'.`
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// QUALITY GATES (per section)
+// QUALITY GATES (per section) — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
@@ -437,25 +245,8 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'If unsure about a number, use "[Insert verified data: ...]" placeholder',
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
-    ],
-    si: [
-      'Vsak opis vzroka vsebuje ≥1 specifičen citat v formatu (Ime vira, Leto)',
-      'Vsak opis posledice vsebuje ≥1 specifičen citat v formatu (Ime vira, Leto)',
-      'Izjava o osrednjem problemu vključuje vsaj en kvantitativni kazalnik',
-      'Vsak opisni odstavek ima ≥3 vsebinske, analitične stavke — brez polnil',
-      'Brez nejasnih fraz kot "različni deležniki", "različni vidiki" — bodi specifičen',
-      'Navedenih je vsaj 5 ločenih, neprekrivajočih se vzrokov',
-      'Navedene so vsaj 4 ločene posledice, vsaj ena se sklicuje na EU politiko',
-      'Vzroki so logično urejeni: najprej temeljni vzroki, nato neposredni',
-      'Vsi navedeni viri so resnični, preverljivi — NE izmišljuj statistik',
-      'Če nisi prepričan o številki, uporabi "[Vstavite preverjen podatek: ...]"',
-      'Brez prepovedanih AI fraz (sinergije, holističen, celosten, katalizator itd.)',
-      'Dolžine stavkov se razlikujejo — brez 3+ zaporednih stavkov enake dolžine',
     ]
   },
-  // ═══════════════════════════════════════════════════════════════
-  // v4.5 FIX [3D]: Added projectAcronym quality checks
-  // ═══════════════════════════════════════════════════════════════
   projectIdea: {
     en: [
       'projectTitle is a concise noun phrase (30–200 chars), NO acronym, NO full sentence',
@@ -469,24 +260,8 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'All cited projects and policies are real and verifiable — no fabricated names',
       'No banned AI phrases — write like a senior human consultant',
       'Sentence lengths and structures vary naturally throughout',
-    ],
-    si: [
-      'projectTitle je jedrnata imenski izraz (30–200 znakov), BREZ akronima, BREZ celega stavka',
-      'projectAcronym je 3–8 velikih črk, izpeljan iz ključnih besed projectTitle, je izgovorljiv ali prepoznavna kratica, in NI generična beseda (npr. PROJEKT, EVROPA)',
-      'Stanje tehnike navaja ≥3 specifične obstoječe projekte/študije z imeni in letnicami',
-      'Predlagana rešitev se ZAČNE s 5–8 stavkov dolgim uvodnim odstavkom PRED fazami',
-      'Faze predlagane rešitve uporabljajo golo besedilo za naslove (brez ** ali ## markdown)',
-      'Glavni cilj je en celovit stavek, ki se začne z glagolom v nedoločniku',
-      'Navedene so vsaj 3 relevantne EU politike s specifičnimi opisi usklajenosti',
-      'Vse stopnje pripravljenosti vključujejo specifično utemeljitev (ne samo številke)',
-      'Vsi navedeni projekti in politike so resnični in preverljivi — brez izmišljenih imen',
-      'Brez prepovedanih AI fraz — piši kot izkušen človeški svetovalec',
-      'Dolžine in strukture stavkov se naravno razlikujejo skozi besedilo',
     ]
   },
-  // ═══════════════════════════════════════════════════════════════
-  // v4.4 FIX: Added dependency, deliverable, and WP duration checks
-  // ═══════════════════════════════════════════════════════════════
   activities: {
     en: [
       'The LAST WP (highest number) is "Project Management and Coordination" — NOT any other topic',
@@ -512,31 +287,6 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'NO task endDate exceeds the project end date ({{projectEnd}})',
       'NO milestone date exceeds the project end date ({{projectEnd}})',
       'Final reporting task and closing milestone are scheduled ON or BEFORE the project end date',
-    ],
-    si: [
-      'ZADNJI DS (najvišja številka) je "Upravljanje in koordinacija projekta" — NE nobena druga tema',
-      'PREDZADNJI DS je "Diseminacija, komunikacija in izkoriščanje rezultatov"',
-      'DS1 je temeljni/analitični DS — NE projektno vodenje',
-      'Skupno število DS je med 6 in 10',
-      'Vsak DS ima vsaj 1 mejnik z datumom v formatu YYYY-MM-DD',
-      'Vsak DS ima vsaj 1 dosežek z ločenima poljema naslov in opis',
-      'Vsaka naloga ima startDate in endDate v formatu YYYY-MM-DD',
-      'Vsi naslovi DS in nalog uporabljajo SAMOSTALNIŠKE ZVEZE, ne nedoločnik',
-      'Brez markdown formatiranja v nobenem besedilnem polju',
-      'Vsaka naloga (razen prve naloge T1.1) ima vsaj 1 odvisnost v polju dependencies',
-      'Odvisnosti navajajo samo veljavne predecessorId vrednosti iz nalog, ki obstajajo v projektu',
-      'Tipi odvisnosti so veljavni: FS (konec-začetek), SS (začetek-začetek), FF (konec-konec) ali SF (začetek-konec)',
-      'Obstajajo meddelovne odvisnosti — vsaj nekatere naloge so odvisne od nalog v DRUGIH delovnih sklopih',
-      'Vsak naslov dosežka je jedrnata samostalniška zveza (3–10 besed)',
-      'Vsak opis dosežka ima 2–4 vsebinske stavke, ki pojasnjujejo obseg, format in vsebino',
-      'Vsak kazalnik dosežka je specifičen in merljiv — vključuje količino, format in način preverjanja',
-      'DS za upravljanje projekta traja CELOTNO trajanje projekta (M1 do zadnjega meseca)',
-      'DS za diseminacijo traja CELOTNO trajanje projekta (M1 do zadnjega meseca)',
-      'Noben vsebinski/tehnični DS ne traja celotno obdobje projekta — vsak pokriva specifično fazo',
-      'Naloge znotraj vsakega DS so zaporedne ali zamaknjene — NE vse z enakimi začetnimi in končnimi datumi',
-      'NOBEN endDate naloge ne presega datuma zaključka projekta ({{projectEnd}})',
-      'NOBEN datum mejnika ne presega datuma zaključka projekta ({{projectEnd}})',
-      'Zaključna poročevalska naloga in zaključni mejnik sta načrtovana NA ali PRED datumom zaključka projekta',
     ]
   },
   _default: {
@@ -549,23 +299,12 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'No markdown formatting (no **, no ##, no `) in output text',
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
-    ],
-    si: [
-      'Vsak opis ima ≥3 vsebinske stavke',
-      'Vsi naslovi uporabljajo PRAVILNO obliko za svoj razdelek (nedoločnik za cilje, samostalniška zveza za aktivnosti/rezultate/KER) — glej PRAVILA ZA FORMAT NASLOVOV',
-      'Brez nejasnih fraz — bodi specifičen in analitičen',
-      'Vsebina je neposredno povezana s kontekstom projekta in analizo problemov',
-      'Vsak naveden vir mora biti resničen in preverljiv',
-      'Brez markdown formatiranja (brez **, brez ##, brez `)',
-      'Brez prepovedanih AI fraz (sinergije, holističen, celosten, katalizator itd.)',
-      'Dolžine stavkov se razlikujejo — brez 3+ zaporednih stavkov enake dolžine',
     ]
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// SECTION TASK INSTRUCTIONS
-// Templates with {{placeholders}} replaced at runtime
+// SECTION TASK INSTRUCTIONS — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const SECTION_TASK_INSTRUCTIONS: Record<string, Record<string, string>> = {
@@ -584,26 +323,8 @@ MANDATORY:
 - NEVER write generic descriptions without evidence.
 - If unknown: "[Insert verified data: <description>]".
 - NO markdown (**, ##, \`).
-- Write like an experienced human consultant — vary sentence structures.`,
-    si: `UPORABNIKOV VNOS ZA OSREDNJI PROBLEM:
-{{userInput}}
-
-NALOGA: Na podlagi ZGORNJEGA VNOSA ustvari (ali dopolni) podrobno analizo problemov.
-
-OBVEZNE ZAHTEVE:
-- Generirani naslov in opis MORATA biti neposredno povezana z uporabnikovim vnosom.
-- NE izmišljuj nepovezanih tem.
-- Vsak VZROK: naslov + opis s 3–5 stavki + vsaj 1 citat iz REALNEGA vira.
-- Vsaka POSLEDICA: naslov + opis s 3–5 stavki + vsaj 1 citat iz REALNEGA vira.
-- Osrednji problem MORA vključevati kvantitativni kazalnik.
-- NIKOLI generičnih opisov brez podatkov.
-- Če ne poznaš podatka: "[Vstavite preverjen podatek: <opis>]".
-- BREZ markdown (**, ##, \`).
-- Piši kot izkušen človeški svetovalec — variraj stavke.`
+- Write like an experienced human consultant — vary sentence structures.`
   },
-  // ═══════════════════════════════════════════════════════════════
-  // v4.5 FIX [3B + 3C]: Added ACRONYM RULES blocks
-  // ═══════════════════════════════════════════════════════════════
   projectIdea: {
     en: `{{titleContext}}Based on the problem analysis, develop (or complete) a comprehensive project idea.
 
@@ -624,40 +345,14 @@ MANDATORY:
 - EU policies must be real and verifiable.
 - If unknown project: "[Insert verified project: <topic>]".
 - NO markdown (**, ##, \`).
-- Write like an experienced human consultant — vary sentences, avoid AI phrases.`,
-    si: `{{titleContext}}Na podlagi analize problemov razvij (ali dopolni) celovito projektno idejo.
-
-PRAVILA ZA AKRONIM (polje projectAcronym):
-- Generiraj projektni AKRONIM, izpeljan iz ključnih besed polja projectTitle.
-- DOLŽINA: 3–8 velikih črk. Primer: "GREENTRANS", "DIGI-CRAFT", "ALPSUST".
-- Akronim MORA biti izgovorljiv ali prepoznavna kratica.
-- Akronim NE SME biti generična beseda (npr. "PROJEKT", "EVROPA", "DIGITAL").
-- Akronim NE SME podvajati celotnega naziva — je KRATKA koda.
-- Če naziv vsebuje geografsko ali tematsko ključno besedo, jo poskusi vključiti.
-- Vezaji so dovoljeni (npr. "DIGI-CRAFT"), ampak niso obvezni.
-- Akronim vstavi SAMO v polje "projectAcronym" — NE v projectTitle.
-
-OBVEZNE ZAHTEVE:
-- Stanje tehnike MORA navajati vsaj 3 RESNIČNE obstoječe projekte/študije z imeni in letnicami.
-- Predlagana rešitev MORA začeti s CELOVITIM UVODNIM ODSTAVKOM (5–8 stavkov) pred fazami.
-- Faze: golo besedilo "Faza 1: Naslov" — NE "**Faza 1: Naslov**".
-- EU politike morajo biti resnične in preverljive.
-- Če ne poznaš projekta: "[Vstavite preverjen projekt: <tematika>]".
-- BREZ markdown (**, ##, \`).
-- Piši kot izkušen človeški svetovalec — variraj stavke, izogibaj se AI frazam.`
+- Write like an experienced human consultant — vary sentences, avoid AI phrases.`
   },
   generalObjectives: {
-    en: 'Define 3–5 general objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Strengthen…", "Develop…"). At least 3 substantive sentences. No markdown. Vary sentence structures.',
-    si: 'Opredeli 3–5 splošnih ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Okrepiti…", "Razviti…"). Vsaj 3 vsebinske stavke. BREZ markdown. Variraj stavčne strukture.'
+    en: 'Define 3–5 general objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Strengthen…", "Develop…"). At least 3 substantive sentences. No markdown. Vary sentence structures.'
   },
   specificObjectives: {
-    en: 'Define at least 5 S.M.A.R.T. objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Develop…", "Increase…"). Measurable KPI. No markdown. Vary sentence structures.',
-    si: 'Opredeli vsaj 5 S.M.A.R.T. ciljev.\nOBVEZNO: Naslov MORA uporabljati NEDOLOČNIK (npr. "Razviti…", "Povečati…"). Merljiv KPI. BREZ markdown. Variraj stavčne strukture.'
+    en: 'Define at least 5 S.M.A.R.T. objectives.\nMANDATORY: Title MUST use INFINITIVE VERB (e.g., "Develop…", "Increase…"). Measurable KPI. No markdown. Vary sentence structures.'
   },
-
-  // ═══════════════════════════════════════════════════════════════
-  // v4.4 FIX: SI block now has full FORMATIRANJE OPISA section
-  // ═══════════════════════════════════════════════════════════════
   projectManagement: {
     en: `Create a DETAILED project management section with TWO distinct parts:
 
@@ -684,40 +379,8 @@ These fields appear as LABELS in the organigram chart. They MUST contain ONLY sh
 - steeringCommittee: e.g., "Steering Committee (UO)"
 - advisoryBoard: e.g., "Advisory Board (SO)"
 - wpLeaders: e.g., "WP Leaders (VDS)"
-CRITICAL: Do NOT put descriptions, explanations, or long text in structure fields. These are chart labels ONLY. All detailed descriptions go in the description field above.`,
-
-    si: `Ustvari PODROBEN razdelek o upravljanju projekta z DVEMA ločenima deloma:
-
-DEL 1 — POLJE OPIS (projectManagement.description):
-To je GLAVNO vsebinsko polje. MORA vsebovati celovito besedilo (najmanj 500 besed), ki pokriva VSE naslednje:
-1. UPRAVLJAVSKA STRUKTURA – Vloge z EU kraticami: PK, UO, SO, VDS. Odgovornosti in pooblastila vsake vloge.
-2. MEHANIZMI ODLOČANJA – Operativna, strateška, eskalacijska raven. Glasovanje, sklepčnost, pogostost sestankov.
-3. ZAGOTAVLJANJE KAKOVOSTI – Notranje revizije, medsebojne evalvacije, zunanje presoje, referenčne točke, standardi poročanja.
-4. PRISTOP K OBVLADOVANJU TVEGANJ – Identifikacija, ocena, spremljanje, blaženje. Referenca na register tveganj (5C).
-5. NOTRANJE KOMUNICIRANJE – Orodja, urniki, verige poročanja, upravljanje dokumentov.
-6. REŠEVANJE KONFLIKTOV – Eskalacija: neformalno → mediacija koordinatorja → formalna arbitraža.
-7. UPRAVLJANJE PODATKOV IN ODPRTA ZNANOST – Načela FAIR, vrste dostopa, podrobnosti repozitorija.
-Piši v tekočih odstavkih proze, NE v točkastih seznamih. Brez markdown. Piši kot izkušen svetovalec.
-
-FORMATIRANJE OPISA:
-- Opis strukturiraj v JASNE ODSTAVKE, ločene z dvojnimi novimi vrsticami (\\n\\n).
-- Vsaka večja tema (upravljavska struktura, mehanizmi odločanja, zagotavljanje kakovosti, obvladovanje tveganj, komuniciranje, reševanje konfliktov, upravljanje podatkov) mora biti SVOJ ODSTAVEK.
-- Vsak odstavek začni z naslovom teme v goli besedilni obliki v svoji vrstici, npr.: "Upravljavska struktura" in nato nova vrstica s tekočim opisnim besedilom.
-- NE piši enega neprekinjenega bloka besedila. Besedilo mora biti berljivo z jasno vizualno ločitvijo med temami.
-
-DEL 2 — STRUKTURNA POLJA (projectManagement.structure):
-Ta polja se prikazujejo kot OZNAKE v organigramu. MORAJO vsebovati SAMO kratke nazive vlog (največ 5–8 besed):
-- coordinator: npr. "Koordinator projekta (PK)"
-- steeringCommittee: npr. "Usmerjevalni odbor (UO)"
-- advisoryBoard: npr. "Svetovalni odbor (SO)"
-- wpLeaders: npr. "Vodja delovnega sklopa (VDS)"
-KLJUČNO: V strukturna polja NE vstavljaj opisov, pojasnil ali dolgega besedila. To so SAMO oznake za grafikon. Vsi podrobni opisi gredo v polje opis zgoraj.`
+CRITICAL: Do NOT put descriptions, explanations, or long text in structure fields. These are chart labels ONLY. All detailed descriptions go in the description field above.`
   },
-
-  // ═══════════════════════════════════════════════════════════════
-  // v4.4 FIX: Added TASK DEPENDENCIES, DELIVERABLE QUALITY, and
-  //           WP DURATION RULES to activities instructions
-  // ═══════════════════════════════════════════════════════════════
   activities: {
     en: `Generate between 6 and 10 Work Packages with tasks, milestones and deliverables.
 
@@ -782,102 +445,25 @@ MILESTONES:
 - Each WP must have at least 1 milestone.
 - Milestone date in YYYY-MM-DD format. Place at logical completion points.
 
-No markdown. Write like an experienced EU project consultant.`,
-    si: `Generiraj med 6 in 10 delovnih sklopov z nalogami, mejniki in dosežki.
-
-ABSOLUTNA ČASOVNA OMEJITEV PROJEKTA:
-- Datum ZAČETKA projekta: {{projectStart}}
-- Datum KONCA projekta: {{projectEnd}} (skupno {{projectDurationMonths}} mesecev)
-- VSAK startDate naloge MORA biti ≥ {{projectStart}}
-- VSAK endDate naloge MORA biti ≤ {{projectEnd}}
-- VSAK datum mejnika MORA biti ≤ {{projectEnd}}
-- VSAK DS se mora začeti na ali po {{projectStart}} in končati na ali pred {{projectEnd}}
-- NOBENA aktivnost, naloga, mejnik ali dosežek NE SME biti načrtovan PO {{projectEnd}}
-- Naloge diseminacije, eksploatacije in poročanja MORAJO biti zaključene do {{projectEnd}}
-- Zaključno projektno poročilo in zaključni mejnik MORATA biti na ali pred {{projectEnd}}
-- To je NEIZPODBOJNO — vsak datum izven tega obsega je USODNA NAPAKA
-
-PRAVILA ZA FORMAT NASLOVOV:
-- Naslovi DS: samostalniška zveza (npr. "Izhodiščna analiza in kartiranje deležnikov")
-- Naslovi nalog: samostalniška zveza (npr. "Razvoj učnega kurikula")
-- Opisi mejnikov: samostalniška zveza (npr. "Zaključek pilotne faze")
-- Naslovi dosežkov: samostalniška zveza (npr. "Poročilo o vključevanju deležnikov")
-- NE uporabljaj nedoločnikov za nobeno od teh.
-
-VRSTNI RED DELOVNIH SKLOPOV (OBVEZNO):
-- DS1: temeljni/analitični (npr. "Izhodiščna analiza in ocena potreb")
-- DS2–DS(N-2): vsebinski/tematski delovni sklopi v logičnem zaporedju
-- DS(N-1) (predzadnji): "Diseminacija, komunikacija in izkoriščanje rezultatov"
-- DS(N) (zadnji): "Upravljanje in koordinacija projekta"
-
-PRAVILA ZA TRAJANJE DS (OBVEZNO):
-- DS "Upravljanje in koordinacija projekta" MORA trajati CELOTNO obdobje projekta — od prvega meseca (M1) do zadnjega meseca.
-- DS "Diseminacija, komunikacija in izkoriščanje rezultatov" MORA prav tako trajati CELOTNO obdobje projekta — od M1 do zadnjega meseca.
-- Vsebinski/tematski DS (DS1 do DS(N-2)) morajo biti ZAPOREDNI z delnim prekrivanjem. Primer za 36-mesečni projekt: DS1 pokriva M1–M10, DS2 pokriva M6–M18, DS3 pokriva M14–M26, DS4 pokriva M22–M34, itd.
-- NOBEN vsebinski/tematski DS ne sme trajati celotno obdobje projekta.
-- Naloge ZNOTRAJ vsakega DS morajo biti zaporedne ali zamaknjene — NE dajaj vsem nalogam v DS enakega startDate in endDate.
-
-SOODVISNOSTI NALOG (OBVEZNO):
-- Prva naloga projekta (T1.1) NIMA odvisnosti (je izhodišče).
-- VSAKA DRUGA naloga MORA imeti vsaj 1 odvisnost v svojem polju "dependencies".
-- Vsak objekt odvisnosti ima: { "predecessorId": "T<ds>.<naloga>", "type": "FS" | "SS" | "FF" | "SF" }
-- FS (konec-začetek) je najpogostejši: naslednica se začne po zaključku predhodnice.
-- SS (začetek-začetek): obe nalogi se začneta istočasno.
-- FF (konec-konec): obe nalogi se zaključita istočasno.
-- SF (začetek-konec): naslednica se zaključi, ko se predhodnica začne (redko).
-- MEDDELOVNE odvisnosti MORAJO obstajati: npr. T2.1 je odvisna od T1.3 (FS), T3.1 od T2.2 (FS).
-- Znotraj DS imajo zaporedne naloge FS odvisnosti: T1.2 je odvisna od T1.1, T1.3 od T1.2 itd.
-- Vzporedne naloge znotraj DS lahko uporabijo SS odvisnosti.
-
-POLJA DOSEŽKOV (OBVEZNO):
-- Vsak dosežek MORA imeti TRI ločena polja:
-  1. "title" — jedrnata samostalniška zveza (3–10 besed), npr. "Poročilo o vključevanju deležnikov"
-  2. "description" — 2–4 vsebinski stavki, ki pojasnjujejo kaj dosežek vsebuje, njegov format, obseg in ciljno publiko. NE ponavljaj samo naslova.
-  3. "indicator" — SPECIFIČEN in MERLJIV kriterij preverjanja. Vključi: količino/format (npr. "1 PDF poročilo"), obseg (npr. "ki pokriva vseh 12 partnerskih regij") in način preverjanja (npr. "pregledano in potrjeno s strani Usmerjevalnega odbora").
-- NAPAČEN kazalnik: "Poročilo oddano" (preveč nejasno)
-- PRAVILEN kazalnik: "1 PDF poročilo (min. 40 strani) z izhodiščnimi podatki iz 12 regij, recenzirano s strani 2 zunanjih strokovnjakov in potrjeno s strani Usmerjevalnega odbora do M10"
-
-NALOGE:
-- Vsak DS mora imeti 2–5 nalog.
-- Vsaka naloga: id, title, description (2–4 stavki), startDate, endDate, dependencies.
-- Opisi nalog morajo pojasniti metodologijo, ne le ponoviti naslova.
-
-MEJNIKI:
-- Vsak DS mora imeti vsaj 1 mejnik.
-- Datum mejnika v formatu YYYY-MM-DD. Postavi na logične zaključne točke.
-
-Brez markdown. Piši kot izkušen EU projektni svetovalec.`
+No markdown. Write like an experienced EU project consultant.`
   },
-
   outputs: {
     en: `Generate 5–8 concrete project outputs (direct deliverables).
 Each output: title (result-oriented noun phrase), description (3–5 sentences, mentions specific WP link), measurable indicator.
 Title MUST be a result-oriented noun phrase: "Digital Competence Curriculum" NOT "Develop a curriculum".
-No markdown. Vary sentence structures.`,
-    si: `Generiraj 5–8 konkretnih neposrednih rezultatov projekta (outputi).
-Vsak rezultat: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov, navede povezavo z DS), merljiv kazalnik.
-Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Kurikul digitalnih kompetenc" NE "Razviti kurikul".
-Brez markdown. Variraj stavčne strukture.`
+No markdown. Vary sentence structures.`
   },
   outcomes: {
     en: `Generate 4–6 medium-term project outcomes (changes resulting from outputs).
 Each outcome: title (result-oriented noun phrase), description (3–5 sentences), indicator with target value and timeline.
 Title MUST be result-oriented noun phrase: "Increased Digital Literacy Among Rural Youth" NOT "Increase digital literacy".
-No markdown. Vary sentence structures.`,
-    si: `Generiraj 4–6 srednjeročnih rezultatov projekta (outcomes).
-Vsak rezultat: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov), kazalnik s ciljno vrednostjo in časovnico.
-Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Povečana digitalna pismenost mladih na podeželju" NE "Povečati digitalno pismenost".
-Brez markdown. Variraj stavčne strukture.`
+No markdown. Vary sentence structures.`
   },
   impacts: {
     en: `Generate 3–5 long-term strategic impacts aligned with EU policy objectives.
 Each impact: title (result-oriented noun phrase), description (3–5 sentences linking to EU goals), indicator with baseline and target.
 Title MUST be result-oriented noun phrase: "Enhanced Cross-Border Innovation Ecosystem" NOT "Enhance the ecosystem".
-No markdown. Vary sentence structures.`,
-    si: `Generiraj 3–5 dolgoročnih strateških učinkov, usklajenih s cilji politik EU.
-Vsak učinek: naslov (rezultatsko usmerjena samostalniška zveza), opis (3–5 stavkov s povezavo na EU cilje), kazalnik z izhodiščem in ciljno vrednostjo.
-Naslov MORA biti rezultatsko usmerjena samostalniška zveza: "Okrepljen čezmejni inovacijski ekosistem" NE "Okrepiti ekosistem".
-Brez markdown. Variraj stavčne strukture.`
+No markdown. Vary sentence structures.`
   },
   risks: {
     en: `Generate 8–12 project risks across ALL FOUR categories:
@@ -888,31 +474,18 @@ Brez markdown. Variraj stavčne strukture.`
 
 Each risk: id, category (lowercase: technical/social/economic/environmental), title, description (2–4 sentences), likelihood (low/medium/high), impact (low/medium/high), mitigation strategy (2–4 sentences).
 Use NOUN PHRASES for titles: "Insufficient Partner Engagement" NOT "Partners might not engage".
-No markdown. Vary sentence structures.`,
-    si: `Generiraj 8–12 projektnih tveganj v VSEH ŠTIRIH kategorijah:
-- technical (tehnološke napake, integracijske težave)
-- social (odpor deležnikov, nizka udeležba)
-- economic (prekoračitev proračuna, tržne spremembe)
-- environmental (podnebni dogodki, regulativne spremembe, okoljska skladnost)
-
-Vsako tveganje: id, category (male črke: technical/social/economic/environmental), naslov, opis (2–4 stavki), likelihood (low/medium/high), impact (low/medium/high), strategija blaženja (2–4 stavki).
-Naslove napiši kot SAMOSTALNIŠKE ZVEZE: "Nezadostna vključenost partnerjev" NE "Partnerji se morda ne bodo vključili".
-Brez markdown. Variraj stavčne strukture.`
+No markdown. Vary sentence structures.`
   },
   kers: {
     en: `Generate 4–6 Key Exploitable Results (KERs).
 Each KER: id, title (specific noun phrase — the product/asset name), description (3–5 sentences about what it is, who will use it, and how it differs from existing solutions), exploitation strategy (3–5 sentences detailing commercialisation, licensing, open-access, or policy integration plan).
 Title MUST be a specific asset/product name: "GreenGrid Decision Support Tool" NOT "Development of a tool".
-No markdown. Vary sentence structures.`,
-    si: `Generiraj 4–6 ključnih rezultatov za izkoriščanje (KER).
-Vsak KER: id, naslov (specifična samostalniška zveza — ime produkta/sredstva), opis (3–5 stavkov o tem, kaj je, kdo bo to uporabljal in kako se razlikuje od obstoječih rešitev), strategija izkoriščanja (3–5 stavkov s podrobnostmi o komercializaciji, licenciranju, odprtem dostopu ali načrtu integracije v politike).
-Naslov MORA biti specifično ime sredstva/produkta: "Orodje za podporo odločanju GreenGrid" NE "Razvoj orodja".
-Brez markdown. Variraj stavčne strukture.`
+No markdown. Vary sentence structures.`
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// CHAPTERS (long-form rules for each section)
+// CHAPTERS (long-form rules for each section) — EN only (unchanged)
 // ───────────────────────────────────────────────────────────────
 
 export const CHAPTERS: Record<string, string> = {
@@ -1015,7 +588,7 @@ Each includes exploitation strategy.`
 };
 
 // ───────────────────────────────────────────────────────────────
-// GLOBAL RULES
+// GLOBAL RULES — unchanged (already EN only)
 // ───────────────────────────────────────────────────────────────
 
 export const GLOBAL_RULES = `
@@ -1032,50 +605,38 @@ export const GLOBAL_RULES = `
 `;
 
 // ───────────────────────────────────────────────────────────────
-// FIELD-SPECIFIC RULES
-// ═══════════════════════════════════════════════════════════════
-// v4.5 FIX [3A]: Added projectAcronym field rule
-// ═══════════════════════════════════════════════════════════════
+// FIELD-SPECIFIC RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const FIELD_RULES: Record<string, Record<string, string>> = {
   title: {
-    en: 'Generate a concise, professional title. Follow the title format rules for this section type.',
-    si: 'Generiraj jedrnat, strokoven naslov. Upoštevaj pravila za format naslova za ta tip razdelka.'
+    en: 'Generate a concise, professional title. Follow the title format rules for this section type.'
   },
   description: {
-    en: 'Generate a detailed professional description. Minimum 3 substantive sentences. Include evidence and citations where appropriate. No markdown.',
-    si: 'Generiraj podroben strokoven opis. Najmanj 3 vsebinski stavki. Vključi dokaze in citate, kjer je primerno. Brez markdown.'
+    en: 'Generate a detailed professional description. Minimum 3 substantive sentences. Include evidence and citations where appropriate. No markdown.'
   },
   indicator: {
-    en: 'Generate a specific, measurable indicator. Include target value, timeline, and verification method. Example: "23% increase in digital literacy scores among 500 participants by M24, measured via pre/post assessment."',
-    si: 'Generiraj specifičen, merljiv kazalnik. Vključi ciljno vrednost, časovnico in način preverjanja. Primer: "23-odstotno povečanje digitalnih kompetenc med 500 udeleženci do M24, merjeno s pred/po ocenjevanjem."'
+    en: 'Generate a specific, measurable indicator. Include target value, timeline, and verification method. Example: "23% increase in digital literacy scores among 500 participants by M24, measured via pre/post assessment."'
   },
   mitigation: {
-    en: 'Generate a detailed risk mitigation strategy. 2–4 sentences covering preventive measures, contingency plans, responsible parties, and monitoring triggers.',
-    si: 'Generiraj podrobno strategijo blaženja tveganja. 2–4 stavki, ki pokrivajo preventivne ukrepe, načrt ukrepanja, odgovorne osebe in sprožilce spremljanja.'
+    en: 'Generate a detailed risk mitigation strategy. 2–4 sentences covering preventive measures, contingency plans, responsible parties, and monitoring triggers.'
   },
   exploitationStrategy: {
-    en: 'Generate a detailed exploitation strategy. 3–5 sentences covering commercialisation pathway, target market, IPR approach, sustainability plan, and scaling potential.',
-    si: 'Generiraj podrobno strategijo izkoriščanja. 3–5 stavkov, ki pokrivajo pot komercializacije, ciljni trg, pristop k intelektualni lastnini, načrt trajnosti in potencial za širjenje.'
+    en: 'Generate a detailed exploitation strategy. 3–5 sentences covering commercialisation pathway, target market, IPR approach, sustainability plan, and scaling potential.'
   },
   mainAim: {
-    en: 'Generate the project main aim as ONE comprehensive sentence starting with an infinitive verb (e.g., "To establish...", "To develop..."). Must capture the project\'s core purpose.',
-    si: 'Generiraj glavni cilj projekta kot EN celovit stavek, ki se začne z nedoločnikom (npr. "Vzpostaviti...", "Razviti..."). Mora zajeti bistvo projekta.'
+    en: 'Generate the project main aim as ONE comprehensive sentence starting with an infinitive verb (e.g., "To establish...", "To develop..."). Must capture the project\'s core purpose.'
   },
   projectTitle: {
-    en: 'Generate a project title following the STRICT PROJECT TITLE RULES: noun phrase, 30–200 characters, no acronym, no verb, no generic AI phrases. Must be a project brand.',
-    si: 'Generiraj naziv projekta po STROGIH PRAVILIH ZA NAZIV: imenski izraz, 30–200 znakov, brez akronima, brez glagola, brez generičnih AI fraz. Mora biti blagovna znamka projekta.'
+    en: 'Generate a project title following the STRICT PROJECT TITLE RULES: noun phrase, 30–200 characters, no acronym, no verb, no generic AI phrases. Must be a project brand.'
   },
   projectAcronym: {
-    en: 'Generate a project acronym: 3–8 uppercase letters derived from the project title keywords. Must be pronounceable or a recognisable abbreviation. Must NOT be a generic word (e.g., PROJECT, EUROPE). Place ONLY in projectAcronym field, never inside projectTitle. Hyphens allowed (e.g., DIGI-CRAFT).',
-    si: 'Generiraj projektni akronim: 3–8 velikih črk, izpeljanih iz ključnih besed naziva projekta. Mora biti izgovorljiv ali prepoznavna kratica. NE sme biti generična beseda (npr. PROJEKT, EVROPA). Vstavi SAMO v polje projectAcronym, nikoli v projectTitle. Vezaji dovoljeni (npr. DIGI-CRAFT).'
+    en: 'Generate a project acronym: 3–8 uppercase letters derived from the project title keywords. Must be pronounceable or a recognisable abbreviation. Must NOT be a generic word (e.g., PROJECT, EUROPE). Place ONLY in projectAcronym field, never inside projectTitle. Hyphens allowed (e.g., DIGI-CRAFT).'
   }
 };
 
 // ───────────────────────────────────────────────────────────────
-// SUMMARY RULES (v4.5 – 2026-02-16)
-// Executive Summary — EXTRACTION + CONDENSATION engine
+// SUMMARY RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const SUMMARY_RULES: Record<string, string> = {
@@ -1114,49 +675,11 @@ STRICT FORMATTING RULES:
 - If data for a section does not exist, write: "Not yet defined in the project."
 - NEVER add content that is not in the project data
 - NO preamble before section 1, NO closing after section 5
-`,
-
-  si: `
-SI MEHANIZEM ZA KONDENZACIJO — NE ZA KOPIRANJE.
-Tvoja naloga je DESTILIRATI projekt v KRATEK izvršni povzetek.
-Vsako sekcijo RADIKALNO SKRAJŠAJ — zajemi samo BISTVO.
-
-SKUPNI MAKSIMUM: 800 besed. Če tvoj izhod presega 800 besed, je ZAVRNJEN.
-
-OBVEZNA STRUKTURA — natanko 5 sekcij z ## naslovi:
-
-## 1. Pregled projekta
-NAJVEČ 80 BESED. Izvleci: naslov, akronim, trajanje, proračun, program/razpis (samo če obstajajo v podatkih). Dodaj 1-2 stavka, ki zajameta bistvo ideje. Nič več.
-
-## 2. Problem in potreba
-NAJVEČ 120 BESED. Navedi osrednji problem v 2-3 stavkih. Omeni samo 2-3 NAJPOMEMBNEJŠE vzroke — NE naštevaj vseh vzrokov. NE naštevaj vseh posledic. Zajemi BISTVO, ne podrobnosti. Brez alinej.
-
-## 3. Rešitev in pristop
-NAJVEČ 150 BESED. Opiši koncept rešitve v 2-3 stavkih. Naštej delovne pakete SAMO po imenu v enem stavku (npr. "Projekt je strukturiran v 6 delovnih paketov, ki pokrivajo izhodiščno analizo, razvoj agentov, validacijo digitalnega dvojčka, pilotne demonstracije, diseminacijo in upravljanje projekta."). NE opisuj vsakega DS podrobno. Brez alinej.
-
-## 4. Ključni rezultati in učinek
-NAJVEČ 200 BESED. Omeni samo 3-4 NAJPOMEMBNEJŠE outpute/dosežke v 1-2 stavkih. Navedi 2-3 ključne merljive izide. Navedi 2-3 dolgoročne učinke. NE naštevaj vsakega posameznega outputa, izida, učinka, cilja in KER-ja. RADIKALNO IZBERI le najpomembnejše. Brez alinej — piši tekoče odstavke proze.
-
-## 5. Dodana vrednost EU in relevantnost
-NAJVEČ 100 BESED. Omeni usklajenost s politikami EU SAMO, če je uporabnik pisal o tem. 2-4 stavki, največ. Če v projektu ni vsebine o relevantnosti EU, napiši: "V projektu še ni opredeljeno."
-
-STROGA PRAVILA OBLIKOVANJA:
-- BREZ alinej (*, -, •) kjerkoli v povzetku — piši SAMO tekoče odstavke proze
-- BREZ krepkega tiska (**) kjerkoli
-- BREZ oštevilčenih pod-seznamov znotraj sekcij
-- Vsaka sekcija je 1-2 kratka odstavka proze, nič več
-- Uporabi ## naslove SAMO za 5 naslovov sekcij
-- Ohrani uporabnikovo terminologijo, kjer je mogoče, ampak DRASTIČNO KONDENZIRAJ
-- NE kopiraj celih odstavkov iz projekta — PREOBLIKUJ in SKRAJŠAJ
-- Če podatki za sekcijo ne obstajajo, napiši: "V projektu še ni opredeljeno."
-- NIKOLI ne dodajaj vsebine, ki ni v projektnih podatkih
-- BREZ uvoda pred sekcijo 1, BREZ zaključka po sekciji 5
 `
 };
 
-
 // ───────────────────────────────────────────────────────────────
-// TRANSLATION RULES
+// TRANSLATION RULES — EN only
 // ───────────────────────────────────────────────────────────────
 
 export const TRANSLATION_RULES: Record<string, string[]> = {
@@ -1168,20 +691,71 @@ export const TRANSLATION_RULES: Record<string, string[]> = {
     'Do not translate proper nouns, organization names, or acronyms',
     'Preserve all dates in YYYY-MM-DD format',
     'Translate technical terms accurately with domain-specific vocabulary',
-  ],
-  si: [
-    'Prevedi vse besedilne vrednosti v slovenščino',
-    'Ohrani strukturo JSON identično — ne dodajaj/odstranjuj ključev',
-    'Ohranjaj strokovno EU projektno terminologijo',
-    'Ohrani citate v izvirnem formatu (Avtor, Leto)',
-    'Ne prevajaj lastnih imen, imen organizacij ali akronimov',
-    'Ohrani vse datume v formatu YYYY-MM-DD',
-    'Prevajaj strokovne izraze natančno z domensko specifičnim besediščem',
   ]
 };
 
 // ───────────────────────────────────────────────────────────────
+// TEMPORAL INTEGRITY RULE — EN only
+// ───────────────────────────────────────────────────────────────
+
+export const TEMPORAL_INTEGRITY_RULE: Record<string, string> = {
+  en: `═══ TEMPORAL INTEGRITY RULE (SUPREME — OVERRIDES ALL OTHER SCHEDULING) ═══
+
+★★★ THIS IS THE #1 MOST IMPORTANT RULE IN THE ENTIRE PROMPT. ★★★
+ANY DATE VIOLATION MAKES THE ENTIRE OUTPUT INVALID AND UNUSABLE.
+
+THE IRON LAW:
+The Project Management WP (LAST WP) = the MAXIMUM TEMPORAL ENVELOPE.
+NOTHING in the entire project may have a date outside this envelope.
+
+PROJECT BOUNDARIES (ABSOLUTE, NON-NEGOTIABLE):
+  Start: {{projectStart}}
+  End:   {{projectEnd}}
+  Duration: {{projectDurationMonths}} months exactly
+
+FORMAL CONSTRAINTS:
+1. PM WP (last WP): starts EXACTLY {{projectStart}}, ends EXACTLY {{projectEnd}}.
+2. Dissemination WP (second-to-last): starts EXACTLY {{projectStart}}, ends EXACTLY {{projectEnd}}.
+   - Dissemination WP MUST NOT extend even 1 day beyond PM WP.
+   - Both WPs end on the SAME date: {{projectEnd}}.
+3. ALL tasks across ALL WPs: startDate ≥ {{projectStart}} AND endDate ≤ {{projectEnd}}.
+4. ALL milestones: date ≥ {{projectStart}} AND date ≤ {{projectEnd}}.
+5. Content/technical WPs: each covers only a PHASE, NONE spans the full duration.
+
+COMMON AI MISTAKES — YOU MUST AVOID THESE:
+✗ Dissemination WP ending 1–3 months AFTER PM WP → WRONG. They end SAME day.
+✗ "Final report" task scheduled after {{projectEnd}} → WRONG. Must be ON or BEFORE.
+✗ Exploitation tasks extending beyond project → WRONG. All within envelope.
+✗ 28-month schedule for 24-month project → WRONG. Count precisely.
+✗ Last task of Dissemination ending later than last task of PM → WRONG. NEVER.
+
+SELF-CHECK (MANDATORY before returning JSON):
+For EVERY task: is endDate ≤ {{projectEnd}}? If NO → set it to {{projectEnd}} or earlier.
+For EVERY milestone: is date ≤ {{projectEnd}}? If NO → set it to {{projectEnd}} or earlier.
+Does PM WP last task end exactly on {{projectEnd}}? Must be YES.
+Does Dissemination last task end ≤ {{projectEnd}}? Must be YES.
+
+VIOLATION OF ANY OF THE ABOVE = ENTIRE JSON IS REJECTED.
+═══════════════════════════════════════════════════════════════════`
+};
+
+// ───────────────────────────────────────────────────────────────
+// OPENROUTER SYSTEM PROMPT — unchanged (already EN only)
+// ───────────────────────────────────────────────────────────────
+
+export const OPENROUTER_SYSTEM_PROMPT = `You are a professional EU project proposal writing assistant with deep expertise in EU funding programmes (Horizon Europe, Interreg, Erasmus+, LIFE, Digital Europe, etc.).
+
+RESPONSE FORMAT RULES:
+1. You MUST respond with valid JSON only.
+2. No markdown, no code fences, no explanations — just the raw JSON object or array.
+3. Do NOT wrap your response in \`\`\`json ... \`\`\` or any other formatting.
+4. The JSON must be parseable by JSON.parse() without any preprocessing.
+5. All string values must be properly escaped (no unescaped newlines, quotes, or backslashes).
+6. Follow the exact schema/structure specified in the user prompt.`;
+
+// ───────────────────────────────────────────────────────────────
 // EXPORTED ACCESSOR FUNCTIONS
+// ★ v5.0: All functions ALWAYS return .en (except getLanguageDirective)
 // ───────────────────────────────────────────────────────────────
 
 export const getAppInstructions = (language: 'en' | 'si' = 'en') => ({
@@ -1196,19 +770,20 @@ export const getAppInstructions = (language: 'en' | 'si' = 'en') => ({
 });
 
 export const getFieldRule = (fieldName: string, language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`FIELD_RULES.${fieldName}.${language}`) || FIELD_RULES[fieldName]?.[language] || '';
+  return getGlobalOverrideSync(`FIELD_RULES.${fieldName}.en`) || FIELD_RULES[fieldName]?.en || '';
 };
 
 export const getTranslationRules = (language: 'en' | 'si' = 'en'): string[] => {
-  const override = getGlobalOverrideSync(`TRANSLATION_RULES.${language}`);
+  const override = getGlobalOverrideSync(`TRANSLATION_RULES.en`);
   if (override) return override.split('\n').filter((line: string) => line.trim().length > 0);
-  return TRANSLATION_RULES[language] || TRANSLATION_RULES.en;
+  return TRANSLATION_RULES.en;
 };
 
 export const getSummaryRules = (language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`SUMMARY_RULES.${language}`) || SUMMARY_RULES[language] || SUMMARY_RULES.en;
+  return getGlobalOverrideSync(`SUMMARY_RULES.en`) || SUMMARY_RULES.en;
 };
 
+// ★ ONLY function that respects language parameter
 export const getLanguageDirective = (language: 'en' | 'si' = 'en'): string => {
   return getGlobalOverrideSync(`LANGUAGE_DIRECTIVES.${language}`) || LANGUAGE_DIRECTIVES[language] || LANGUAGE_DIRECTIVES.en;
 };
@@ -1224,27 +799,26 @@ export const getLanguageMismatchNotice = (
 };
 
 export const getAcademicRigorRules = (language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`ACADEMIC_RIGOR_RULES.${language}`) || ACADEMIC_RIGOR_RULES[language] || ACADEMIC_RIGOR_RULES.en;
+  return getGlobalOverrideSync(`ACADEMIC_RIGOR_RULES.en`) || ACADEMIC_RIGOR_RULES.en;
 };
 
 export const getHumanizationRules = (language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`HUMANIZATION_RULES.${language}`) || HUMANIZATION_RULES[language] || HUMANIZATION_RULES.en;
+  return getGlobalOverrideSync(`HUMANIZATION_RULES.en`) || HUMANIZATION_RULES.en;
 };
 
 export const getProjectTitleRules = (language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`PROJECT_TITLE_RULES.${language}`) || PROJECT_TITLE_RULES[language] || PROJECT_TITLE_RULES.en;
+  return getGlobalOverrideSync(`PROJECT_TITLE_RULES.en`) || PROJECT_TITLE_RULES.en;
 };
 
 export const getModeInstruction = (mode: string, language: 'en' | 'si' = 'en'): string => {
-  return getGlobalOverrideSync(`MODE_INSTRUCTIONS.${mode}.${language}`) || MODE_INSTRUCTIONS[mode]?.[language] || MODE_INSTRUCTIONS.regenerate[language];
+  return getGlobalOverrideSync(`MODE_INSTRUCTIONS.${mode}.en`) || MODE_INSTRUCTIONS[mode]?.en || MODE_INSTRUCTIONS.regenerate.en;
 };
 
 export const getQualityGate = (sectionKey: string, language: 'en' | 'si' = 'en'): string => {
-  const fullOverride = getGlobalOverrideSync(`QUALITY_GATES.${sectionKey}.${language}`);
+  const fullOverride = getGlobalOverrideSync(`QUALITY_GATES.${sectionKey}.en`);
   if (fullOverride) return fullOverride;
-  const gates = QUALITY_GATES[sectionKey]?.[language] || QUALITY_GATES._default[language];
-  const header = language === 'si' ? 'KONTROLNA LISTA KAKOVOSTI' : 'QUALITY CHECKLIST';
-  return `═══ ${header} ═══\nBefore returning the JSON, verify ALL of the following:\n- ${gates.join('\n- ')}\n═══════════════════════════════════════════════════════════════════`;
+  const gates = QUALITY_GATES[sectionKey]?.en || QUALITY_GATES._default.en;
+  return `═══ QUALITY CHECKLIST ═══\nBefore returning the JSON, verify ALL of the following:\n- ${gates.join('\n- ')}\n═══════════════════════════════════════════════════════════════════`;
 };
 
 export const getSectionTaskInstruction = (
@@ -1252,16 +826,15 @@ export const getSectionTaskInstruction = (
   language: 'en' | 'si' = 'en',
   placeholders: Record<string, string> = {}
 ): string => {
-  let template = getGlobalOverrideSync(`SECTION_TASK_INSTRUCTIONS.${sectionKey}.${language}`) || SECTION_TASK_INSTRUCTIONS[sectionKey]?.[language] || '';
+  let template = getGlobalOverrideSync(`SECTION_TASK_INSTRUCTIONS.${sectionKey}.en`) || SECTION_TASK_INSTRUCTIONS[sectionKey]?.en || '';
   for (const [key, value] of Object.entries(placeholders)) {
     template = template.replace(new RegExp(`{{${key}}}`, 'g'), value);
   }
   return template;
 };
+
 // ═══════════════════════════════════════════════════════════════════
-// SETTINGS MODAL SUPPORT — v4.5
-// Exports consumed by SettingsModal.tsx (Instructions editor tab)
-// Storage via storageService.getCustomInstructions / saveCustomInstructions
+// SETTINGS MODAL SUPPORT — v5.0
 // ═══════════════════════════════════════════════════════════════════
 
 export const CHAPTER_LABELS: Record<string, string> = {
@@ -1283,7 +856,7 @@ export const FIELD_RULE_LABELS: Record<string, string> = {
   projectAcronym: 'Project Acronym',
 };
 
-const INSTRUCTIONS_VERSION = '4.5';
+const INSTRUCTIONS_VERSION = '5.0';
 
 function buildDefaultInstructions() {
   return {
@@ -1327,99 +900,3 @@ export async function resetAppInstructions(): Promise<any> {
   await storageService.saveCustomInstructions(defaults);
   return defaults;
 }
-// ───────────────────────────────────────────────────────────────
-// ★ v4.5 NEW: TEMPORAL INTEGRITY RULE
-// ───────────────────────────────────────────────────────────────
-
-export const TEMPORAL_INTEGRITY_RULE: Record<string, string> = {
-  en: `═══ TEMPORAL INTEGRITY RULE (SUPREME — OVERRIDES ALL OTHER SCHEDULING) ═══
-
-★★★ THIS IS THE #1 MOST IMPORTANT RULE IN THE ENTIRE PROMPT. ★★★
-ANY DATE VIOLATION MAKES THE ENTIRE OUTPUT INVALID AND UNUSABLE.
-
-THE IRON LAW:
-The Project Management WP (LAST WP) = the MAXIMUM TEMPORAL ENVELOPE.
-NOTHING in the entire project may have a date outside this envelope.
-
-PROJECT BOUNDARIES (ABSOLUTE, NON-NEGOTIABLE):
-  Start: {{projectStart}}
-  End:   {{projectEnd}}
-  Duration: {{projectDurationMonths}} months exactly
-
-FORMAL CONSTRAINTS:
-1. PM WP (last WP): starts EXACTLY {{projectStart}}, ends EXACTLY {{projectEnd}}.
-2. Dissemination WP (second-to-last): starts EXACTLY {{projectStart}}, ends EXACTLY {{projectEnd}}.
-   - Dissemination WP MUST NOT extend even 1 day beyond PM WP.
-   - Both WPs end on the SAME date: {{projectEnd}}.
-3. ALL tasks across ALL WPs: startDate ≥ {{projectStart}} AND endDate ≤ {{projectEnd}}.
-4. ALL milestones: date ≥ {{projectStart}} AND date ≤ {{projectEnd}}.
-5. Content/technical WPs: each covers only a PHASE, NONE spans the full duration.
-
-COMMON AI MISTAKES — YOU MUST AVOID THESE:
-✗ Dissemination WP ending 1–3 months AFTER PM WP → WRONG. They end SAME day.
-✗ "Final report" task scheduled after {{projectEnd}} → WRONG. Must be ON or BEFORE.
-✗ Exploitation tasks extending beyond project → WRONG. All within envelope.
-✗ 28-month schedule for 24-month project → WRONG. Count precisely.
-✗ Last task of Dissemination ending later than last task of PM → WRONG. NEVER.
-
-SELF-CHECK (MANDATORY before returning JSON):
-For EVERY task: is endDate ≤ {{projectEnd}}? If NO → set it to {{projectEnd}} or earlier.
-For EVERY milestone: is date ≤ {{projectEnd}}? If NO → set it to {{projectEnd}} or earlier.
-Does PM WP last task end exactly on {{projectEnd}}? Must be YES.
-Does Dissemination last task end ≤ {{projectEnd}}? Must be YES.
-
-VIOLATION OF ANY OF THE ABOVE = ENTIRE JSON IS REJECTED.
-═══════════════════════════════════════════════════════════════════`,
-
-  si: `═══ PRAVILO ČASOVNE CELOVITOSTI (VRHOVNI ZAKON — PREGLASI VSE DRUGO) ═══
-
-★★★ TO JE NAJPOMEMBNEJŠE PRAVILO V CELOTNEM NAVODILU. ★★★
-VSAKA KRŠITEV DATUMA NAREDI CELOTEN IZHOD NEVELJAVEN IN NEUPORABEN.
-
-ŽELEZNI ZAKON:
-DS Upravljanja projekta (ZADNJI DS) = NAJVEČJI ČASOVNI OKVIR.
-NIČ v celotnem projektu ne sme imeti datuma izven tega okvira.
-
-MEJE PROJEKTA (ABSOLUTNE, NEPRELOMNE):
-  Začetek: {{projectStart}}
-  Konec:   {{projectEnd}}
-  Trajanje: natančno {{projectDurationMonths}} mesecev
-
-FORMALNE OMEJITVE:
-1. DS upravljanja (zadnji DS): začne se NATANČNO {{projectStart}}, konča NATANČNO {{projectEnd}}.
-2. DS diseminacije (predzadnji): začne se NATANČNO {{projectStart}}, konča NATANČNO {{projectEnd}}.
-   - DS diseminacije NE SME trajati niti 1 dan dlje od DS upravljanja.
-   - Oba DS se končata na ISTI datum: {{projectEnd}}.
-3. VSE naloge v VSEH DS: startDate ≥ {{projectStart}} IN endDate ≤ {{projectEnd}}.
-4. VSI mejniki: date ≥ {{projectStart}} IN date ≤ {{projectEnd}}.
-5. Vsebinski/tehnični DS: vsak pokriva le FAZO, NOBEN ne traja celotno trajanje.
-
-POGOSTE NAPAKE AI — TEM SE MORAŠ IZOGNITI:
-✗ DS diseminacije se konča 1–3 mesece PO DS upravljanja → NAPAČNO. Končata se ISTI dan.
-✗ Naloga "Zaključno poročilo" načrtovana po {{projectEnd}} → NAPAČNO. Mora biti NA ali PRED.
-✗ Naloge eksploatacije presegajo projekt → NAPAČNO. Vse znotraj okvira.
-✗ 28-mesečni urnik za 24-mesečni projekt → NAPAČNO. Natančno preštej.
-✗ Zadnja naloga diseminacije se konča pozneje kot zadnja naloga upravljanja → NAPAČNO. NIKOLI.
-
-SAMOPREVERJANJE (OBVEZNO pred vrnitvijo JSON):
-Za VSAKO nalogo: ali je endDate ≤ {{projectEnd}}? Če NE → nastavi na {{projectEnd}} ali prej.
-Za VSAK mejnik: ali je date ≤ {{projectEnd}}? Če NE → nastavi na {{projectEnd}} ali prej.
-Ali se zadnja naloga DS upravljanja konča natančno na {{projectEnd}}? Mora biti DA.
-Ali se zadnja naloga DS diseminacije konča ≤ {{projectEnd}}? Mora biti DA.
-
-KRŠITEV KATEREGAKOLI ZGORNJEGA = CELOTEN JSON JE ZAVRNJEN.
-═══════════════════════════════════════════════════════════════════`
-};
-// ───────────────────────────────────────────────────────────────
-// OPENROUTER SYSTEM PROMPT
-// ───────────────────────────────────────────────────────────────
-
-export const OPENROUTER_SYSTEM_PROMPT = `You are a professional EU project proposal writing assistant with deep expertise in EU funding programmes (Horizon Europe, Interreg, Erasmus+, LIFE, Digital Europe, etc.).
-
-RESPONSE FORMAT RULES:
-1. You MUST respond with valid JSON only.
-2. No markdown, no code fences, no explanations — just the raw JSON object or array.
-3. Do NOT wrap your response in \`\`\`json ... \`\`\` or any other formatting.
-4. The JSON must be parseable by JSON.parse() without any preprocessing.
-5. All string values must be properly escaped (no unescaped newlines, quotes, or backslashes).
-6. Follow the exact schema/structure specified in the user prompt.`;
