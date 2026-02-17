@@ -1,16 +1,10 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v1.8 — 2026-02-17
-//   - REFACTOR: Merged SettingsModal into unified AdminPanel
-//   - REMOVE: SettingsModal import and usage
-//   - NEW: adminPanelInitialTab state to open specific tabs
-//   - All setIsSettingsOpen calls now open AdminPanel with initialTab='ai'
-// All business logic lives in hooks:
-//   - useAuth           → authentication, session, API key check, MFA
-//   - useProjectManager → CRUD, save/load, import/export, navigation
-//   - useTranslation    → language switching, diff-based translation
-//   - useGeneration     → AI content generation, summaries
+// v1.9 — 2026-02-17
+//   - FIX #1: adminHook.checkAdminStatus() re-called when auth.currentUser changes
+//   - FIX #3: ToolbarButton, ToolbarSeparator now accept `colors` prop for dark-mode
+//   - Previous: Merged SettingsModal into unified AdminPanel
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -35,14 +29,13 @@ import { isStepCompleted } from './utils.ts';
 import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
 import { initTheme, getThemeMode, onThemeChange } from './services/themeService.ts';
 
-// Module-level alias: top-level components (ToolbarButton, etc.) use lightColors;
-// dark-mode CSS overrides in index.css handle their visual dark styling.
-const colors = lightColors;
-
 import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
 import { useTranslation } from './hooks/useTranslation.ts';
 import { useGeneration } from './hooks/useGeneration.ts';
+
+// ★ FIX #3: Type alias for color props
+type ColorScheme = typeof lightColors;
 
 // ─── Small UI Components ─────────────────────────────────────────
 
@@ -54,26 +47,27 @@ const HamburgerIcon = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-// ─── Toolbar Button ──────────────────────────────────────────────
-
+// ★ FIX #3: ToolbarButton now receives `colors` as a prop
 const ToolbarButton = ({
   onClick,
   title,
   icon,
   disabled = false,
   variant = 'default',
+  colors: c,
 }: {
   onClick: () => void;
   title: string;
   icon: React.ReactNode;
   disabled?: boolean;
   variant?: 'default' | 'primary' | 'success' | 'warning';
+  colors: ColorScheme;
 }) => {
   const variantColors: Record<string, { hover: string; active: string }> = {
-    default: { hover: colors.primary[50], active: colors.primary[600] },
-    primary: { hover: colors.primary[50], active: colors.primary[600] },
-    success: { hover: colors.success[50], active: colors.success[600] },
-    warning: { hover: colors.warning[50], active: colors.warning[600] },
+    default: { hover: c.primary[50], active: c.primary[600] },
+    primary: { hover: c.primary[50], active: c.primary[600] },
+    success: { hover: c.success[50], active: c.success[600] },
+    warning: { hover: c.warning[50], active: c.warning[600] },
   };
   const vc = variantColors[variant] || variantColors.default;
 
@@ -87,7 +81,7 @@ const ToolbarButton = ({
         borderRadius: radii.lg,
         border: 'none',
         background: 'transparent',
-        color: disabled ? colors.text.muted : colors.text.body,
+        color: disabled ? c.text.muted : c.text.body,
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -103,7 +97,7 @@ const ToolbarButton = ({
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = 'transparent';
-        e.currentTarget.style.color = disabled ? colors.text.muted : colors.text.body;
+        e.currentTarget.style.color = disabled ? c.text.muted : c.text.body;
       }}
     >
       {icon}
@@ -111,13 +105,12 @@ const ToolbarButton = ({
   );
 };
 
-// ─── Toolbar Separator ───────────────────────────────────────────
-
-const ToolbarSeparator = () => (
+// ★ FIX #3: ToolbarSeparator now receives `colors` as a prop
+const ToolbarSeparator = ({ colors: c }: { colors: ColorScheme }) => (
   <div style={{
     width: 1,
     height: 24,
-    background: colors.border.light,
+    background: c.border.light,
     margin: `0 ${spacing.xs}`,
     flexShrink: 0,
   }} />
@@ -193,7 +186,7 @@ const App = () => {
 
   // ─── Hooks ─────────────────────────────────────────────────────
 
-  const auth = useAuth(); // ★ MFA: now also exposes needsMFAVerify, mfaFactorId, handleMFAVerified
+  const auth = useAuth();
 
   const pm = useProjectManager({
     language,
@@ -246,14 +239,15 @@ const App = () => {
 
   // ═══════════════════════════════════════════════════════════════
   // CRITICAL: All useEffect hooks MUST be BEFORE any conditional
-  // return statement. React requires hooks to be called in the
-  // same order on every render.
+  // return statement.
   // ═══════════════════════════════════════════════════════════════
 
-  // ─── Prime global instructions cache after auth ───────────────
+  // ★ FIX #1: Re-check admin status AFTER auth.currentUser changes
+  // This ensures cachedUser.role is read AFTER restoreSession/login fills it
   useEffect(() => {
     if (auth.currentUser) {
       ensureGlobalInstructionsLoaded();
+      adminHook.checkAdminStatus();  // ★ FIX #1
     }
   }, [auth.currentUser]);
 
@@ -338,7 +332,7 @@ const App = () => {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER: Not logged in (or MFA verification pending)       ★ MFA
+  // RENDER: Not logged in (or MFA verification pending)
   // ═══════════════════════════════════════════════════════════════
   if (!auth.currentUser) {
     return (
@@ -361,10 +355,10 @@ const App = () => {
           language={language}
           setLanguage={(lang: string) => setLanguage(lang as 'en' | 'si')}
           onOpenSettings={() => { setAdminPanelInitialTab('ai'); setIsSettingsOpen(true); }}
-          needsMFAVerify={auth.needsMFAVerify}       // ★ MFA
-          mfaFactorId={auth.mfaFactorId}             // ★ MFA
-          onMFAVerified={auth.handleMFAVerified}     // ★ MFA
-          onMFACancel={handleLogout}                  // ★ MFA
+          needsMFAVerify={auth.needsMFAVerify}
+          mfaFactorId={auth.mfaFactorId}
+          onMFAVerified={auth.handleMFAVerified}
+          onMFACancel={handleLogout}
         />
       </>
     );
@@ -399,7 +393,6 @@ const App = () => {
         language={language}
       />
 
-      {/* Summary Modal */}
       <SummaryModal
         isOpen={generation.summaryModalOpen}
         onClose={() => generation.setSummaryModalOpen(false)}
@@ -556,10 +549,11 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* Right: Action buttons, grouped */}
+                {/* Right: Action buttons — ★ FIX #3: pass colors prop */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                   {/* Group 1: Dashboard */}
                   <ToolbarButton
+                    colors={colors}
                     onClick={() => setIsDashboardOpen(true)}
                     title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'}
                     variant="primary"
@@ -570,10 +564,11 @@ const App = () => {
                     }
                   />
 
-                  <ToolbarSeparator />
+                  <ToolbarSeparator colors={colors} />
 
                   {/* Group 2: Save + Import */}
                   <ToolbarButton
+                    colors={colors}
                     onClick={pm.handleSaveToStorage}
                     title={t.saveProject}
                     variant="success"
@@ -593,15 +588,17 @@ const App = () => {
                     <input ref={pm.importInputRef} type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
                   </label>
 
-                  <ToolbarSeparator />
+                  <ToolbarSeparator colors={colors} />
 
                   {/* Group 3: Export (DOCX + Summary + Print) */}
                   <ToolbarButton
+                    colors={colors}
                     onClick={handleExportDocx}
                     title={t.exportDocx}
                     icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
                   />
                   <ToolbarButton
+                    colors={colors}
                     onClick={generation.handleExportSummary}
                     title={t.exportSummary}
                     disabled={auth.showAiWarning}
@@ -609,6 +606,7 @@ const App = () => {
                     icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
                   />
                   <ToolbarButton
+                    colors={colors}
                     onClick={handlePrint}
                     title={t.print}
                     icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
@@ -636,12 +634,12 @@ const App = () => {
         </div>
       )}
 
-      {/* PRINT LAYOUT – hidden on screen, visible only when printing */}
+      {/* PRINT LAYOUT */}
       <div className="hidden print:block">
         <PrintLayout projectData={pm.projectData} language={language} logo={auth.appLogo} />
       </div>
 
-      {/* EXPORT-ONLY CHART CONTAINERS (hidden, used by html2canvas) */}
+      {/* EXPORT-ONLY CHART CONTAINERS */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
         <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
           <GanttChart activities={pm.projectData.activities} language={language} forceViewMode="project" containerWidth={2400} printMode={true} id="gantt-export" />
