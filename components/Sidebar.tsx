@@ -90,12 +90,14 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     return Math.round((filled / total) * 100);
   }
 
-  // General Objectives
+    // General Objectives (minimum 3 required)
   if (stepKey === 'generalObjectives') {
     const objs = projectData.generalObjectives;
     if (!objs || objs.length === 0) return 0;
     const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim()).length;
-    return Math.round((Math.min(withContent, 5) / 5) * 100);
+    const minRequired = 3;
+    if (withContent >= minRequired) return 100;
+    return Math.round((withContent / minRequired) * 100);
   }
 
   // Specific Objectives
