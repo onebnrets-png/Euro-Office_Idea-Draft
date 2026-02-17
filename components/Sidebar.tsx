@@ -807,11 +807,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           </svg>
         </button>
       )}
-        </>
+      </>
   );
 };
-
-export default Sidebar;
-
 
 export default Sidebar;
