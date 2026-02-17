@@ -28,8 +28,6 @@ import {
   getDefaultInstructions,
   saveAppInstructions,
   resetAppInstructions,
-  CHAPTER_LABELS,
-  FIELD_RULE_LABELS,
   LANGUAGE_DIRECTIVES,
   ACADEMIC_RIGOR_RULES,
   HUMANIZATION_RULES,
@@ -37,7 +35,16 @@ import {
   MODE_INSTRUCTIONS,
   QUALITY_GATES,
   SECTION_TASK_INSTRUCTIONS,
-} from '../services/Instructions.ts';
+  TEMPORAL_INTEGRITY_RULE,
+  CHAPTER_LABELS,
+  FIELD_RULE_LABELS,
+  // These need the new export we added:
+  CHAPTERS,
+  GLOBAL_RULES,
+  FIELD_RULES,
+  SUMMARY_RULES,
+  TRANSLATION_RULES,
+} from '../services/Instructions';
 
 // ─── Types ───────────────────────────────────────────────────
 
