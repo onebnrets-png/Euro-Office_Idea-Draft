@@ -1,7 +1,7 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Admin Panel — User management, Instructions editor, Audit log
-// v1.0 — 2026-02-17
+// v1.1 — 2026-02-17  Dark-mode reactive
 // First component built with the new EURO-OFFICE Design System
 // ═══════════════════════════════════════════════════════════════
 
@@ -11,7 +11,8 @@ import { Card, CardHeader } from '../design/components/Card.tsx';
 import { Button, SparkleIcon } from '../design/components/Button.tsx';
 import { Badge, RoleBadge } from '../design/components/Badge.tsx';
 import { SkeletonTable, SkeletonText } from '../design/components/Skeleton.tsx';
-import { colors, shadows, radii, animation, typography } from '../design/theme.ts';
+import { colors as lightColors, darkColors, shadows, radii, animation, typography } from '../design/theme.ts';
+import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { TEXT } from '../locales.ts';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -251,6 +252,14 @@ const UserAvatar: React.FC<{ name: string; email: string; size?: number }> = ({
 const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language }) => {
   const admin = useAdmin();
   const t = ADMIN_TEXT[language] || ADMIN_TEXT.en;
+
+  // ─── Dark mode reactive state ──────────────────────────────
+  const [isDark, setIsDark] = useState(() => getThemeMode() === 'dark');
+  useEffect(() => {
+    const unsub = onThemeChange((mode) => setIsDark(mode === 'dark'));
+    return unsub;
+  }, []);
+  const colors = isDark ? darkColors : lightColors;
 
   const [activeTab, setActiveTab] = useState<TabId>('users');
   const [confirmModal, setConfirmModal] = useState<{
