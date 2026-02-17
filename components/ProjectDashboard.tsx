@@ -1,5 +1,5 @@
 // components/ProjectDashboard.tsx
-// v2.0 - 2026-02-17  Dark-mode: isDark + colors pattern
+// v2.1 - 2026-02-17  Fix: emoji Unicode escapes → actual emoji characters
 import React, { useState, useEffect, useMemo } from 'react';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
 import ChartRenderer from './ChartRenderer.tsx';
@@ -126,7 +126,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
           {label}
         </p>
         <p style={{ fontSize: '16px', fontWeight: 700, color: colors.text.heading, margin: '2px 0 0' }}>
-          {value || '\u2014'}
+          {value || '—'}
         </p>
       </div>
     </div>
@@ -198,7 +198,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.surface.sidebar; }}
             onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
           >
-            \u2715
+            ✕
           </button>
         </div>
 
@@ -206,17 +206,17 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           {/* Meta cards row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.projectTitle} value={pi?.projectTitle || ''} icon="\uD83D\uDCCB" />
-            <MetaCard label={t.acronym} value={pi?.projectAcronym || ''} icon="\uD83C\uDFF7\uFE0F" />
-            <MetaCard label={t.duration} value={pi?.durationMonths ? `${pi.durationMonths} ${t.months}` : ''} icon="\uD83D\uDCC5" />
-            <MetaCard label={t.startDate} value={pi?.startDate || ''} icon="\uD83D\uDE80" />
+            <MetaCard label={t.projectTitle} value={pi?.projectTitle || ''} icon="📋" />
+            <MetaCard label={t.acronym} value={pi?.projectAcronym || ''} icon="🏷️" />
+            <MetaCard label={t.duration} value={pi?.durationMonths ? `${pi.durationMonths} ${t.months}` : ''} icon="📅" />
+            <MetaCard label={t.startDate} value={pi?.startDate || ''} icon="🚀" />
           </div>
 
           {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.workPackages} value={String(wpCount)} icon="\uD83D\uDCE6" />
-            <MetaCard label={t.risks} value={String(riskCount)} icon="\u26A0\uFE0F" />
-            <MetaCard label={t.objectives} value={String(objCount)} icon="\uD83C\uDFAF" />
+            <MetaCard label={t.workPackages} value={String(wpCount)} icon="📦" />
+            <MetaCard label={t.risks} value={String(riskCount)} icon="⚠️" />
+            <MetaCard label={t.objectives} value={String(objCount)} icon="🎯" />
           </div>
 
           {/* Charts */}
