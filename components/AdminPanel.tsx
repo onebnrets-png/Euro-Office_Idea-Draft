@@ -648,7 +648,53 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     setMessage(language === 'si' ? `Razdelek ponastavljen.` : `Section reset to default.`);
     setIsError(false);
   };
-
+  // ★ FIX: Show default rules as placeholder when no override exists
+  const getDefaultPlaceholder = (section: string): string => {
+    const lang = language;
+    switch (section) {
+      case 'global':
+        return [
+          '── This section has no override. Default hardcoded rules from Instructions.ts are active. ──',
+          '',
+          'To customize, type your rules here and click Save.',
+          'Leave empty to keep using defaults.',
+        ].join('\n');
+      case 'language':
+        return `── LANGUAGE DIRECTIVES (defaults) ──\n\nEN:\n${LANGUAGE_DIRECTIVES.en}\n\n─────────────────\n\nSI:\n${LANGUAGE_DIRECTIVES.si}`;
+      case 'academic':
+        return `── ACADEMIC RIGOR RULES (defaults) ──\n\nEN:\n${ACADEMIC_RIGOR_RULES.en}\n\n─────────────────\n\nSI:\n${ACADEMIC_RIGOR_RULES.si}`;
+      case 'humanization':
+        return `── HUMANIZATION RULES (defaults) ──\n\nEN:\n${HUMANIZATION_RULES.en}\n\n─────────────────\n\nSI:\n${HUMANIZATION_RULES.si}`;
+      case 'projectTitle':
+        return `── PROJECT TITLE RULES (defaults) ──\n\nEN:\n${PROJECT_TITLE_RULES.en}\n\n─────────────────\n\nSI:\n${PROJECT_TITLE_RULES.si}`;
+      case 'mode':
+        return Object.entries(MODE_INSTRUCTIONS).map(([mode, langs]) =>
+          `── ${mode.toUpperCase()} ──\nEN:\n${langs.en}\n\nSI:\n${langs.si}`
+        ).join('\n\n═════════════════\n\n');
+      case 'qualityGates':
+        return Object.entries(QUALITY_GATES).map(([key, langs]) =>
+          `── ${key} ──\nEN:\n${(langs.en || []).join('\n• ')}\n\nSI:\n${(langs.si || []).join('\n• ')}`
+        ).join('\n\n═════════════════\n\n');
+      case 'sectionTask':
+        return Object.entries(SECTION_TASK_INSTRUCTIONS).map(([key, langs]) =>
+          `── ${key} ──\nEN:\n${(langs.en || '').substring(0, 300)}...\n\nSI:\n${(langs.si || '').substring(0, 300)}...`
+        ).join('\n\n═════════════════\n\n');
+      case 'fieldRules': {
+        const labels = FIELD_RULE_LABELS || {};
+        return `── FIELD RULES (defaults) ──\n\n${Object.keys(labels).map(k => `• ${k}: ${labels[k]}`).join('\n')}`;
+      }
+      case 'translation':
+        return '── TRANSLATION RULES ──\nTranslation rules are defined in Instructions.ts.\nOverride here to customize translation behavior for all users.';
+      case 'summary':
+        return '── SUMMARY RULES ──\nSummary condensation rules are defined in Instructions.ts.\nOverride here to customize summary generation.';
+      case 'chapter': {
+        const labels = CHAPTER_LABELS || {};
+        return `── CHAPTER MAPPING (defaults) ──\n\n${Object.keys(labels).map(k => `• ${k}: ${labels[k]}`).join('\n')}`;
+      }
+      default:
+        return 'No default rules available for this section.';
+    }
+  };
   // ─── Tab save router ──────────────────────────────────────
 
   const handleSave = () => {
