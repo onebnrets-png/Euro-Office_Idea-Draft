@@ -319,6 +319,7 @@ const UserAvatar: React.FC<{ name: string; email: string; size?: number }> = ({
 };
 
 // ─── Build default instructions for each section ─────────────
+// ★ v5.0: EN-only — no more SI variants displayed
 
 const buildDefaultInstructions = (): Record<string, string> => {
   const fmtGates = (gates: string[]): string =>
@@ -343,72 +344,55 @@ ${LANGUAGE_DIRECTIVES.en}
 ${LANGUAGE_DIRECTIVES.si}
 
 ── Language Mismatch Template ──
-${LANGUAGE_MISMATCH_TEMPLATE}`,
+${LANGUAGE_MISMATCH_TEMPLATE}
+
+NOTE: Language Directives are the ONLY section that retains both EN and SI variants.
+This is intentional — LANGUAGE_DIRECTIVES tells the AI which language to WRITE in.`,
 
     academic: `═══ ACADEMIC RIGOR & CITATION RULES ═══
 
-── English ──
-${ACADEMIC_RIGOR_RULES.en}
-
-── Slovenščina ──
-${ACADEMIC_RIGOR_RULES.si}`,
+${ACADEMIC_RIGOR_RULES.en}`,
 
     humanization: `═══ HUMANIZATION RULES ═══
 
-── English ──
-${HUMANIZATION_RULES.en}
-
-── Slovenščina ──
-${HUMANIZATION_RULES.si}`,
+${HUMANIZATION_RULES.en}`,
 
     projectTitle: `═══ PROJECT TITLE RULES ═══
 
-── English ──
-${PROJECT_TITLE_RULES.en}
-
-── Slovenščina ──
-${PROJECT_TITLE_RULES.si}`,
+${PROJECT_TITLE_RULES.en}`,
 
     mode: `═══ MODE INSTRUCTIONS ═══
 
 ${Object.entries(MODE_INSTRUCTIONS).map(([mode, langs]) =>
-  `── ${mode.toUpperCase()} ──\n\n[EN]\n${langs.en}\n\n[SI]\n${langs.si}`
+  `── ${mode.toUpperCase()} ──\n\n${langs.en}`
 ).join('\n\n════════════════════════════════════\n\n')}`,
 
     qualityGates: `═══ QUALITY GATES ═══
 
 ${Object.entries(QUALITY_GATES).map(([section, langs]) =>
-  `── ${section} ──\n\n[EN]\n${fmtGates(langs.en || [])}\n\n[SI]\n${fmtGates(langs.si || [])}`
+  `── ${section} ──\n\n${fmtGates(langs.en || [])}`
 ).join('\n\n════════════════════════════════════\n\n')}`,
 
     sectionTask: `═══ SECTION TASK INSTRUCTIONS ═══
 
 ${Object.entries(SECTION_TASK_INSTRUCTIONS).map(([section, langs]) =>
-  `── ${section} ──\n\n[EN]\n${langs.en || '(empty)'}\n\n[SI]\n${langs.si || '(empty)'}`
+  `── ${section} ──\n\n${langs.en || '(empty)'}`
 ).join('\n\n════════════════════════════════════\n\n')}`,
 
     fieldRules: `═══ FIELD RULES ═══
 
 ${Object.entries(FIELD_RULES).map(([key, val]) => {
   const label = (FIELD_RULE_LABELS as Record<string, string>)[key] || key;
-  return `── ${label} ──\n[EN] ${val.en || '(empty)'}\n[SI] ${val.si || '(empty)'}`;
+  return `── ${label} ──\n${val.en || '(empty)'}`;
 }).join('\n\n')}`,
 
     translation: `═══ TRANSLATION RULES ═══
 
-── English ──
-${TRANSLATION_RULES.en.map((r: string, i: number) => `  ${i + 1}. ${r}`).join('\n')}
-
-── Slovenščina ──
-${TRANSLATION_RULES.si.map((r: string, i: number) => `  ${i + 1}. ${r}`).join('\n')}`,
+${TRANSLATION_RULES.en.map((r: string, i: number) => `  ${i + 1}. ${r}`).join('\n')}`,
 
     summary: `═══ SUMMARY RULES ═══
 
-── English ──
-${SUMMARY_RULES.en}
-
-── Slovenščina ──
-${SUMMARY_RULES.si}`,
+${SUMMARY_RULES.en}`,
 
     chapter: `═══ CHAPTER RULES ═══
 
@@ -419,14 +403,9 @@ ${Object.entries(CHAPTERS).map(([key, val]) => {
 
     temporal: `═══ TEMPORAL INTEGRITY RULE ═══
 
-── English ──
-${TEMPORAL_INTEGRITY_RULE.en}
-
-── Slovenščina ──
-${TEMPORAL_INTEGRITY_RULE.si}`,
+${TEMPORAL_INTEGRITY_RULE.en}`,
   };
 };
-
 // ─── Placeholder text for sections without custom overrides ──
 
 const getDefaultPlaceholder = (section: string): string => {
