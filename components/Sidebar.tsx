@@ -1,12 +1,13 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
-// v1.2 — 2026-02-17
+// v1.3 — 2026-02-17
 //   - NEW: Dark mode toggle button (sun/moon icon) in footer
 //   - NEW: Dynamic sidebar background via isDark + darkColors
 //   - NEW: themeService integration (getThemeMode, toggleTheme, onThemeChange)
 //   - FIX: JS-based isDesktop (matchMedia 1024px) replaces Tailwind lg: breakpoint
-//          so sidebar is always visible on desktop without relying on CSS classes
+//   - FIX: All colors.* refs replaced with activeColors.* for proper dark mode
+//          (text, borders, surfaces, icons all respond to theme toggle)
 //
 // FEATURES:
 //   - Gradient background with design system tokens
@@ -24,7 +25,7 @@ import { ProgressRing } from '../design/components/ProgressRing.tsx';
 import { ICONS, getSteps, getSubSteps } from '../constants.tsx';
 import { TEXT } from '../locales.ts';
 import { isSubStepCompleted } from '../utils.ts';
-import { getThemeMode, toggleTheme, getActiveColors, onThemeChange } from '../services/themeService.ts';
+import { getThemeMode, toggleTheme, onThemeChange } from '../services/themeService.ts';
 import type { ProjectData } from '../types.ts';
 
 // ─── Step Icons (SVG for collapsed mode) ─────────────────────
@@ -202,7 +203,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return onThemeChange((mode) => setIsDark(mode === 'dark'));
   }, []);
 
-  const activeColors = getActiveColors();
+  const activeColors = isDark ? darkColors : colors;
 
   const t = TEXT[language] || TEXT['en'];
   const STEPS = getSteps(language);
@@ -223,14 +224,15 @@ const Sidebar: React.FC<SidebarProps> = ({
     width: sidebarWidth,
     background: isDark
       ? `linear-gradient(180deg, ${darkColors.surface.card} 0%, ${darkColors.surface.sidebar} 100%)`
-      : `linear-gradient(180deg, ${colors.surface.card} 0%, ${colors.surface.sidebar} 100%)`,
-    borderRight: `1px solid ${isDark ? darkColors.border.light : colors.border.light}`,
+      : `linear-gradient(180deg, ${activeColors.surface.card} 0%, ${activeColors.surface.sidebar} 100%)`,
+    borderRight: `1px solid ${activeColors.border.light}`,
     display: 'flex',
     flexDirection: 'column',
     transition: `width ${animation.duration.normal} ${animation.easing.default}, transform ${animation.duration.normal} ${animation.easing.default}`,
     overflow: 'hidden',
     boxShadow: shadows.lg,
     fontFamily: typography.fontFamily.sans,
+    color: activeColors.text.body,
   };
 
   // Mobile transform
@@ -253,9 +255,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         width: 24,
         height: 24,
         borderRadius: radii.full,
-        background: colors.primary[500],
-        border: `2px solid ${colors.surface.card}`,
-        color: colors.text.inverse,
+        background: activeColors.primary[500],
+        border: `2px solid ${activeColors.surface.card}`,
+        color: activeColors.text.inverse,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -289,7 +291,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: colors.surface.overlay,
+            background: activeColors.surface.overlay,
             zIndex: zIndex.sidebar - 1,
           }}
           className="lg:hidden"
@@ -304,7 +306,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* ═══ HEADER ═══ */}
         <div style={{
           padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : `${spacing.lg} ${spacing.lg}`,
-          borderBottom: `1px solid ${colors.border.light}`,
+          borderBottom: `1px solid ${activeColors.border.light}`,
           flexShrink: 0,
         }}>
           {/* Logo + Language */}
@@ -341,10 +343,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             {!isCollapsed && (
               <div style={{
                 display: 'flex',
-                background: colors.surface.sidebar,
+                background: activeColors.surface.sidebar,
                 borderRadius: radii.md,
                 padding: '2px',
-                border: `1px solid ${colors.border.light}`,
+                border: `1px solid ${activeColors.border.light}`,
               }}>
                 {(['si', 'en'] as const).map((lang) => (
                   <button
@@ -358,8 +360,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                       borderRadius: radii.sm,
                       border: 'none',
                       cursor: isLoading ? 'not-allowed' : 'pointer',
-                      background: language === lang ? colors.surface.card : 'transparent',
-                      color: language === lang ? colors.primary[600] : colors.text.muted,
+                      background: language === lang ? activeColors.surface.card : 'transparent',
+                      color: language === lang ? activeColors.primary[600] : activeColors.text.muted,
                       boxShadow: language === lang ? shadows.xs : 'none',
                       transition: `all ${animation.duration.fast}`,
                       opacity: isLoading ? 0.5 : 1,
@@ -381,17 +383,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             <>
               {/* Project Card */}
               <div style={{
-                background: colors.surface.card,
+                background: activeColors.surface.card,
                 borderRadius: radii.lg,
                 padding: spacing.md,
-                border: `1px solid ${colors.border.light}`,
+                border: `1px solid ${activeColors.border.light}`,
                 marginBottom: spacing.md,
               }}>
                 <p style={{
                   fontSize: '10px',
                   textTransform: 'uppercase',
                   fontWeight: typography.fontWeight.bold,
-                  color: colors.text.muted,
+                  color: activeColors.text.muted,
                   marginBottom: '4px',
                   letterSpacing: '0.05em',
                   margin: '0 0 4px 0',
@@ -402,7 +404,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <h3 style={{
                     fontSize: typography.fontSize.sm,
                     fontWeight: typography.fontWeight.semibold,
-                    color: colors.text.heading,
+                    color: activeColors.text.heading,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -418,7 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       borderRadius: radii.sm,
                       border: 'none',
                       background: 'transparent',
-                      color: colors.primary[500],
+                      color: activeColors.primary[500],
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -438,14 +440,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div style={{ flex: 1 }}>
                   <p style={{
                     fontSize: typography.fontSize.xs,
-                    color: colors.text.muted,
+                    color: activeColors.text.muted,
                     margin: 0,
                   }}>
                     {language === 'si' ? 'Skupni napredek' : 'Overall Progress'}
                   </p>
                   <div style={{
                     height: 4,
-                    background: colors.border.light,
+                    background: activeColors.border.light,
                     borderRadius: radii.full,
                     marginTop: 4,
                     overflow: 'hidden',
@@ -453,7 +455,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div style={{
                       height: '100%',
                       width: `${overallCompletion}%`,
-                      background: colors.primary.gradient,
+                      background: activeColors.primary.gradient,
                       borderRadius: radii.full,
                       transition: `width ${animation.duration.slower} ${animation.easing.default}`,
                     }} />
@@ -467,15 +469,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 fontSize: typography.fontSize.xs,
-                color: colors.text.muted,
+                color: activeColors.text.muted,
               }}>
-                <span>{t.auth.welcome} <strong style={{ color: colors.text.body }}>{currentUser}</strong></span>
+                <span>{t.auth.welcome} <strong style={{ color: activeColors.text.body }}>{currentUser}</strong></span>
                 <button
                   onClick={onOpenSettings}
                   style={{
                     border: 'none',
                     background: 'none',
-                    color: colors.primary[500],
+                    color: activeColors.primary[500],
                     cursor: 'pointer',
                     fontSize: typography.fontSize.xs,
                     textDecoration: 'underline',
@@ -550,7 +552,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <StepIcon style={{
                               width: 16,
                               height: 16,
-                              color: isActive ? stepColor.main : colors.text.muted,
+                              color: isActive ? stepColor.main : activeColors.text.muted,
                             }} />
                           </div>
                         )}
@@ -572,7 +574,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         flex: 1,
                         fontSize: typography.fontSize.sm,
                         fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                        color: isActive ? stepColor.text : colors.text.body,
+                        color: isActive ? stepColor.text : activeColors.text.body,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -620,7 +622,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                               alignItems: 'center',
                               gap: spacing.sm,
                               fontSize: typography.fontSize.xs,
-                              color: subCompleted ? stepColor.text : colors.text.muted,
+                              color: subCompleted ? stepColor.text : activeColors.text.muted,
                               fontFamily: 'inherit',
                               transition: `all ${animation.duration.fast}`,
                             }}
@@ -637,7 +639,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 width: 6,
                                 height: 6,
                                 borderRadius: radii.full,
-                                background: colors.border.medium,
+                                background: activeColors.border.medium,
                                 flexShrink: 0,
                               }} />
                             )}
@@ -656,7 +658,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* ═══ FOOTER ═══ */}
         <div style={{
           padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : spacing.lg,
-          borderTop: `1px solid ${colors.border.light}`,
+          borderTop: `1px solid ${activeColors.border.light}`,
           flexShrink: 0,
         }}>
           {isAdmin && !isCollapsed && (
@@ -671,7 +673,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 background: 'transparent',
                 cursor: 'pointer',
                 fontSize: typography.fontSize.sm,
-                color: colors.primary[600],
+                color: activeColors.primary[600],
                 fontWeight: typography.fontWeight.medium,
                 display: 'flex',
                 alignItems: 'center',
@@ -718,7 +720,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 background: 'transparent',
                 cursor: 'pointer',
                 fontSize: typography.fontSize.sm,
-                color: colors.text.muted,
+                color: activeColors.text.muted,
                 display: 'flex',
                 alignItems: 'center',
                 gap: spacing.sm,
@@ -753,7 +755,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 background: 'transparent',
                 cursor: 'pointer',
                 marginBottom: '2px',
-                color: colors.text.muted,
+                color: activeColors.text.muted,
               }}
               title={isDark ? 'Light Mode' : 'Dark Mode'}
             >
@@ -780,7 +782,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               background: 'transparent',
               cursor: 'pointer',
               fontSize: typography.fontSize.sm,
-              color: colors.text.muted,
+              color: activeColors.text.muted,
               display: 'flex',
               alignItems: 'center',
               justifyContent: isCollapsed ? 'center' : 'flex-start',
@@ -798,7 +800,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed && (
             <p style={{
               fontSize: '10px',
-              color: colors.text.muted,
+              color: activeColors.text.muted,
               textAlign: 'center',
               marginTop: spacing.sm,
               opacity: 0.6,
