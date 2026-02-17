@@ -19,6 +19,7 @@ import AuthScreen from './components/AuthScreen.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
 import ProjectListModal from './components/ProjectListModal.tsx';
 import ProjectDashboard from './components/ProjectDashboard.tsx';
+import DashboardPanel from './components/DashboardPanel.tsx';
 import Sidebar from './components/Sidebar.tsx';
 import SummaryModal from './components/SummaryModal.tsx';
 import { useAdmin } from './hooks/useAdmin.ts';
