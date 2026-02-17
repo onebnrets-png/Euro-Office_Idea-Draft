@@ -413,14 +413,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     }
   }, [activeTab, isOpen, isUserAdmin]);
 
-  // Sync edited instructions with fetched data
+  // ★ FIX: Sync edited instructions — MERGE defaults with overrides
+  // Admin always sees FULL rules, editable, deletable, customizable
   useEffect(() => {
-    if (admin.globalInstructions?.custom_instructions) {
-      setEditedInstructions(admin.globalInstructions.custom_instructions);
-    } else {
-      setEditedInstructions({});
+    const defaults = buildDefaultInstructions();
+    const overrides = admin.globalInstructions?.custom_instructions || {};
+    // Merge: override wins if it exists, otherwise show default
+    const merged: Record<string, string> = {};
+    for (const key of Object.keys(defaults)) {
+      merged[key] = (overrides[key] !== undefined && overrides[key] !== null)
+        ? overrides[key]
+        : defaults[key];
     }
-  }, [admin.globalInstructions]);
+    // Also include any override keys not in defaults
+    for (const key of Object.keys(overrides)) {
+      if (!(key in merged)) {
+        merged[key] = overrides[key];
+      }
+    }
+    setEditedInstructions(merged);
+  }, [admin.globalInstructions, language]);
 
   // ─── Toast auto-dismiss ────────────────────────────────────
 
