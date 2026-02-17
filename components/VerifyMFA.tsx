@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../services/storageService';
+import { supabase } from '../services/supabaseClient';
 
 export function VerifyMFA({ onVerified, language }) {
     const [verifyCode, setVerifyCode] = useState('');
