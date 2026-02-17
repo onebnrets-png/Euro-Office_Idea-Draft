@@ -90,11 +90,13 @@ export const useAuth = () => {
     }, 100);
   }, [loadCustomLogo, checkMFA]);
 
-  // ─── MFA Verified ──────────────────────────────────────────────
-  const handleMFAVerified = useCallback(() => {
+   // ─── MFA Verified ──────────────────────────────────────────────
+  const handleMFAVerified = useCallback(async () => {
     setNeedsMFAVerify(false);
     setMfaFactorId(null);
-    const email = storageService.getCurrentUser();
+    // After MFA verify, Supabase refreshes the session token.
+    // We must restore session to reload cachedUser from the new token.
+    const email = await storageService.restoreSession();
     if (email) {
       setCurrentUser(email);
       loadCustomLogo();
@@ -144,3 +146,4 @@ export const useAuth = () => {
     handleMFAVerified,
   };
 };
+
