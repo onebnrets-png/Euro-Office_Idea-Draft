@@ -164,7 +164,9 @@ const App = () => {
 
   // ★ v2.1: Track sidebar collapsed state for responsive main content
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
+  // ★ v2.2: Track dashboard panel collapsed state
+  const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
+  
   // ─── Dark mode reactive state ────────────────────────────────────
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   const colors = isDark ? darkColors : lightColors;
