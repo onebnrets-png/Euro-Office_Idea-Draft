@@ -1,9 +1,9 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v1.6 — 2026-02-17
-//   - NEW: initTheme() call on mount for dark mode initialization
-//   - Previous: SummaryModal extraction, Sidebar, Toolbar redesign
+// v1.7 — 2026-02-17
+//   - NEW: Dark mode reactive for inline styles (ToolbarButton, loading overlay)
+//   - Previous: initTheme(), SummaryModal extraction, Sidebar, Toolbar redesign
 // All business logic lives in hooks:
 //   - useAuth           → authentication, session, API key check, MFA
 //   - useProjectManager → CRUD, save/load, import/export, navigation
@@ -31,8 +31,12 @@ import { ensureGlobalInstructionsLoaded } from './services/globalInstructionsSer
 import { ICONS, getSteps, BRAND_ASSETS } from './constants.tsx';
 import { TEXT } from './locales.ts';
 import { isStepCompleted } from './utils.ts';
-import { colors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
-import { initTheme } from './services/themeService.ts';
+import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
+import { initTheme, getThemeMode, onThemeChange } from './services/themeService.ts';
+
+// Module-level alias: top-level components (ToolbarButton, etc.) use lightColors;
+// dark-mode CSS overrides in index.css handle their visual dark styling.
+const colors = lightColors;
 
 import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
@@ -161,6 +165,13 @@ const App = () => {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const adminHook = useAdmin();
+
+  // ─── Dark mode reactive state ────────────────────────────────────
+  const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
+  useEffect(() => {
+    return onThemeChange((mode) => setIsDark(mode === 'dark'));
+  }, []);
+  const colors = isDark ? darkColors : lightColors;
 
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
