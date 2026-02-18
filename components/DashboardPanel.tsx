@@ -1,10 +1,13 @@
 // components/DashboardPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Persistent right-side dashboard panel — always visible.
-// v2.1 — 2026-02-18
+// v2.2 — 2026-02-18
 //   - FIX: Empty projects now correctly show 0% completeness
 //   - FIX: skeleton arrays, default durationMonths, empty readinessLevels
 //          no longer inflate completeness percentage
+//   - FIX: Default enum fields (category, likelihood, impact, type)
+//          are now skipped in content detection
+//   - FIX: Removed duplicate objectHasRealContent declaration
 //   - Charts no longer clipped (removed overflow:hidden, proper width)
 //   - Full stats grid — Gen.Obj, Spec.Obj, WPs, Tasks, Outputs,
 //          Outcomes, Impacts, KERs, Risks (all with counts)
@@ -142,6 +145,7 @@ const Icons = {
 // ─── Helper: Check if a value represents real user-entered content ──
 // v2.2 FIX: Skip default enum fields (category, likelihood, impact, type)
 // and id-like fields — these are skeleton defaults, not user content
+// Numbers are NOT counted as real content (prevents durationMonths:24 inflation)
 
 const SKIP_KEYS = new Set([
   'id', 'project_id', 'created_at', 'updated_at',
@@ -159,7 +163,6 @@ const arrayHasRealContent = (arr: any[]): boolean => {
     return Object.entries(item).some(([k, v]) => {
       if (SKIP_KEYS.has(k)) return false;
       if (typeof v === 'string') return v.trim().length > 0;
-      // DO NOT count numbers as real content (durationMonths:24, etc.)
       if (Array.isArray(v)) return arrayHasRealContent(v);
       return false;
     });
@@ -177,41 +180,28 @@ const objectHasRealContent = (obj: any, skipKeys: Set<string>): boolean => {
   });
 };
 
-const objectHasRealContent = (obj: any, skipKeys: Set<string>): boolean => {
-  if (!obj || typeof obj !== 'object') return false;
-  return Object.entries(obj).some(([k, v]) => {
-    if (skipKeys.has(k)) return false;
-    if (typeof v === 'string') return v.trim().length > 0;
-    if (typeof v === 'number') return true;
-    if (Array.isArray(v)) return arrayHasRealContent(v);
-    if (typeof v === 'object' && v !== null) return objectHasRealContent(v, skipKeys);
-    return false;
-  });
-};
-
 // ─── Completeness calculator ─────────────────────────────────
-// v2.1 — Correctly returns 0% for empty/skeleton projects
+// v2.2 — Correctly returns 0% for empty/skeleton projects
 
 const calculateCompleteness = (projectData: any): number => {
   if (!projectData) return 0;
 
-  // Fields to skip — these are metadata or default values, not user content
   const SKIP = new Set([
     'startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe',
     'id', 'project_id', 'created_at', 'updated_at',
   ]);
 
-  // Define what "filled" means for each section
   const sectionChecks: { key: string; check: (data: any) => boolean }[] = [
     {
       key: 'problemAnalysis',
       check: (d) => {
         if (!d) return false;
-        const hasCoreTitle = hasRealStringContent(d.coreProblem?.title);
-        const hasCoreDesc = hasRealStringContent(d.coreProblem?.description);
-        const hasCauses = arrayHasRealContent(d.causes);
-        const hasConsequences = arrayHasRealContent(d.consequences);
-        return hasCoreTitle || hasCoreDesc || hasCauses || hasConsequences;
+        return (
+          hasRealStringContent(d.coreProblem?.title) ||
+          hasRealStringContent(d.coreProblem?.description) ||
+          arrayHasRealContent(d.causes) ||
+          arrayHasRealContent(d.consequences)
+        );
       },
     },
     {
@@ -225,12 +215,13 @@ const calculateCompleteness = (projectData: any): number => {
           hasRealStringContent(d.stateOfTheArt) ||
           hasRealStringContent(d.proposedSolution) ||
           arrayHasRealContent(d.policies) ||
-          (d.readinessLevels && (
-            d.readinessLevels.TRL?.level !== null ||
-            d.readinessLevels.SRL?.level !== null ||
-            d.readinessLevels.ORL?.level !== null ||
-            d.readinessLevels.LRL?.level !== null
-          ))
+          // Only count readiness levels if at least one is a real number > 0
+          (d.readinessLevels && [
+            d.readinessLevels.TRL,
+            d.readinessLevels.SRL,
+            d.readinessLevels.ORL,
+            d.readinessLevels.LRL,
+          ].some((r: any) => typeof r?.level === 'number' && r.level > 0))
         );
       },
     },
@@ -264,7 +255,17 @@ const calculateCompleteness = (projectData: any): number => {
     { key: 'outputs', check: (d) => arrayHasRealContent(d) },
     { key: 'outcomes', check: (d) => arrayHasRealContent(d) },
     { key: 'impacts', check: (d) => arrayHasRealContent(d) },
-    { key: 'risks', check: (d) => arrayHasRealContent(d) },
+    {
+      key: 'risks',
+      check: (d) => {
+        if (!Array.isArray(d)) return false;
+        return d.some((r: any) =>
+          hasRealStringContent(r.title) ||
+          hasRealStringContent(r.description) ||
+          hasRealStringContent(r.mitigation)
+        );
+      },
+    },
     { key: 'kers', check: (d) => arrayHasRealContent(d) },
   ];
 
@@ -399,7 +400,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   const [statOrder, setStatOrder] = useState<string[]>(loadStatOrder);
 
-  // Drag state
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const dragRef = useRef<number | null>(null);
@@ -423,7 +423,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
 
   const pi = projectData?.projectIdea;
 
-  // Build ordered stats from saved order
   const orderedStats = useMemo(() => {
     const map = new Map(DEFAULT_STAT_ORDER.map(s => [s.id, s]));
     const ordered = statOrder
@@ -435,7 +434,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
     return ordered;
   }, [statOrder]);
 
-  // Drag handlers
   const handleDragStart = useCallback((idx: number) => {
     setDragIdx(idx);
     dragRef.current = idx;
@@ -536,7 +534,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
           label={`${completeness}`}
         />
 
-        {/* Mini stats — all categories */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
           {orderedStats.map(stat => {
             const val = stat.getValue(projectData);
@@ -622,10 +619,8 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
           <MetaRow icon={Icons.play(colors.success[500])} label={t.startDate} value={pi?.startDate || ''} />
         </div>
 
-        {/* Separator */}
         <hr style={{ border: 'none', borderTop: `1px solid ${colors.border.light}`, margin: 0 }} />
 
-        {/* Section label + drag hint */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '10px', fontWeight: 700, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {t.stats}
@@ -669,22 +664,18 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
                   borderBottom: isOver && dragIdx !== null && dragIdx > idx ? `2px solid ${colors.primary[400]}` : '2px solid transparent',
                 }}
               >
-                {/* Drag handle */}
                 <div style={{ flexShrink: 0, opacity: 0.3, cursor: 'grab' }}>
                   {Icons.grip(colors.text.muted)}
                 </div>
-                {/* Icon */}
                 <div style={{ flexShrink: 0 }}>
                   {stat.icon(iconColor)}
                 </div>
-                {/* Label */}
                 <span style={{
                   flex: 1, fontSize: '11px', color: colors.text.body,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {language === 'si' ? stat.labelSI : stat.labelEN}
                 </span>
-                {/* Value */}
                 <span style={{
                   fontSize: '13px', fontWeight: 700, color: val > 0 ? colors.text.heading : colors.text.muted,
                   minWidth: '20px', textAlign: 'right',
@@ -696,17 +687,14 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
           })}
         </div>
 
-        {/* Separator */}
         <hr style={{ border: 'none', borderTop: `1px solid ${colors.border.light}`, margin: 0 }} />
 
-        {/* Charts section label */}
         {structuralCharts.length > 0 && (
           <span style={{ fontSize: '10px', fontWeight: 700, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {t.charts}
           </span>
         )}
 
-        {/* Mini charts — with proper width to prevent clipping */}
         {structuralCharts.map(chart => (
           <div key={chart.id} style={{
             borderRadius: radii.lg,
