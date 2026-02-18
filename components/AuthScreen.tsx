@@ -1,12 +1,18 @@
 // components/AuthScreen.tsx
 // Supabase Auth - Email/Password login & registration + MFA verification
-// v2.0 - 2026-02-17  Dark-mode: isDark + colors pattern
+// v3.0 - 2026-02-18
+//   ★ v3.0: Multi-provider API key on registration
+//     - Dropdown to select provider (Gemini / OpenAI / OpenRouter)
+//     - Dynamic placeholder and description per provider
+//     - register() passes apiProvider to storageService
+//   v2.0 - 2026-02-17  Dark-mode: isDark + colors pattern
 
 import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/storageService.ts';
 import { isValidEmail, checkPasswordStrength, isPasswordSecure, generateDisplayNameFromEmail } from '../utils.ts';
 import { TEXT } from '../locales.ts';
 import type { Language } from '../types.ts';
+import type { AIProviderType } from '../services/aiProvider.ts';
 import { lightColors, darkColors, spacing, radii, shadows, typography } from '../design/theme.ts';
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 
@@ -19,7 +25,7 @@ interface MFAVerifyScreenProps {
 }
 
 interface AuthScreenProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (displayName?: string) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   onOpenSettings: () => void;
@@ -28,6 +34,44 @@ interface AuthScreenProps {
   onMFAVerified: () => void;
   onMFACancel: () => void;
 }
+
+// ─── ★ v3.0: Provider config for registration ───────────────────
+
+const PROVIDER_OPTIONS: { id: AIProviderType; label: string; labelSi: string; icon: string; placeholder: string; desc: string; descSi: string; link: string; linkLabel: string }[] = [
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    labelSi: 'Google Gemini',
+    icon: '✨',
+    placeholder: 'AIza...',
+    desc: 'Get your free Gemini API key from Google AI Studio.',
+    descSi: 'Pridobi brezplačni Gemini API ključ iz Google AI Studio.',
+    link: 'https://aistudio.google.com/apikey',
+    linkLabel: 'Google AI Studio →',
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI (ChatGPT)',
+    labelSi: 'OpenAI (ChatGPT)',
+    icon: '🤖',
+    placeholder: 'sk-...',
+    desc: 'Get your OpenAI API key from platform.openai.com.',
+    descSi: 'Pridobi OpenAI API ključ iz platform.openai.com.',
+    link: 'https://platform.openai.com/api-keys',
+    linkLabel: 'OpenAI Platform →',
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    labelSi: 'OpenRouter',
+    icon: '🔀',
+    placeholder: 'sk-or-...',
+    desc: 'Access 200+ models via OpenRouter. Get your key at openrouter.ai.',
+    descSi: 'Dostop do 200+ modelov prek OpenRouter. Pridobi ključ na openrouter.ai.',
+    link: 'https://openrouter.ai/keys',
+    linkLabel: 'OpenRouter →',
+  },
+];
 
 // --- MFA Verification Sub-Component ---
 const MFAVerifyScreen: React.FC<MFAVerifyScreenProps> = ({ factorId, language, onVerified, onCancel }) => {
@@ -133,6 +177,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [apiKey, setApiKey] = useState('');
+    const [apiProvider, setApiProvider] = useState<AIProviderType>('gemini');  // ★ v3.0
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
@@ -141,6 +186,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
 
     const t = TEXT[language].auth;
     const pwStrength = checkPasswordStrength(password);
+
+    // ★ v3.0: Get current provider config
+    const currentProviderConfig = PROVIDER_OPTIONS.find(p => p.id === apiProvider) || PROVIDER_OPTIONS[0];
 
     if (needsMFAVerify && mfaFactorId) {
         return (
@@ -170,7 +218,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
         if (password !== confirmPassword) { setError(t.errorMatch); return; }
         setLoading(true);
         const finalDisplayName = displayName.trim() || generateDisplayNameFromEmail(email);
-        const result = await storageService.register(email, finalDisplayName, password, apiKey);
+        // ★ v3.0: Pass apiProvider to register
+        const result = await storageService.register(email, finalDisplayName, password, apiKey, apiProvider);
         setLoading(false);
         if (result.success) {
             onLoginSuccess(result.displayName || email.split('@')[0]);
@@ -192,7 +241,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
         </svg>
     );
 
-    // Shared input style
     const inputStyle: React.CSSProperties = {
       width: '100%',
       padding: spacing.sm,
@@ -231,7 +279,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
             </div>
 
             {/* Card */}
-            <div style={{ background: colors.surface.card, borderRadius: radii.lg, boxShadow: shadows['2xl'], width: '100%', maxWidth: 448, padding: spacing['3xl'], position: 'relative', overflow: 'hidden', border: `1px solid ${colors.border.light}` }}>
+            <div style={{ background: colors.surface.card, borderRadius: radii.lg, boxShadow: shadows['2xl'], width: '100%', maxWidth: 480, padding: spacing['3xl'], position: 'relative', overflow: 'hidden', border: `1px solid ${colors.border.light}` }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: colors.primary.gradient }}></div>
 
                 <div style={{ textAlign: 'center', marginBottom: spacing['3xl'] }}>
@@ -286,11 +334,78 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
                         </div>
                     )}
 
+                    {/* ═══ ★ v3.0: MULTI-PROVIDER API KEY SECTION ═══ */}
                     {!isLogin && (
                         <div style={{ background: colors.surface.sidebar, padding: spacing.md, borderRadius: radii.md, border: `1px solid ${colors.border.light}`, marginTop: spacing.sm }}>
-                            <label style={{ display: 'block', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold as any, color: colors.primary[isDark ? 300 : 700], marginBottom: '4px' }}>{t.apiKeyLabel}</label>
-                            <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }} placeholder={t.apiKeyPlaceholder} />
-                            <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, marginTop: '4px' }}>{t.apiKeyDesc}</p>
+
+                            {/* Provider selector dropdown */}
+                            <label style={{ display: 'block', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold as any, color: colors.primary[isDark ? 300 : 700], marginBottom: spacing.sm }}>
+                                {language === 'si' ? 'AI Ponudnik & API Ključ' : 'AI Provider & API Key'}
+                                <span style={{ fontWeight: typography.fontWeight.normal as any, color: colors.text.muted, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>
+                                    ({language === 'si' ? 'opcijsko — lahko dodaš tudi pozneje' : 'optional — you can add later too'})
+                                </span>
+                            </label>
+
+                            {/* Provider dropdown */}
+                            <div style={{ marginBottom: spacing.sm }}>
+                                <select
+                                    value={apiProvider}
+                                    onChange={(e) => { setApiProvider(e.target.value as AIProviderType); setApiKey(''); }}
+                                    style={{
+                                        width: '100%',
+                                        padding: `${spacing.sm} ${spacing.md}`,
+                                        border: `1px solid ${colors.border.medium}`,
+                                        borderRadius: radii.md,
+                                        background: isDark ? colors.surface.background : '#FFFFFF',
+                                        color: colors.text.heading,
+                                        fontSize: typography.fontSize.sm,
+                                        fontWeight: typography.fontWeight.medium as any,
+                                        cursor: 'pointer',
+                                        appearance: 'none',
+                                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`,
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'right 12px center',
+                                        paddingRight: '36px',
+                                    }}
+                                >
+                                    {PROVIDER_OPTIONS.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.icon} {language === 'si' ? p.labelSi : p.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* API Key input */}
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                style={{ ...inputStyle, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}
+                                placeholder={currentProviderConfig.placeholder}
+                            />
+
+                            {/* Description + link */}
+                            <div style={{ marginTop: spacing.sm, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
+                                <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, margin: 0, flex: 1 }}>
+                                    {language === 'si' ? currentProviderConfig.descSi : currentProviderConfig.desc}
+                                </p>
+                                <a
+                                    href={currentProviderConfig.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        fontSize: typography.fontSize.xs,
+                                        color: colors.primary[isDark ? 300 : 600],
+                                        fontWeight: typography.fontWeight.semibold as any,
+                                        textDecoration: 'none',
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    {currentProviderConfig.linkLabel}
+                                </a>
+                            </div>
                         </div>
                     )}
 
@@ -305,7 +420,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
                 <div style={{ marginTop: spacing.xl, textAlign: 'center', fontSize: typography.fontSize.sm, borderTop: `1px solid ${colors.border.light}`, paddingTop: spacing.lg }}>
                     <p style={{ color: colors.text.body }}>
                         {isLogin ? t.switchMsg : t.switchMsgLogin}
-                        <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setDisplayName(''); setPassword(''); setApiKey(''); setSuccessMessage(''); }} style={{ marginLeft: spacing.sm, color: colors.primary[isDark ? 300 : 600], background: 'none', border: 'none', cursor: 'pointer', fontWeight: typography.fontWeight.semibold as any, textDecoration: 'underline' }}>
+                        <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setDisplayName(''); setPassword(''); setConfirmPassword(''); setApiKey(''); setApiProvider('gemini'); setSuccessMessage(''); }} style={{ marginLeft: spacing.sm, color: colors.primary[isDark ? 300 : 600], background: 'none', border: 'none', cursor: 'pointer', fontWeight: typography.fontWeight.semibold as any, textDecoration: 'underline' }}>
                             {isLogin ? t.switchAction : t.switchActionLogin}
                         </button>
                     </p>
