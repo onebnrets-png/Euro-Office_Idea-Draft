@@ -55,6 +55,19 @@ const STEP_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
 
 const STEP_KEYS: StepColorKey[] = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
 
+// ─── Helper: does array contain at least one item with real content? ──
+function arrayHasContent(arr: any[] | undefined | null): boolean {
+  if (!arr || arr.length === 0) return false;
+  return arr.some((item: any) => {
+    if (typeof item === 'string') return item.trim().length > 0;
+    if (typeof item !== 'object' || item === null) return false;
+    const hasTitle = item.title && typeof item.title === 'string' && item.title.trim().length > 0;
+    const hasDesc = item.description && typeof item.description === 'string' && item.description.trim().length > 0;
+    const hasMitigation = item.mitigation && typeof item.mitigation === 'string' && item.mitigation.trim().length > 0;
+    return hasTitle || hasDesc || hasMitigation;
+  });
+}
+
 function getStepCompletionPercent(projectData: ProjectData, stepKey: string): number {
   // Problem Analysis
   if (stepKey === 'problemAnalysis') {
@@ -62,8 +75,8 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     const total = 3;
     const pa = projectData.problemAnalysis;
     if (pa?.coreProblem?.title && pa.coreProblem.title.trim()) filled++;
-    if (pa?.causes && pa.causes.length > 0 && pa.causes.some((c: any) => c.title?.trim())) filled++;
-    if (pa?.consequences && pa.consequences.length > 0 && pa.consequences.some((c: any) => c.title?.trim())) filled++;
+    if (arrayHasContent(pa?.causes)) filled++;
+    if (arrayHasContent(pa?.consequences)) filled++;
     return Math.round((filled / total) * 100);
   }
 
@@ -76,14 +89,14 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (pi?.stateOfTheArt?.trim()) filled++;
     if (pi?.proposedSolution?.trim()) filled++;
     if (pi?.readinessLevels && Object.values(pi.readinessLevels).some((rl: any) => rl?.level > 0)) filled++;
-    if (pi?.policies && pi.policies.length > 0 && pi.policies.some((p: any) => p.name?.trim())) filled++;
+    if (arrayHasContent(pi?.policies)) filled++;
     return Math.round((filled / total) * 100);
   }
 
-    // General Objectives (minimum 3 required)
+  // General Objectives (minimum 3 required)
   if (stepKey === 'generalObjectives') {
     const objs = projectData.generalObjectives;
-    if (!objs || objs.length === 0) return 0;
+    if (!arrayHasContent(objs)) return 0;
     const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim()).length;
     const minRequired = 3;
     if (withContent >= minRequired) return 100;
@@ -93,7 +106,7 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
   // Specific Objectives
   if (stepKey === 'specificObjectives') {
     const objs = projectData.specificObjectives;
-    if (!objs || objs.length === 0) return 0;
+    if (!arrayHasContent(objs)) return 0;
     const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim() && o.indicator?.trim()).length;
     return Math.round((Math.min(withContent, 5) / 5) * 100);
   }
@@ -102,9 +115,12 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
   if (stepKey === 'activities') {
     let filled = 0;
     const total = 3;
-    if (projectData.activities && projectData.activities.length > 0) filled++;
+    if (projectData.activities && projectData.activities.some((wp: any) =>
+      (wp.title && wp.title.trim()) ||
+      (wp.tasks && wp.tasks.some((t: any) => t.title && t.title.trim()))
+    )) filled++;
     if (projectData.projectManagement?.description?.trim()) filled++;
-    if (projectData.risks && projectData.risks.length > 0) filled++;
+    if (arrayHasContent(projectData.risks)) filled++;
     return Math.round((filled / total) * 100);
   }
 
@@ -112,10 +128,10 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
   if (stepKey === 'expectedResults') {
     let filled = 0;
     const total = 4;
-    if (projectData.outputs && projectData.outputs.length > 0) filled++;
-    if (projectData.outcomes && projectData.outcomes.length > 0) filled++;
-    if (projectData.impacts && projectData.impacts.length > 0) filled++;
-    if (projectData.kers && projectData.kers.length > 0) filled++;
+    if (arrayHasContent(projectData.outputs)) filled++;
+    if (arrayHasContent(projectData.outcomes)) filled++;
+    if (arrayHasContent(projectData.impacts)) filled++;
+    if (arrayHasContent(projectData.kers)) filled++;
     return Math.round((filled / total) * 100);
   }
 
