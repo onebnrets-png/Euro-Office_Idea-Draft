@@ -1,6 +1,9 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
+// v1.6 — 2026-02-18
+//   - FIX: arrayHasContent helper — empty skeleton arrays no longer count as "filled"
+//     New projects correctly show 0% instead of false 40-100%
 // v1.5 — 2026-02-17
 //   - FIX: onCollapseChange prop — notifies App.tsx when sidebar
 //     collapses/expands so main content can adjust marginLeft
