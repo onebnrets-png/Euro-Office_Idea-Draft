@@ -1,12 +1,13 @@
 // components/DashboardPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Persistent right-side dashboard panel — always visible.
-// v2.0 — 2026-02-18
+// v2.1 — 2026-02-18
+//   - FIX: Empty skeleton arrays no longer count as filled (completeness bug)
 //   - FIX: Charts no longer clipped (removed overflow:hidden, proper width)
-//   - NEW: Full stats grid — Gen.Obj, Spec.Obj, WPs, Tasks, Outputs,
+//   - Full stats grid — Gen.Obj, Spec.Obj, WPs, Tasks, Outputs,
 //          Outcomes, Impacts, KERs (all with counts)
-//   - NEW: Drag & drop reordering of stat items
-//   - Previous (v1.0): Basic panel with 3 stats + charts
+//   - Drag & drop reordering of stat items
+//   - Previous (v2.0): Had completeness bug with empty projects
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -138,7 +139,27 @@ const Icons = {
   ),
 };
 
+// ─── Helper: Check if array has real content ─────────────────
+// v2.1 FIX — skeleton arrays like [{title:'', description:''}]
+// no longer count as "filled"
+
+const arrayHasRealContent = (arr: any[]): boolean => {
+  return arr.some((item: any) => {
+    if (typeof item === 'string') return item.trim().length > 0;
+    if (typeof item === 'number') return true;
+    if (typeof item !== 'object' || item === null) return false;
+    return Object.entries(item).some(([k, v]) => {
+      if (['id', 'project_id', 'created_at', 'updated_at'].includes(k)) return false;
+      if (typeof v === 'string') return v.trim().length > 0;
+      if (typeof v === 'number') return true;
+      if (Array.isArray(v)) return v.length > 0 && arrayHasRealContent(v);
+      return false;
+    });
+  });
+};
+
 // ─── Completeness calculator ─────────────────────────────────
+// v2.1 FIX: Uses arrayHasRealContent to avoid false positives
 
 const calculateCompleteness = (projectData: any): number => {
   const sections = [
@@ -165,9 +186,14 @@ const calculateCompleteness = (projectData: any): number => {
       if (entries.length === 0) { filled += 1; continue; }
       const f = entries.filter(([_, v]) => {
         if (typeof v === 'string') return v.trim().length > 0;
-        if (Array.isArray(v)) return v.length > 0;
+        if (Array.isArray(v)) return v.length > 0 && arrayHasRealContent(v);
         if (typeof v === 'number') return true;
-        if (typeof v === 'object' && v !== null) return Object.values(v).some((sv: any) => sv !== null && sv !== undefined);
+        if (typeof v === 'object' && v !== null) return Object.values(v).some((sv: any) => {
+          if (typeof sv === 'string') return sv.trim().length > 0;
+          if (typeof sv === 'number') return true;
+          if (Array.isArray(sv)) return sv.length > 0 && arrayHasRealContent(sv);
+          return sv !== null && sv !== undefined;
+        });
         return false;
       });
       filled += f.length / entries.length;
