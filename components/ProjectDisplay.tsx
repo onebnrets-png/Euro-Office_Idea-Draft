@@ -953,15 +953,29 @@ const renderExpectedResults = (props) => {
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-      <header className="bg-white border-b border-slate-200 px-6 py-5 flex justify-between items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn">
-          <div className="flex items-start gap-3">
-              <span style={{ width: 4, height: 36, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 4 }} />
-              <div>
-                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{activeStep.title}</h2>
-                  <p className="text-sm text-slate-500 mt-0.5">{t.stepSubtitle}</p>
+            <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
+          {/* Left: Step title + description */}
+          <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
+              <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ minWidth: 0 }}>
+                  <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
               </div>
           </div>
-            <div className="flex items-center gap-4">
+
+          {/* Center: Step Navigation Circles */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
+              <StepNavigationBar
+                  language={language}
+                  currentStepId={activeStepId}
+                  completedStepsStatus={completedStepsStatus || []}
+                  onStepClick={onStepClick || (() => {})}
+                  isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
+              />
+          </div>
+
+          {/* Right: Generate button */}
+          <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
               {showGenerateButton && (
                   sectionKey === 'expectedResults'
                     ? <GenerateButton onClick={() => props.onGenerateCompositeSection('expectedResults')} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
