@@ -320,35 +320,7 @@ const App = () => {
               </div>
             </div>
 
-            {/* ═══ TOOLBAR ROW 2: Step Title + Navigation Circles ═══ */}
-            <div style={{
-              background: colors.surface.card, borderBottom: `1px solid ${colors.border.light}`,
-              padding: `6px ${spacing.lg}`, display: 'flex', alignItems: 'center',
-              gap: spacing.md, flexShrink: 0, minHeight: 52,
-            }}>
-              <div style={{ flexShrink: 0, maxWidth: '200px' }}>
-                <h2 style={{
-                  fontSize: '14px', fontWeight: 700, color: colors.text.heading,
-                  margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {STEPS.find(s => s.id === (pm.currentStepId || 1))?.title || ''}
-                </h2>
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
-                <StepNavigationBar
-                  language={language}
-                  currentStepId={pm.currentStepId || 1}
-                  completedStepsStatus={completedStepsStatus}
-                  onStepClick={(id) => pm.setCurrentStepId(id)}
-                  isProblemAnalysisComplete={completedStepsStatus[0]}
-                />
-              </div>
-
-              <div style={{ width: '200px', flexShrink: 0 }} />
-            </div>
-
-            {/* ═══ SCROLLABLE CONTENT ═══ */}
+           {/* ═══ SCROLLABLE CONTENT ═══ */}
             <ProjectDisplay
               projectData={pm.projectData} activeStepId={pm.currentStepId || 1} language={language}
               onUpdateData={pm.handleUpdateData} onGenerateSection={generation.handleGenerateSection}
