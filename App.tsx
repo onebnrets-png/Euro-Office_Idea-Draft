@@ -1,6 +1,8 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
+// v2.2 — 2026-02-18
+//   - NEW: Toolbar center — project acronym badge + full title (or placeholder)
 // v2.1 — 2026-02-17
 //   - FIX: Sidebar collapse → main content responsive marginLeft
 //     sidebarCollapsed state + onCollapseChange prop + reactive <main>
