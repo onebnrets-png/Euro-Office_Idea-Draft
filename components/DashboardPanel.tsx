@@ -2,12 +2,13 @@
 // ═══════════════════════════════════════════════════════════════
 // Persistent right-side dashboard panel — always visible.
 // v2.1 — 2026-02-18
-//   - FIX: Empty skeleton arrays no longer count as filled (completeness bug)
-//   - FIX: Charts no longer clipped (removed overflow:hidden, proper width)
+//   - FIX: Empty projects now correctly show 0% completeness
+//   - FIX: skeleton arrays, default durationMonths, empty readinessLevels
+//          no longer inflate completeness percentage
+//   - Charts no longer clipped (removed overflow:hidden, proper width)
 //   - Full stats grid — Gen.Obj, Spec.Obj, WPs, Tasks, Outputs,
-//          Outcomes, Impacts, KERs (all with counts)
+//          Outcomes, Impacts, KERs, Risks (all with counts)
 //   - Drag & drop reordering of stat items
-//   - Previous (v2.0): Had completeness bug with empty projects
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -56,7 +57,6 @@ const Icons = {
       <polygon points="10 8 16 12 10 16 10 8" />
     </svg>
   ),
-  // Stats icons
   flag: (c: string) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
@@ -139,11 +139,16 @@ const Icons = {
   ),
 };
 
-// ─── Helper: Check if array has real content ─────────────────
-// v2.1 FIX — skeleton arrays like [{title:'', description:''}]
-// no longer count as "filled"
+// ─── Helper: Check if a value represents real user-entered content ──
+// Skeleton arrays like [{title:'', description:''}] → false
+// Default values like durationMonths:24, startDate:'2026-...' → skipped
+// Empty readinessLevels {level:null, justification:''} → false
+
+const hasRealStringContent = (v: any): boolean =>
+  typeof v === 'string' && v.trim().length > 0;
 
 const arrayHasRealContent = (arr: any[]): boolean => {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
   return arr.some((item: any) => {
     if (typeof item === 'string') return item.trim().length > 0;
     if (typeof item === 'number') return true;
@@ -152,54 +157,114 @@ const arrayHasRealContent = (arr: any[]): boolean => {
       if (['id', 'project_id', 'created_at', 'updated_at'].includes(k)) return false;
       if (typeof v === 'string') return v.trim().length > 0;
       if (typeof v === 'number') return true;
-      if (Array.isArray(v)) return v.length > 0 && arrayHasRealContent(v);
+      if (Array.isArray(v)) return arrayHasRealContent(v);
       return false;
     });
   });
 };
 
+const objectHasRealContent = (obj: any, skipKeys: Set<string>): boolean => {
+  if (!obj || typeof obj !== 'object') return false;
+  return Object.entries(obj).some(([k, v]) => {
+    if (skipKeys.has(k)) return false;
+    if (typeof v === 'string') return v.trim().length > 0;
+    if (typeof v === 'number') return true;
+    if (Array.isArray(v)) return arrayHasRealContent(v);
+    if (typeof v === 'object' && v !== null) return objectHasRealContent(v, skipKeys);
+    return false;
+  });
+};
+
 // ─── Completeness calculator ─────────────────────────────────
-// v2.1 FIX: Uses arrayHasRealContent to avoid false positives
+// v2.1 — Correctly returns 0% for empty/skeleton projects
 
 const calculateCompleteness = (projectData: any): number => {
-  const sections = [
-    'problemAnalysis', 'projectIdea', 'generalObjectives',
-    'specificObjectives', 'projectManagement', 'activities',
-    'outputs', 'outcomes', 'impacts', 'risks', 'kers',
-  ];
-  const SKIP = new Set(['startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe', 'id', 'project_id', 'created_at', 'updated_at']);
-  let filled = 0, total = 0;
+  if (!projectData) return 0;
 
-  for (const key of sections) {
+  // Fields to skip — these are metadata or default values, not user content
+  const SKIP = new Set([
+    'startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe',
+    'id', 'project_id', 'created_at', 'updated_at',
+  ]);
+
+  // Define what "filled" means for each section
+  const sectionChecks: { key: string; check: (data: any) => boolean }[] = [
+    {
+      key: 'problemAnalysis',
+      check: (d) => {
+        if (!d) return false;
+        const hasCoreTitle = hasRealStringContent(d.coreProblem?.title);
+        const hasCoreDesc = hasRealStringContent(d.coreProblem?.description);
+        const hasCauses = arrayHasRealContent(d.causes);
+        const hasConsequences = arrayHasRealContent(d.consequences);
+        return hasCoreTitle || hasCoreDesc || hasCauses || hasConsequences;
+      },
+    },
+    {
+      key: 'projectIdea',
+      check: (d) => {
+        if (!d) return false;
+        return (
+          hasRealStringContent(d.projectTitle) ||
+          hasRealStringContent(d.projectAcronym) ||
+          hasRealStringContent(d.mainAim) ||
+          hasRealStringContent(d.stateOfTheArt) ||
+          hasRealStringContent(d.proposedSolution) ||
+          arrayHasRealContent(d.policies) ||
+          (d.readinessLevels && (
+            d.readinessLevels.TRL?.level !== null ||
+            d.readinessLevels.SRL?.level !== null ||
+            d.readinessLevels.ORL?.level !== null ||
+            d.readinessLevels.LRL?.level !== null
+          ))
+        );
+      },
+    },
+    {
+      key: 'generalObjectives',
+      check: (d) => arrayHasRealContent(d),
+    },
+    {
+      key: 'specificObjectives',
+      check: (d) => arrayHasRealContent(d),
+    },
+    {
+      key: 'projectManagement',
+      check: (d) => {
+        if (!d) return false;
+        return hasRealStringContent(d.description) || objectHasRealContent(d.structure, SKIP);
+      },
+    },
+    {
+      key: 'activities',
+      check: (d) => {
+        if (!Array.isArray(d)) return false;
+        return d.some((wp: any) =>
+          hasRealStringContent(wp.title) ||
+          arrayHasRealContent(wp.tasks) ||
+          arrayHasRealContent(wp.milestones) ||
+          arrayHasRealContent(wp.deliverables)
+        );
+      },
+    },
+    { key: 'outputs', check: (d) => arrayHasRealContent(d) },
+    { key: 'outcomes', check: (d) => arrayHasRealContent(d) },
+    { key: 'impacts', check: (d) => arrayHasRealContent(d) },
+    { key: 'risks', check: (d) => arrayHasRealContent(d) },
+    { key: 'kers', check: (d) => arrayHasRealContent(d) },
+  ];
+
+  let filledCount = 0;
+  let totalCount = 0;
+
+  for (const { key, check } of sectionChecks) {
     const data = projectData?.[key];
     if (data === undefined || data === null) continue;
-    total++;
-    if (Array.isArray(data)) {
-      if (data.length === 0) continue;
-      const f = data.filter((item: any) => {
-        if (typeof item !== 'object' || !item) return false;
-        return (item.title && item.title.trim().length > 0) || (item.description && item.description.trim().length > 0);
-      });
-      filled += f.length / data.length;
-    } else if (typeof data === 'object') {
-      const entries = Object.entries(data).filter(([k]) => !SKIP.has(k));
-      if (entries.length === 0) { filled += 1; continue; }
-      const f = entries.filter(([_, v]) => {
-        if (typeof v === 'string') return v.trim().length > 0;
-        if (Array.isArray(v)) return v.length > 0 && arrayHasRealContent(v);
-        if (typeof v === 'number') return true;
-        if (typeof v === 'object' && v !== null) return Object.values(v).some((sv: any) => {
-          if (typeof sv === 'string') return sv.trim().length > 0;
-          if (typeof sv === 'number') return true;
-          if (Array.isArray(sv)) return sv.length > 0 && arrayHasRealContent(sv);
-          return sv !== null && sv !== undefined;
-        });
-        return false;
-      });
-      filled += f.length / entries.length;
-    }
+    totalCount++;
+    if (check(data)) filledCount++;
   }
-  return total === 0 ? 0 : Math.round((filled / total) * 100);
+
+  return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
 };
 
 // ─── Stat item type ──────────────────────────────────────────
@@ -350,7 +415,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ projectData, language, 
     const ordered = statOrder
       .map(id => map.get(id))
       .filter(Boolean) as StatItem[];
-    // Add any new stats not in saved order
     DEFAULT_STAT_ORDER.forEach(s => {
       if (!ordered.find(o => o.id === s.id)) ordered.push(s);
     });
