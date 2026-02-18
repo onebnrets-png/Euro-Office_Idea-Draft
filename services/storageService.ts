@@ -1,33 +1,37 @@
 // services/storageService.ts
-// Supabase-backed storage service – replaces localStorage completely
-// All data now lives in PostgreSQL via Supabase
+// Supabase-backed storage service — replaces localStorage completely
+//
+// v2.2 — 2026-02-18
+// CHANGES:
+//   - NEW: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
+//   - NEW: getEffectiveLogo() — returns custom logo only for superadmin
+//   - FIX: saveCustomLogo() guarded — only superadmin can save
+//   - FIX: getCustomLogo() returns null for non-superadmin
 //
 // v2.1 — 2026-02-18
-// CHANGES:
-//   - NEW: OpenAI key support (getOpenAIKey, setOpenAIKey)
-//   - NEW: register() accepts apiProvider parameter (gemini/openai/openrouter)
-//   - FIX: getAIProvider/setAIProvider type includes 'openai'
-//   - FIX: register() saves key to correct column based on provider
+//   - OpenAI key support (getOpenAIKey, setOpenAIKey)
+//   - register() accepts apiProvider parameter
 //
 // v2.0 — 2026-02-17
-// FIXES:
-//   - FIX DB-1: login() now sets cachedUser even when profiles query fails
-//   - FIX DB-2: restoreSession() same fallback
-//   - FIX DB-3: login() / restoreSession() log profile-query errors clearly
+//   - DB-1/DB-2/DB-3 fixes
 
 import { supabase } from './supabaseClient.ts';
 import { createEmptyProjectData } from '../utils.ts';
 import type { AIProviderType } from './aiProvider.ts';
+import { BRAND_ASSETS } from '../constants.tsx';
 
 // ─── ID GENERATOR ────────────────────────────────────────────────
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-// ─── LOCAL CACHE (in-memory, avoids excessive DB reads) ──────────
+// ─── SUPERADMIN EMAIL (genesis, hardcoded) ───────────────────────
+const SUPERADMIN_EMAIL = 'beno.stern@infinita.si';
+
+// ─── LOCAL CACHE ─────────────────────────────────────────────────
 let cachedUser: { id: string; email: string; displayName: string; role: string } | null = null;
 let cachedSettings: Record<string, any> | null = null;
 let cachedProjectsMeta: any[] | null = null;
 
-// ─── HELPER: Get current Supabase user ID ────────────────────────
+// ─── HELPER ──────────────────────────────────────────────────────
 async function getAuthUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id || null;
@@ -36,14 +40,11 @@ async function getAuthUserId(): Promise<string | null> {
 export const storageService = {
 
   // ═══════════════════════════════════════════════════════════════
-  // AUTHENTICATION (Supabase Auth)
+  // AUTHENTICATION
   // ═══════════════════════════════════════════════════════════════
 
   async login(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       return { success: false, message: error.message };
@@ -83,7 +84,6 @@ export const storageService = {
     return { success: false, message: 'Login failed' };
   },
 
-  // ★ v2.1: register() now accepts apiProvider parameter
   async register(email: string, displayName: string, password: string, apiKey: string = '', apiProvider: AIProviderType = 'gemini') {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -103,10 +103,10 @@ export const storageService = {
     }
 
     if (data.user) {
-      // Wait for the DB trigger to create profile + user_settings row
+      // Wait for DB trigger to create profile + user_settings row
       await new Promise(r => setTimeout(r, 1500));
 
-      // ★ v2.1: Save key to correct column based on provider
+      // Save key to correct column based on provider
       if (apiKey && apiKey.trim() !== '') {
         const keyColumn = apiProvider === 'openai' ? 'openai_key'
                         : apiProvider === 'openrouter' ? 'openrouter_key'
@@ -147,7 +147,7 @@ export const storageService = {
 
       await this.loadSettings();
 
-      // ★ v2.1: Force key into cache using correct column
+      // Force key into cache if not loaded
       if (apiKey && apiKey.trim() !== '' && cachedSettings) {
         const keyColumn = apiProvider === 'openai' ? 'openai_key'
                         : apiProvider === 'openrouter' ? 'openrouter_key'
@@ -209,6 +209,19 @@ export const storageService = {
     return cachedUser?.role || 'user';
   },
 
+  // ★ v2.2: Superadmin helpers
+  isSuperAdmin(): boolean {
+    return cachedUser?.role === 'superadmin';
+  },
+
+  isAdminOrSuperAdmin(): boolean {
+    return cachedUser?.role === 'admin' || cachedUser?.role === 'superadmin';
+  },
+
+  getSuperAdminEmail(): string {
+    return SUPERADMIN_EMAIL;
+  },
+
   async getCurrentUserId(): Promise<string | null> {
     if (cachedUser?.id) return cachedUser.id;
     return await getAuthUserId();
@@ -249,7 +262,7 @@ export const storageService = {
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // USER SETTINGS (AI Provider, Keys, Model, Logo, Instructions)
+  // USER SETTINGS
   // ═══════════════════════════════════════════════════════════════
 
   async loadSettings() {
@@ -302,7 +315,7 @@ export const storageService = {
     }
   },
 
-  // --- AI Provider --- ★ v2.1: includes 'openai'
+  // --- AI Provider ---
   getAIProvider(): AIProviderType {
     return (cachedSettings?.ai_provider as AIProviderType) || 'gemini';
   },
@@ -333,7 +346,7 @@ export const storageService = {
     await this.updateSettings({ openrouter_key: key.trim() || null });
   },
 
-  // --- ★ v2.1: OpenAI Key ---
+  // --- OpenAI Key ---
   getOpenAIKey(): string | null {
     return cachedSettings?.openai_key || null;
   },
@@ -351,16 +364,33 @@ export const storageService = {
     await this.updateSettings({ model: model.trim() || null });
   },
 
-  // --- Custom Logo ---
+  // --- Custom Logo --- ★ v2.2: Superadmin only
   getCustomLogo(): string | null {
-    return cachedSettings?.custom_logo || null;
+    if (this.isSuperAdmin()) {
+      return cachedSettings?.custom_logo || null;
+    }
+    return null;
+  },
+
+  // ★ v2.2: Effective logo — what should actually be displayed
+  getEffectiveLogo(): string {
+    if (this.isSuperAdmin()) {
+      const customLogo = cachedSettings?.custom_logo;
+      if (customLogo) return customLogo;
+    }
+    return BRAND_ASSETS.logoText;
   },
 
   async saveCustomLogo(base64Data: string | null) {
+    // ★ v2.2: Only superadmin can change the logo
+    if (!this.isSuperAdmin()) {
+      console.warn('saveCustomLogo: Only superadmin can change the logo.');
+      return;
+    }
     await this.updateSettings({ custom_logo: base64Data });
   },
 
-  // --- Custom Instructions (Admin) ---
+  // --- Custom Instructions ---
   getCustomInstructions(): any {
     return cachedSettings?.custom_instructions || null;
   },
@@ -544,7 +574,7 @@ export const storageService = {
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // MFA (Supabase Auth TOTP)
+  // MFA
   // ═══════════════════════════════════════════════════════════════
 
   async getMFAFactors(): Promise<{ totp: any[] }> {
