@@ -1,11 +1,16 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
+// v2.4 — 2026-02-18
+//   - REMOVED: StepNavigationBar from App toolbar (moved to ProjectDisplay header)
+//   - NEW: onStepClick + completedStepsStatus props passed to ProjectDisplay
 // v2.3 — 2026-02-18
-//   - REMOVED: WelcomeScreen — auto-starts on step 1
-//   - NEW: StepNavigationBar in second toolbar row (horizontal circles with arrows)
-//   - NEW: Auto-open ProjectListModal on login
-//   - Previous (v2.2): Toolbar center acronym + title
+//   - REMOVED: WelcomeScreen (auto-start step 1)
+//   - NEW: StepNavigationBar in toolbar row 2 (now moved to ProjectDisplay)
+// v2.2 — 2026-02-18
+//   - NEW: Toolbar center — project acronym badge + full title (or placeholder)
+// v2.1 — 2026-02-17
+//   - FIX: Sidebar collapse → main content responsive marginLeft
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -29,12 +34,15 @@ import { TEXT } from './locales.ts';
 import { isStepCompleted } from './utils.ts';
 import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
 import { initTheme, getThemeMode, onThemeChange } from './services/themeService.ts';
+
 import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
 import { useTranslation } from './hooks/useTranslation.ts';
 import { useGeneration } from './hooks/useGeneration.ts';
 
 type ColorScheme = typeof lightColors | typeof darkColors;
+
+/* ═══ SMALL UI COMPONENTS ═══ */
 
 const HamburgerIcon = ({ onClick }: { onClick: () => void }) => (
   <button onClick={onClick} className="p-2 rounded-md text-slate-500 hover:bg-slate-200 lg:hidden" style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
@@ -99,6 +107,8 @@ const ApiWarningBanner = ({ onDismiss, onOpenSettings, language }: { onDismiss: 
   );
 };
 
+/* ═══ MAIN APP COMPONENT ═══ */
+
 const App = () => {
   const [language, setLanguage] = useState<'en' | 'si'>('en');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -135,7 +145,8 @@ const App = () => {
     setHasUnsavedTranslationChanges: pm.setHasUnsavedTranslationChanges,
     handleUpdateData: pm.handleUpdateData, checkSectionHasContent: pm.checkSectionHasContent,
     setModalConfig, closeModal, currentProjectId: pm.currentProjectId,
-    projectVersions: pm.projectVersions, setLanguage, setProjectVersions: pm.setProjectVersions,
+    projectVersions: pm.projectVersions, setProjectVersions: pm.setProjectVersions,
+    setLanguage,
   });
 
   const translation = useTranslation({
@@ -149,24 +160,26 @@ const App = () => {
     setIsSettingsOpen: openSettingsFromHook, setModalConfig, closeModal,
   });
 
+  /* ═══ EFFECTS ═══ */
   useEffect(() => { if (auth.currentUser) { ensureGlobalInstructionsLoaded(); adminHook.checkAdminStatus(); } }, [auth.currentUser]);
   useEffect(() => { initTheme(); const unsub = onThemeChange((m) => setIsDark(m === 'dark')); return unsub; }, []);
   useEffect(() => { if (pm.showProjectListOnLogin) { setIsProjectListOpen(true); pm.setShowProjectListOnLogin(false); } }, [pm.showProjectListOnLogin]);
 
-  // ★ v2.3: Auto-start on step 1 — no more WelcomeScreen
+  // Auto-start step 1 when logged in and no step is selected
   useEffect(() => {
     if (auth.currentUser && pm.currentStepId === null) {
       pm.setCurrentStepId(1);
-      setIsProjectListOpen(true);
     }
-  }, [auth.currentUser]);
+  }, [auth.currentUser, pm.currentStepId]);
 
+  /* ═══ DERIVED STATE ═══ */
   const t = TEXT[language] || TEXT['en'];
   const STEPS = getSteps(language);
   const completedStepsStatus = useMemo(() => STEPS.map((step) => isStepCompleted(pm.projectData, step.key)), [pm.projectData, language, STEPS]);
   const currentProjectMeta = pm.userProjects.find((p: any) => p.id === pm.currentProjectId);
   const displayTitle = currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled;
 
+  /* ═══ HANDLERS ═══ */
   const handleSettingsClose = async () => { setIsSettingsOpen(false); setIsAdminPanelOpen(false); setAdminPanelInitialTab(undefined); await auth.checkApiKey(); auth.loadCustomLogo(); };
   const handleLogout = async () => { await auth.handleLogout(); pm.resetOnLogout(); };
   const handleSwitchProjectAndClose = async (projectId: string) => { await pm.handleSwitchProject(projectId); setIsProjectListOpen(false); };
@@ -175,9 +188,7 @@ const App = () => {
   const handleExportDocx = async () => { try { await pm.handleExportDocx(generation.setIsLoading); } catch (e: any) { alert(e.message); } };
   const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => { generation.setIsLoading(true); try { await pm.handleImportProject(event); } catch (e: any) { generation.setError(`Failed to import: ${e.message}`); } finally { generation.setIsLoading(false); } };
 
-  // ═══════════════════════════════════════════════════════════════
-  // RENDER: Not logged in
-  // ═══════════════════════════════════════════════════════════════
+  /* ═══ UNAUTHENTICATED VIEW ═══ */
   if (!auth.currentUser) {
     return (
       <>
@@ -196,11 +207,10 @@ const App = () => {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // RENDER: Logged in — always shows main app layout (no WelcomeScreen)
-  // ═══════════════════════════════════════════════════════════════
+  /* ═══ AUTHENTICATED VIEW ═══ */
   return (
     <>
+      {/* ═══ MODALS ═══ */}
       <ConfirmationModal isOpen={modalConfig.isOpen} {...modalConfig} />
       <AdminPanel isOpen={isAdminPanelOpen || isSettingsOpen} onClose={handleSettingsClose} language={language} initialTab={adminPanelInitialTab} />
       <ProjectDashboard isOpen={isDashboardOpen} onClose={() => setIsDashboardOpen(false)} projectData={pm.projectData} language={language} />
@@ -217,15 +227,38 @@ const App = () => {
         language={language}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: colors.surface.background, fontFamily: typography.fontFamily.sans, overflow: 'hidden' }} className="print:hidden">
+      {/* ═══ MAIN APP LAYOUT ═══ */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', height: '100dvh',
+        background: colors.surface.background, fontFamily: typography.fontFamily.sans, overflow: 'hidden',
+      }} className="print:hidden">
         {auth.shouldShowBanner && (
-          <ApiWarningBanner onDismiss={auth.dismissWarning} onOpenSettings={() => { setAdminPanelInitialTab('ai'); setIsSettingsOpen(true); }} language={language} />
+          <ApiWarningBanner
+            onDismiss={auth.dismissWarning}
+            onOpenSettings={() => { setAdminPanelInitialTab('ai'); setIsSettingsOpen(true); }}
+            language={language}
+          />
         )}
+
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          {/* Loading overlay */}
           {generation.isLoading && (
-            <div style={{ position: 'fixed', inset: 0, background: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', cursor: 'wait' }}>
-              <div style={{ background: colors.surface.card, padding: spacing['3xl'], borderRadius: radii.xl, boxShadow: shadows.xl, textAlign: 'center', border: `1px solid ${colors.border.light}` }}>
-                <div style={{ width: 32, height: 32, border: `4px solid ${colors.primary[500]}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+            <div style={{
+              position: 'fixed', inset: 0,
+              background: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
+              zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(4px)', cursor: 'wait',
+            }}>
+              <div style={{
+                background: colors.surface.card, padding: spacing['3xl'],
+                borderRadius: radii.xl, boxShadow: shadows.xl, textAlign: 'center',
+                border: `1px solid ${colors.border.light}`,
+              }}>
+                <div style={{
+                  width: 32, height: 32, border: `4px solid ${colors.primary[500]}`,
+                  borderTopColor: 'transparent', borderRadius: '50%',
+                  animation: 'spin 1s linear infinite', margin: '0 auto 16px',
+                }} />
                 <p style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.heading, margin: 0 }}>
                   {typeof generation.isLoading === 'string' ? generation.isLoading : t.loading}
                 </p>
@@ -233,6 +266,7 @@ const App = () => {
             </div>
           )}
 
+          {/* ═══ SIDEBAR ═══ */}
           <Sidebar
             language={language} projectData={pm.projectData} currentStepId={pm.currentStepId}
             setCurrentStepId={pm.setCurrentStepId} completedStepsStatus={completedStepsStatus}
@@ -247,24 +281,30 @@ const App = () => {
             onCollapseChange={setSidebarCollapsed}
           />
 
+          {/* ═══ MAIN CONTENT ═══ */}
           <main style={{
             flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
             marginLeft: sidebarCollapsed ? 64 : 280, marginRight: 0,
             transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
-            {/* ═══ TOOLBAR ROW 1: Acronym + Title + Action Buttons ═══ */}
+            {/* ═══ TOOLBAR — Row 1: Acronym + Title + Action Buttons ═══ */}
             <div style={{
               background: colors.surface.card, borderBottom: `1px solid ${colors.border.light}`,
               padding: `${spacing.sm} ${spacing.lg}`, display: 'flex', alignItems: 'center',
               justifyContent: 'space-between', gap: spacing.sm, flexShrink: 0,
             }}>
+              {/* Left: hamburger (mobile) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, flexShrink: 0 }}>
                 <div className="lg:hidden">
                   <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${spacing.md}` }}>
+              {/* Center: Project Acronym + Title */}
+              <div style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${spacing.md}`,
+              }}>
                 {pm.projectData?.projectIdea?.projectAcronym?.trim() ? (
                   <>
                     <span style={{
@@ -301,45 +341,72 @@ const App = () => {
                 )}
               </div>
 
+              {/* Right: Action buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-                <ToolbarButton colors={colors} onClick={() => setIsDashboardOpen(true)} title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'} variant="primary"
+                <ToolbarButton colors={colors} onClick={() => setIsDashboardOpen(true)}
+                  title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'} variant="primary"
                   icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>}
                 />
                 <ToolbarSeparator colors={colors} />
-                <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success" icon={<ICONS.SAVE style={{ width: 20, height: 20 }} />} />
-                <label style={{ padding: spacing.sm, borderRadius: radii.lg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: `all ${animation.duration.fast}`, color: colors.text.body }} title={t.importProject}>
+                <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success"
+                  icon={<ICONS.SAVE style={{ width: 20, height: 20 }} />}
+                />
+                <label style={{
+                  padding: spacing.sm, borderRadius: radii.lg, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', transition: `all ${animation.duration.fast}`,
+                  color: colors.text.body,
+                }} title={t.importProject}>
                   <ICONS.IMPORT style={{ width: 20, height: 20 }} />
                   <input ref={pm.importInputRef} type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
                 </label>
                 <ToolbarSeparator colors={colors} />
-                <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx} icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />} />
-                <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary} disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'} icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />} />
-                <ToolbarButton colors={colors} onClick={handlePrint} title={t.print} icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />} />
+                <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx}
+                  icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
+                />
+                <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary}
+                  disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'}
+                  icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
+                />
+                <ToolbarButton colors={colors} onClick={handlePrint} title={t.print}
+                  icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
+                />
               </div>
             </div>
 
-           {/* ═══ SCROLLABLE CONTENT ═══ */}
-             <ProjectDisplay
-                projectData={pm.projectData} activeStepId={pm.currentStepId || 1} language={language}
-                onUpdateData={pm.handleUpdateData} onGenerateSection={generation.handleGenerateSection}
-                onGenerateCompositeSection={generation.handleGenerateCompositeSection}
-                onGenerateField={generation.handleGenerateField} onAddItem={pm.handleAddItem}
-                onRemoveItem={pm.handleRemoveItem} isLoading={generation.isLoading}
-                error={generation.error} missingApiKey={auth.showAiWarning}
-                completedStepsStatus={completedStepsStatus}
-                onStepClick={(id: number) => pm.setCurrentStepId(id)}
-              />
-
+            {/* ═══ SCROLLABLE CONTENT — ProjectDisplay ═══ */}
+            <ProjectDisplay
+              projectData={pm.projectData}
+              activeStepId={pm.currentStepId}
+              language={language}
+              onUpdateData={pm.handleUpdateData}
+              onGenerateSection={generation.handleGenerateSection}
+              onGenerateCompositeSection={generation.handleGenerateCompositeSection}
+              onGenerateField={generation.handleGenerateField}
+              onAddItem={pm.handleAddItem}
+              onRemoveItem={pm.handleRemoveItem}
+              isLoading={generation.isLoading}
+              error={generation.error}
+              missingApiKey={auth.showAiWarning}
+              completedStepsStatus={completedStepsStatus}
+              onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
+            />
           </main>
 
-          <DashboardPanel projectData={pm.projectData} language={language} onCollapseChange={setDashboardCollapsed} />
+          {/* ═══ DASHBOARD PANEL (right side) ═══ */}
+          <DashboardPanel
+            projectData={pm.projectData}
+            language={language}
+            onCollapseChange={setDashboardCollapsed}
+          />
         </div>
       </div>
 
+      {/* ═══ PRINT LAYOUT ═══ */}
       <div className="hidden print:block">
         <PrintLayout projectData={pm.projectData} language={language} logo={auth.appLogo} />
       </div>
 
+      {/* ═══ HIDDEN EXPORT CONTAINERS ═══ */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
         <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
           <GanttChart activities={pm.projectData.activities} language={language} forceViewMode="project" containerWidth={2400} printMode={true} id="gantt-export" />
