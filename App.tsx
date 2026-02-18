@@ -153,6 +153,14 @@ const App = () => {
   useEffect(() => { if (auth.currentUser) { ensureGlobalInstructionsLoaded(); adminHook.checkAdminStatus(); } }, [auth.currentUser]);
   useEffect(() => { initTheme(); const unsub = onThemeChange((m) => setIsDark(m === 'dark')); return unsub; }, []);
   useEffect(() => { if (pm.showProjectListOnLogin) { setIsProjectListOpen(true); pm.setShowProjectListOnLogin(false); } }, [pm.showProjectListOnLogin]);
+  // ★ v2.3: Auto-start on step 1 (no more WelcomeScreen)
+  useEffect(() => {
+  if (auth.currentUser && pm.currentStepId === null) {
+    pm.setCurrentStepId(1);
+    setIsProjectListOpen(true);
+  }
+}, [auth.currentUser]);
+
 
   const t = TEXT[language] || TEXT['en'];
   const STEPS = getSteps(language);
