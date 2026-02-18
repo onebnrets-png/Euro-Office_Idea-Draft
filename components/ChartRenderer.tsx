@@ -1,5 +1,5 @@
 // components/ChartRenderer.tsx
-// v1.1 — 2026-02-18 — FIX: Donut labels/legend scale for small containers
+// v1.2 — 2026-02-18 — FIX: Donut BIGGER, label lines SHORTER, labels percent-only in small mode
 import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -43,6 +43,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+/* ─── COMPARISON BAR ──────────────────────────────────────── */
+
 const ComparisonBar: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const chartData = data.dataPoints.map(dp => ({ name: dp.label, value: dp.value, unit: dp.unit || '' }));
   return (
@@ -62,30 +64,79 @@ const ComparisonBar: React.FC<{ data: ExtractedChartData; height: number }> = ({
   );
 };
 
+/* ─── DONUT — v1.2: BIGGER ring, SHORTER label lines ────── */
+
 const DonutChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const chartData = data.dataPoints.map(dp => ({ name: dp.label, value: dp.value, unit: dp.unit || '' }));
   const isSmall = height <= 180;
-  const innerRadius = isSmall ? Math.min(height * 0.18, 30) : Math.min(height * 0.25, 60);
-  const outerRadius = isSmall ? Math.min(height * 0.30, 48) : Math.min(height * 0.38, 90);
+
+  // BIGGER donut: radii increased significantly
+  const innerRadius = isSmall ? Math.min(height * 0.24, 40) : Math.min(height * 0.25, 60);
+  const outerRadius = isSmall ? Math.min(height * 0.40, 65) : Math.min(height * 0.38, 90);
+
   const labelFontSize = isSmall ? 9 : 12;
-  const renderLabel = ({ name, percent }: any) => {
-    if (isSmall) return `${(percent * 100).toFixed(0)}%`;
-    return `${name} (${(percent * 100).toFixed(0)}%)`;
+
+  // Custom label renderer — positions text CLOSE to the donut (short "arrows")
+  const renderLabel = ({ name, percent, midAngle, outerRadius: oR, cx, cy }: any) => {
+    const RADIAN = Math.PI / 180;
+    // SHORT label line: only 8px beyond outer edge (was implicitly ~20+)
+    const radius = oR + (isSmall ? 8 : 14);
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    const textAnchor = x > cx ? 'start' : 'end';
+    const displayText = isSmall
+      ? `${(percent * 100).toFixed(0)}%`
+      : `${name} (${(percent * 100).toFixed(0)}%)`;
+    return (
+      <text
+        x={x} y={y}
+        fill={theme.colors.text.body}
+        textAnchor={textAnchor}
+        dominantBaseline="central"
+        fontSize={labelFontSize}
+        fontWeight={600}
+      >
+        {displayText}
+      </text>
+    );
   };
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <PieChart>
-        <Pie data={chartData} cx="50%" cy={isSmall ? '42%' : '50%'} innerRadius={innerRadius} outerRadius={outerRadius} paddingAngle={2} dataKey="value" label={renderLabel} labelLine={{ strokeWidth: 1 }} fontSize={labelFontSize}>
+      <PieChart margin={{ top: 4, right: 4, bottom: 2, left: 4 }}>
+        <Pie
+          data={chartData}
+          cx="50%"
+          cy={isSmall ? '44%' : '50%'}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          paddingAngle={2}
+          dataKey="value"
+          label={renderLabel}
+          labelLine={isSmall
+            ? { strokeWidth: 1, stroke: theme.colors.border.medium, type: 'straight' as any }
+            : { strokeWidth: 1 }
+          }
+        >
           {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
           ))}
         </Pie>
         <Tooltip content={<CustomTooltip />} />
-        <Legend wrapperStyle={{ fontSize: isSmall ? '9px' : '11px', lineHeight: isSmall ? '14px' : '18px' }} iconType="circle" iconSize={isSmall ? 6 : 8} />
+        <Legend
+          wrapperStyle={{
+            fontSize: isSmall ? '9px' : '11px',
+            lineHeight: isSmall ? '14px' : '18px',
+          }}
+          iconType="circle"
+          iconSize={isSmall ? 6 : 8}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
 };
+
+/* ─── LINE CHART ──────────────────────────────────────────── */
 
 const LineChartComponent: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const chartData = data.dataPoints.sort((a, b) => (a.year || 0) - (b.year || 0)).map(dp => ({ name: dp.year ? String(dp.year) : dp.label, value: dp.value, unit: dp.unit || '' }));
@@ -102,6 +153,8 @@ const LineChartComponent: React.FC<{ data: ExtractedChartData; height: number }>
   );
 };
 
+/* ─── RADAR CHART ─────────────────────────────────────────── */
+
 const RadarChartComponent: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const chartData = data.dataPoints.map(dp => ({ subject: dp.label, value: dp.value, fullMark: 9 }));
   return (
@@ -116,6 +169,8 @@ const RadarChartComponent: React.FC<{ data: ExtractedChartData; height: number }
     </ResponsiveContainer>
   );
 };
+
+/* ─── GAUGE CHART ─────────────────────────────────────────── */
 
 const GaugeChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const value = data.dataPoints[0]?.value || 0;
@@ -136,12 +191,17 @@ const GaugeChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ da
   );
 };
 
+/* ─── STACKED BAR ─────────────────────────────────────────── */
+
 const StackedBarChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const categories: string[] = Array.from(new Set(data.dataPoints.map(dp => dp.category || 'default')));
   const labels: string[] = Array.from(new Set(data.dataPoints.map(dp => dp.label)));
   const chartData = labels.map(label => {
     const row: any = { name: label };
-    categories.forEach(cat => { const dp = data.dataPoints.find(d => d.label === label && (d.category || 'default') === cat); row[cat] = dp?.value || 0; });
+    categories.forEach(cat => {
+      const dp = data.dataPoints.find(d => d.label === label && (d.category || 'default') === cat);
+      row[cat] = dp?.value || 0;
+    });
     return row;
   });
   return (
@@ -159,6 +219,8 @@ const StackedBarChart: React.FC<{ data: ExtractedChartData; height: number }> = 
     </ResponsiveContainer>
   );
 };
+
+/* ─── PROGRESS ────────────────────────────────────────────── */
 
 const ProgressChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   return (
@@ -179,11 +241,15 @@ const ProgressChart: React.FC<{ data: ExtractedChartData; height: number }> = ({
   );
 };
 
+/* ─── UNSUPPORTED ─────────────────────────────────────────── */
+
 const UnsupportedChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => (
   <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface.background, borderRadius: theme.radii.md, border: `1px dashed ${theme.colors.border.medium}`, color: theme.colors.text.muted, fontSize: '13px' }}>
     Chart type &quot;{data.chartType}&quot; — coming soon
   </div>
 );
+
+/* ─── COMPONENT MAP ───────────────────────────────────────── */
 
 const CHART_COMPONENTS: Record<string, React.FC<{ data: ExtractedChartData; height: number }>> = {
   comparison_bar: ComparisonBar,
@@ -194,6 +260,8 @@ const CHART_COMPONENTS: Record<string, React.FC<{ data: ExtractedChartData; heig
   stacked_bar: StackedBarChart,
   progress: ProgressChart,
 };
+
+/* ─── MAIN RENDERER ───────────────────────────────────────── */
 
 const ChartRenderer: React.FC<ChartRendererProps> = ({ data, width, height = 250, showTitle = true, showSource = true, className = '' }) => {
   const ChartComponent = useMemo(() => CHART_COMPONENTS[data.chartType] || UnsupportedChart, [data.chartType]);
