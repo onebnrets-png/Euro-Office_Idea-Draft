@@ -1,81 +1,51 @@
-// components/ProjectDashboard.tsx
+// components/DashboardPanel.tsx
 // ═══════════════════════════════════════════════════════════════
-// Project Dashboard — full-screen modal overview
-// v2.3 — 2026-02-18
-//   - FIX: calculateOverallCompleteness now returns 0% for empty projects
-//   - FIX: readinessLevels with {level:null, justification:''} no longer
-//     count as filled
+// Persistent right-side dashboard panel
+// v2.2 — 2026-02-18
+//   - FIX: Empty projects now correctly show 0% completeness
+//   - FIX: Skeleton data no longer inflates percentages
 //   - FIX: Default enum fields (category, likelihood, impact) skipped
-//   - FIX: Uses binary section checks instead of fractional counting
+//   - FIX: Removed duplicate objectHasRealContent declaration
+//   - FIX: Chart overflow fixed, proper widths set
+//   - FEAT: Full stats grid with drag-and-drop reordering
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
 import ChartRenderer from './ChartRenderer.tsx';
-import { lightColors, darkColors, shadows, radii, spacing, typography } from '../design/theme.ts';
+import { theme } from '../design/theme.ts';
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { ProgressRing } from '../design/index.ts';
 
 // ─── Props ───────────────────────────────────────────────────
 
-interface ProjectDashboardProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface DashboardPanelProps {
   projectData: any;
   language: 'en' | 'si';
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-// ─── Professional SVG Icons ─────────────────────────────────
+// ─── SVG Icons ───────────────────────────────────────────────
 
-const DashboardIcons = {
-  document: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  ),
-  tag: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-      <line x1="7" y1="7" x2="7.01" y2="7" />
-    </svg>
-  ),
-  calendar: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-  play: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="10 8 16 12 10 16 10 8" />
-    </svg>
-  ),
-  layers: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2" />
-      <polyline points="2 17 12 22 22 17" />
-      <polyline points="2 12 12 17 22 12" />
-    </svg>
-  ),
-  shield: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  ),
-  target: (color: string) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
-  ),
+const icons = {
+  document: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  tag: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  calendar: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  play: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>,
+  flag: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
+  crosshair: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>,
+  layers: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  checkSquare: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+  package: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+  trending: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  zap: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  key: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+  shield: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  chevronLeft: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+  chevronRight: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+  dashboard: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  grip: <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/></svg>,
 };
 
 // ─── Helpers: detect real user-entered content ───────────────
@@ -86,10 +56,10 @@ const SKIP_KEYS = new Set([
   'startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe',
 ]);
 
-const hasRealStr = (v: any): boolean =>
+const hasRealStringContent = (v: any): boolean =>
   typeof v === 'string' && v.trim().length > 0;
 
-const arrHasContent = (arr: any[]): boolean => {
+const arrayHasRealContent = (arr: any[]): boolean => {
   if (!Array.isArray(arr) || arr.length === 0) return false;
   return arr.some((item: any) => {
     if (typeof item === 'string') return item.trim().length > 0;
@@ -97,27 +67,27 @@ const arrHasContent = (arr: any[]): boolean => {
     return Object.entries(item).some(([k, v]) => {
       if (SKIP_KEYS.has(k)) return false;
       if (typeof v === 'string') return v.trim().length > 0;
-      if (Array.isArray(v)) return arrHasContent(v);
+      if (Array.isArray(v)) return arrayHasRealContent(v);
       return false;
     });
   });
 };
 
-const objHasContent = (obj: any): boolean => {
+const objectHasRealContent = (obj: any): boolean => {
   if (!obj || typeof obj !== 'object') return false;
-  if (Array.isArray(obj)) return arrHasContent(obj);
+  if (Array.isArray(obj)) return arrayHasRealContent(obj);
   return Object.entries(obj).some(([k, v]) => {
     if (SKIP_KEYS.has(k)) return false;
     if (typeof v === 'string') return v.trim().length > 0;
-    if (Array.isArray(v)) return arrHasContent(v);
-    if (typeof v === 'object' && v !== null) return objHasContent(v);
+    if (Array.isArray(v)) return arrayHasRealContent(v);
+    if (typeof v === 'object' && v !== null) return objectHasRealContent(v);
     return false;
   });
 };
 
-// ─── Section completeness calculator ─────────────────────────
+// ─── Completeness calculation ────────────────────────────────
 
-const calculateOverallCompleteness = (projectData: any): number => {
+const calculateCompleteness = (projectData: any): number => {
   if (!projectData) return 0;
 
   const sectionChecks: { key: string; check: (data: any) => boolean }[] = [
@@ -126,10 +96,10 @@ const calculateOverallCompleteness = (projectData: any): number => {
       check: (d) => {
         if (!d) return false;
         return (
-          hasRealStr(d.coreProblem?.title) ||
-          hasRealStr(d.coreProblem?.description) ||
-          arrHasContent(d.causes) ||
-          arrHasContent(d.consequences)
+          hasRealStringContent(d.coreProblem?.title) ||
+          hasRealStringContent(d.coreProblem?.description) ||
+          arrayHasRealContent(d.causes) ||
+          arrayHasRealContent(d.consequences)
         );
       },
     },
@@ -138,12 +108,12 @@ const calculateOverallCompleteness = (projectData: any): number => {
       check: (d) => {
         if (!d) return false;
         return (
-          hasRealStr(d.projectTitle) ||
-          hasRealStr(d.projectAcronym) ||
-          hasRealStr(d.mainAim) ||
-          hasRealStr(d.stateOfTheArt) ||
-          hasRealStr(d.proposedSolution) ||
-          arrHasContent(d.policies) ||
+          hasRealStringContent(d.projectTitle) ||
+          hasRealStringContent(d.projectAcronym) ||
+          hasRealStringContent(d.mainAim) ||
+          hasRealStringContent(d.stateOfTheArt) ||
+          hasRealStringContent(d.proposedSolution) ||
+          arrayHasRealContent(d.policies) ||
           (d.readinessLevels && [
             d.readinessLevels.TRL,
             d.readinessLevels.SRL,
@@ -153,13 +123,13 @@ const calculateOverallCompleteness = (projectData: any): number => {
         );
       },
     },
-    { key: 'generalObjectives', check: (d) => arrHasContent(d) },
-    { key: 'specificObjectives', check: (d) => arrHasContent(d) },
+    { key: 'generalObjectives', check: (d) => arrayHasRealContent(d) },
+    { key: 'specificObjectives', check: (d) => arrayHasRealContent(d) },
     {
       key: 'projectManagement',
       check: (d) => {
         if (!d) return false;
-        return hasRealStr(d.description) || objHasContent(d.structure);
+        return hasRealStringContent(d.description) || objectHasRealContent(d.structure);
       },
     },
     {
@@ -167,26 +137,26 @@ const calculateOverallCompleteness = (projectData: any): number => {
       check: (d) => {
         if (!Array.isArray(d)) return false;
         return d.some((wp: any) =>
-          hasRealStr(wp.title) ||
-          arrHasContent(wp.tasks) ||
-          arrHasContent(wp.milestones) ||
-          arrHasContent(wp.deliverables)
+          hasRealStringContent(wp.title) ||
+          arrayHasRealContent(wp.tasks) ||
+          arrayHasRealContent(wp.milestones) ||
+          arrayHasRealContent(wp.deliverables)
         );
       },
     },
-    { key: 'outputs', check: (d) => arrHasContent(d) },
-    { key: 'outcomes', check: (d) => arrHasContent(d) },
-    { key: 'impacts', check: (d) => arrHasContent(d) },
+    { key: 'outputs', check: (d) => arrayHasRealContent(d) },
+    { key: 'outcomes', check: (d) => arrayHasRealContent(d) },
+    { key: 'impacts', check: (d) => arrayHasRealContent(d) },
     {
       key: 'risks',
       check: (d) => {
         if (!Array.isArray(d)) return false;
         return d.some((r: any) =>
-          hasRealStr(r.title) || hasRealStr(r.description) || hasRealStr(r.mitigation)
+          hasRealStringContent(r.title) || hasRealStringContent(r.description) || hasRealStringContent(r.mitigation)
         );
       },
     },
-    { key: 'kers', check: (d) => arrHasContent(d) },
+    { key: 'kers', check: (d) => arrayHasRealContent(d) },
   ];
 
   let filledCount = 0;
@@ -202,254 +172,238 @@ const calculateOverallCompleteness = (projectData: any): number => {
   return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
 };
 
+// ─── Stat definitions ────────────────────────────────────────
+
+interface StatItem {
+  id: string;
+  labelEn: string;
+  labelSi: string;
+  icon: React.ReactNode;
+  getValue: (data: any) => number;
+  color: string;
+}
+
+const STAT_DEFINITIONS: StatItem[] = [
+  { id: 'genObj', labelEn: 'General Objectives', labelSi: 'Splošni cilji', icon: icons.crosshair, getValue: (d) => d?.generalObjectives?.filter((o: any) => hasRealStringContent(o.title)).length || 0, color: theme.colors.primary[500] },
+  { id: 'specObj', labelEn: 'Specific Objectives', labelSi: 'Specifični cilji', icon: icons.flag, getValue: (d) => d?.specificObjectives?.filter((o: any) => hasRealStringContent(o.title)).length || 0, color: theme.colors.secondary[500] },
+  { id: 'wp', labelEn: 'Work Packages', labelSi: 'Delovni sklopi', icon: icons.layers, getValue: (d) => d?.activities?.filter((wp: any) => hasRealStringContent(wp.title)).length || 0, color: theme.colors.success[500] },
+  { id: 'tasks', labelEn: 'Tasks', labelSi: 'Naloge', icon: icons.checkSquare, getValue: (d) => { let c = 0; d?.activities?.forEach((wp: any) => { c += wp.tasks?.filter((t: any) => hasRealStringContent(t.title)).length || 0; }); return c; }, color: theme.colors.warning[500] },
+  { id: 'outputs', labelEn: 'Outputs', labelSi: 'Rezultati', icon: icons.package, getValue: (d) => d?.outputs?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.error[500] },
+  { id: 'outcomes', labelEn: 'Outcomes', labelSi: 'Učinki', icon: icons.trending, getValue: (d) => d?.outcomes?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.primary[300] },
+  { id: 'impacts', labelEn: 'Impacts', labelSi: 'Vplivi', icon: icons.zap, getValue: (d) => d?.impacts?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.secondary[300] },
+  { id: 'kers', labelEn: 'KERs', labelSi: 'KER-i', icon: icons.key, getValue: (d) => d?.kers?.filter((k: any) => hasRealStringContent(k.title) || hasRealStringContent(k.result)).length || 0, color: theme.colors.success[300] },
+  { id: 'risks', labelEn: 'Risks', labelSi: 'Tveganja', icon: icons.shield, getValue: (d) => d?.risks?.filter((r: any) => hasRealStringContent(r.title)).length || 0, color: theme.colors.warning[300] },
+];
+
+const STORAGE_KEY = 'dashboard_stat_order';
+
 // ─── Component ───────────────────────────────────────────────
 
-const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
-  isOpen, onClose, projectData, language,
+const DashboardPanel: React.FC<DashboardPanelProps> = ({
+  projectData, language, isCollapsed, onToggleCollapse,
 }) => {
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   useEffect(() => {
     const unsub = onThemeChange((m) => setIsDark(m === 'dark'));
     return unsub;
   }, []);
-  const colors = isDark ? darkColors : lightColors;
 
-  const t = language === 'si' ? {
-    title: 'Pregled projekta',
-    projectTitle: 'Naziv projekta',
-    acronym: 'Akronim',
-    duration: 'Trajanje',
-    startDate: 'Začetek',
-    months: 'mesecev',
-    overallProgress: 'Skupni napredek',
-    noData: 'Še ni podatkov za vizualizacijo.',
-    close: 'Zapri',
-    workPackages: 'Delovni sklopi',
-    risks: 'Tveganja',
-    objectives: 'Cilji',
-  } : {
-    title: 'Project Dashboard',
-    projectTitle: 'Project Title',
-    acronym: 'Acronym',
-    duration: 'Duration',
-    startDate: 'Start Date',
-    months: 'months',
-    overallProgress: 'Overall Progress',
-    noData: 'No data available for visualization yet.',
-    close: 'Close',
-    workPackages: 'Work Packages',
-    risks: 'Risks',
-    objectives: 'Objectives',
-  };
+  // Drag-and-drop stat order
+  const [statOrder, setStatOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === STAT_DEFINITIONS.length) return parsed;
+      }
+    } catch {}
+    return STAT_DEFINITIONS.map(s => s.id);
+  });
 
-  const structuralCharts = useMemo(
-    () => extractStructuralData(projectData),
-    [projectData]
-  );
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  const overallCompleteness = useMemo(
-    () => calculateOverallCompleteness(projectData),
-    [projectData]
-  );
+  const handleDragStart = useCallback((idx: number) => { setDragIdx(idx); }, []);
+  const handleDragOver = useCallback((e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOverIdx(idx); }, []);
+  const handleDrop = useCallback((idx: number) => {
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setDragOverIdx(null); return; }
+    setStatOrder(prev => {
+      const newOrder = [...prev];
+      const [moved] = newOrder.splice(dragIdx, 1);
+      newOrder.splice(idx, 0, moved);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newOrder));
+      return newOrder;
+    });
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }, [dragIdx]);
+  const handleDragEnd = useCallback(() => { setDragIdx(null); setDragOverIdx(null); }, []);
+
+  const completeness = useMemo(() => calculateCompleteness(projectData), [projectData]);
+  const structuralCharts = useMemo(() => extractStructuralData(projectData), [projectData]);
+
+  const orderedStats = useMemo(() => {
+    return statOrder.map(id => STAT_DEFINITIONS.find(s => s.id === id)).filter(Boolean) as StatItem[];
+  }, [statOrder]);
 
   const pi = projectData?.projectIdea;
-  const wpCount = projectData?.activities?.filter((wp: any) => hasRealStr(wp.title)).length || 0;
-  const riskCount = projectData?.risks?.filter((r: any) => hasRealStr(r.title)).length || 0;
-  const objCount = (projectData?.generalObjectives?.filter((o: any) => hasRealStr(o.title)).length || 0)
-    + (projectData?.specificObjectives?.filter((o: any) => hasRealStr(o.title)).length || 0);
+  const t = language === 'si';
 
-  if (!isOpen) return null;
+  // ─── Collapsed view ─────────────────────────────────────
 
-  const iconColors = {
-    primary: colors.primary[500],
-    secondary: colors.secondary[500],
-    warning: colors.warning[500],
-    success: colors.success[500],
-  };
-
-  const MetaCard = ({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) => (
-    <div style={{
-      backgroundColor: colors.surface.card,
-      borderRadius: radii.lg,
-      border: `1px solid ${colors.border.light}`,
-      padding: '16px 20px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '14px',
-    }}>
+  if (isCollapsed) {
+    return (
       <div style={{
-        width: 40,
-        height: 40,
-        borderRadius: radii.lg,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+        width: 52,
+        height: '100%',
+        backgroundColor: isDark ? '#1e1e2e' : '#ffffff',
+        borderLeft: `1px solid ${isDark ? '#2d2d3f' : theme.colors.border.light}`,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
+        paddingTop: 16,
+        gap: 12,
+        position: 'relative',
       }}>
-        {icon}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-          {label}
-        </p>
-        <p style={{
-          fontSize: '15px', fontWeight: 700, color: colors.text.heading, margin: '2px 0 0',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        <button onClick={onToggleCollapse} style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+          color: isDark ? '#a0a0b8' : theme.colors.text.muted, display: 'flex',
         }}>
-          {value || '—'}
-        </p>
+          {icons.chevronLeft}
+        </button>
+        <ProgressRing value={completeness} size={36} strokeWidth={4} showLabel={true} labelSize="0.55rem" />
+        <div style={{ width: 1, height: 1, backgroundColor: isDark ? '#2d2d3f' : theme.colors.border.light, margin: '4px 0' }} />
+        {orderedStats.slice(0, 6).map(stat => (
+          <div key={stat.id} title={t ? stat.labelSi : stat.labelEn} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            color: stat.color, fontSize: '10px', fontWeight: 700,
+          }}>
+            {stat.icon}
+            <span>{stat.getValue(projectData)}</span>
+          </div>
+        ))}
       </div>
-    </div>
-  );
+    );
+  }
+
+  // ─── Expanded view ──────────────────────────────────────
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 90,
+    <div style={{
+      width: 300,
+      height: '100%',
+      backgroundColor: isDark ? '#1e1e2e' : '#ffffff',
+      borderLeft: `1px solid ${isDark ? '#2d2d3f' : theme.colors.border.light}`,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '14px 16px',
+        borderBottom: `1px solid ${isDark ? '#2d2d3f' : theme.colors.border.light}`,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        backgroundColor: colors.surface.overlayBlur,
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          backgroundColor: colors.surface.background,
-          borderRadius: radii.xl,
-          boxShadow: shadows.xl,
-          width: '100%',
-          maxWidth: '1100px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          border: `1px solid ${colors.border.light}`,
-          animation: 'fadeIn 0.2s ease-out',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: `1px solid ${colors.border.light}`,
-          backgroundColor: colors.surface.card,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: colors.text.heading }}>
-              {t.title}
-            </h2>
-            <ProgressRing
-              value={overallCompleteness}
-              size={48}
-              strokeWidth={5}
-              color={overallCompleteness >= 80 ? colors.success[500] : overallCompleteness >= 40 ? colors.warning[500] : colors.error[500]}
-              label={`${overallCompleteness}%`}
-            />
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '8px',
-              borderRadius: radii.md,
-              color: colors.text.muted,
-              fontSize: '20px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.surface.sidebar; }}
-            onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: isDark ? '#a0a0b8' : theme.colors.text.muted }}>{icons.dashboard}</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: isDark ? '#e0e0f0' : theme.colors.text.heading }}>
+            {t ? 'Nadzorna plošča' : 'Dashboard'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ProgressRing value={completeness} size={32} strokeWidth={4} showLabel={true} labelSize="0.5rem" />
+          <button onClick={onToggleCollapse} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+            color: isDark ? '#a0a0b8' : theme.colors.text.muted, display: 'flex',
+          }}>
+            {icons.chevronRight}
           </button>
         </div>
+      </div>
 
-        {/* Scrollable Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-          {/* Meta cards row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.projectTitle} value={pi?.projectTitle || ''} icon={DashboardIcons.document(iconColors.primary)} />
-            <MetaCard label={t.acronym} value={pi?.projectAcronym || ''} icon={DashboardIcons.tag(iconColors.secondary)} />
-            <MetaCard label={t.duration} value={pi?.durationMonths ? `${pi.durationMonths} ${t.months}` : ''} icon={DashboardIcons.calendar(iconColors.primary)} />
-            <MetaCard label={t.startDate} value={pi?.startDate || ''} icon={DashboardIcons.play(iconColors.success)} />
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {/* Project meta */}
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+            {t ? 'Projekt' : 'Project'}
+          </p>
+          <p style={{ fontSize: '14px', fontWeight: 700, color: isDark ? '#e0e0f0' : theme.colors.text.heading, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pi?.projectTitle || '—'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, fontSize: '11px', color: isDark ? '#8080a0' : theme.colors.text.muted, marginTop: 4 }}>
+            {pi?.projectAcronym && <span>{pi.projectAcronym}</span>}
+            {pi?.durationMonths && <span>{pi.durationMonths} {t ? 'mes.' : 'mo.'}</span>}
+            {pi?.startDate && <span>{pi.startDate}</span>}
           </div>
-
-          {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.workPackages} value={String(wpCount)} icon={DashboardIcons.layers(iconColors.primary)} />
-            <MetaCard label={t.risks} value={String(riskCount)} icon={DashboardIcons.shield(iconColors.warning)} />
-            <MetaCard label={t.objectives} value={String(objCount)} icon={DashboardIcons.target(iconColors.success)} />
-          </div>
-
-          {/* Charts */}
-          {structuralCharts.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '16px' }}>
-              {structuralCharts.map(chart => (
-                <ChartRenderer
-                  key={chart.id}
-                  data={chart}
-                  height={280}
-                  showTitle={true}
-                  showSource={false}
-                />
-              ))}
-            </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
-              color: colors.text.muted,
-              fontSize: '14px',
-            }}>
-              {t.noData}
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div style={{
-          padding: '16px 24px',
-          borderTop: `1px solid ${colors.border.light}`,
-          backgroundColor: colors.surface.card,
-          display: 'flex',
-          justifyContent: 'flex-end',
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '8px 20px',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: colors.text.body,
-              backgroundColor: colors.surface.sidebar,
-              border: `1px solid ${colors.border.light}`,
-              borderRadius: radii.md,
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.border.light; }}
-            onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.surface.sidebar; }}
-          >
-            {t.close}
-          </button>
+        {/* Stats grid — draggable */}
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>
+            {t ? 'Statistika' : 'Statistics'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {orderedStats.map((stat, idx) => {
+              const val = stat.getValue(projectData);
+              return (
+                <div
+                  key={stat.id}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={() => handleDrop(idx)}
+                  onDragEnd={handleDragEnd}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 8px',
+                    borderRadius: theme.radii.md,
+                    backgroundColor: dragOverIdx === idx
+                      ? (isDark ? '#2d2d4f' : '#f0f0ff')
+                      : 'transparent',
+                    opacity: dragIdx === idx ? 0.4 : 1,
+                    cursor: 'grab',
+                    transition: 'background-color 0.15s',
+                  }}
+                >
+                  <span style={{ color: isDark ? '#606078' : '#c0c0d0', flexShrink: 0 }}>{icons.grip}</span>
+                  <span style={{ color: stat.color, flexShrink: 0 }}>{stat.icon}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: isDark ? '#c0c0d8' : theme.colors.text.body }}>
+                    {t ? stat.labelSi : stat.labelEn}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: isDark ? '#e0e0f0' : theme.colors.text.heading, minWidth: 20, textAlign: 'right' }}>
+                    {val}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Charts */}
+        {structuralCharts.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+              {t ? 'Grafi' : 'Charts'}
+            </p>
+            {structuralCharts.map(chart => (
+              <ChartRenderer
+                key={chart.id}
+                data={chart}
+                height={160}
+                showTitle={true}
+                showSource={false}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default ProjectDashboard;
+export default DashboardPanel;
