@@ -22,7 +22,6 @@ import ProjectDashboard from './components/ProjectDashboard.tsx';
 import DashboardPanel from './components/DashboardPanel.tsx';
 import Sidebar from './components/Sidebar.tsx';
 import SummaryModal from './components/SummaryModal.tsx';
-import StepNavigationBar from './components/StepNavigationBar.tsx';
 import { useAdmin } from './hooks/useAdmin.ts';
 import { ensureGlobalInstructionsLoaded } from './services/globalInstructionsService.ts';
 import { ICONS, getSteps, BRAND_ASSETS } from './constants.tsx';
@@ -30,7 +29,6 @@ import { TEXT } from './locales.ts';
 import { isStepCompleted } from './utils.ts';
 import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
 import { initTheme, getThemeMode, onThemeChange } from './services/themeService.ts';
-
 import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
 import { useTranslation } from './hooks/useTranslation.ts';
