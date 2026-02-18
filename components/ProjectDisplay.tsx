@@ -918,8 +918,8 @@ const renderExpectedResults = (props) => {
     );
 };
 
-const ProjectDisplay = (props) => {
-  const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey } = props;
+  const ProjectDisplay = (props) => {
+  const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey, completedStepsStatus, onStepClick } = props;
   const STEPS = getSteps(language);
   const activeStep = STEPS.find(step => step.id === activeStepId);
   const t = TEXT[language] || TEXT['en'];
