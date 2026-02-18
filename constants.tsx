@@ -1,10 +1,11 @@
 // constants.tsx
 // ═══════════════════════════════════════════════════════════════
 // UI assets, step definitions, readiness-level definitions.
-// v4.4 — 2026-02-14 — CHANGES:
-//   - FIXED CRASH: removed references to non-existent TEXT[lang].rl.*
-//   - Readiness level names/descriptions are now inline strings
-//   - Fixed all Slovene diacritics in readiness level titles
+// v4.5 — 2026-02-18 — CHANGES:
+//   - ★ v4.5: BRAND_ASSETS.logoText → hardcoded EURO-OFFICE logo
+//   - v4.4: Fixed crash (removed non-existent TEXT[lang].rl.*)
+//   - Readiness level names/descriptions are inline strings
+//   - Fixed all Slovene diacritics
 //   - Sub-steps: 'implementation' + 'organigram' (no 'quality-efficiency')
 // ═══════════════════════════════════════════════════════════════
 
@@ -12,8 +13,10 @@ import React from 'react';
 import { TEXT } from './locales.ts';
 
 // --- BRANDING ASSETS ---
+// ★ v4.5: Hardcoded EURO-OFFICE logo — NOT changeable by regular users
+// Copy "design/logo Euro-Office.png" to "public/euro-office-logo.png"
 export const BRAND_ASSETS = {
-  logoText: "/logo.png" 
+  logoText: "/euro-office-logo.png"
 };
 
 export const ICONS = {
@@ -80,7 +83,7 @@ export const getSteps = (lang = 'en') => [
   { id: 6, key: 'expectedResults', title: TEXT[lang].steps.expectedResults, color: 'bg-cyan-500' },
 ];
 
-export const STEPS = getSteps('en'); 
+export const STEPS = getSteps('en');
 
 // ─── SUB-STEP DEFINITIONS ───────────────────────────────────────
 
@@ -118,7 +121,6 @@ export const getSubSteps = (lang = 'en') => ({
 export const SUB_STEPS = getSubSteps('en');
 
 // ─── READINESS LEVELS DEFINITIONS ────────────────────────────────
-// Names and descriptions are inline (NOT from locales — locales has no 'rl' section)
 
 export const getReadinessLevelsDefinitions = (lang = 'en') => ({
   TRL: {
