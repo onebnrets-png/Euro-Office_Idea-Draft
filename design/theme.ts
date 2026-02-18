@@ -1,8 +1,13 @@
 // design/theme.ts
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Design System — Central Theme Configuration
-// v1.2 — 2026-02-17
-// 
+// v1.3 — 2026-02-18
+//
+// CHANGES (v1.3):
+//   - ★ Added 'superadmin' to roleBadge with gold/amber styling + 👑 icon
+//
+// v1.2 — 2026-02-17: Full dark palette with gradients
+//
 // Single source of truth for all visual tokens.
 // All components reference this file — NEVER hardcode colors/sizes.
 // ═══════════════════════════════════════════════════════════════
@@ -10,7 +15,6 @@
 // ─── COLOR PALETTE ───────────────────────────────────────────
 
 export const colors = {
-  // Primary (Indigo → Violet gradient)
   primary: {
     50:  '#EEF2FF',
     100: '#E0E7FF',
@@ -25,8 +29,6 @@ export const colors = {
     gradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
     gradientHover: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
   },
-
-  // Secondary (Cyan)
   secondary: {
     50:  '#ECFEFF',
     100: '#CFFAFE',
@@ -40,8 +42,6 @@ export const colors = {
     900: '#164E63',
     gradient: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)',
   },
-
-  // Success (Emerald)
   success: {
     50:  '#ECFDF5',
     100: '#D1FAE5',
@@ -54,8 +54,6 @@ export const colors = {
     800: '#065F46',
     900: '#064E3B',
   },
-
-  // Warning (Amber)
   warning: {
     50:  '#FFFBEB',
     100: '#FEF3C7',
@@ -68,8 +66,6 @@ export const colors = {
     800: '#92400E',
     900: '#78350F',
   },
-
-  // Error (Red)
   error: {
     50:  '#FEF2F2',
     100: '#FEE2E2',
@@ -82,8 +78,6 @@ export const colors = {
     800: '#991B1B',
     900: '#7F1D1D',
   },
-
-  // Surfaces
   surface: {
     background: '#F8FAFC',
     card: '#FFFFFF',
@@ -91,8 +85,6 @@ export const colors = {
     overlay: 'rgba(15, 23, 42, 0.5)',
     overlayBlur: 'rgba(15, 23, 42, 0.3)',
   },
-
-  // Text
   text: {
     heading: '#0F172A',
     body: '#334155',
@@ -101,8 +93,6 @@ export const colors = {
     link: '#6366F1',
     linkHover: '#4F46E5',
   },
-
-  // Borders
   border: {
     light: '#E2E8F0',
     medium: '#CBD5E1',
@@ -111,7 +101,7 @@ export const colors = {
   },
 } as const;
 
-// ─── STEP COLORS (6 korakov, vsak s svojo identiteto) ────────
+// ─── STEP COLORS ─────────────────────────────────────────────
 
 export const stepColors = {
   problemAnalysis:     { main: '#EF4444', light: '#FEF2F2', border: '#FECACA', text: '#991B1B' },
@@ -149,10 +139,8 @@ export const shadows = {
   lg:   '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
   xl:   '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
   '2xl':'0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-  // Card specific
   card:      '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06)',
   cardHover: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -4px rgba(0, 0, 0, 0.08)',
-  // Glow effects (for primary actions)
   primaryGlow: '0 0 20px rgba(99, 102, 241, 0.3)',
   successGlow: '0 0 20px rgba(16, 185, 129, 0.3)',
 } as const;
@@ -212,14 +200,14 @@ export const typography = {
     mono:  "'JetBrains Mono', 'Fira Code', monospace",
   },
   fontSize: {
-    xs:   '0.75rem',    // 12px
-    sm:   '0.875rem',   // 14px
-    base: '1rem',       // 16px
-    lg:   '1.125rem',   // 18px
-    xl:   '1.25rem',    // 20px
-    '2xl':'1.5rem',     // 24px
-    '3xl':'1.875rem',   // 30px
-    '4xl':'2.25rem',    // 36px
+    xs:   '0.75rem',
+    sm:   '0.875rem',
+    base: '1rem',
+    lg:   '1.125rem',
+    xl:   '1.25rem',
+    '2xl':'1.5rem',
+    '3xl':'1.875rem',
+    '4xl':'2.25rem',
   },
   fontWeight: {
     normal:   '400',
@@ -246,8 +234,16 @@ export const breakpoints = {
 } as const;
 
 // ─── ROLE BADGES ─────────────────────────────────────────────
+// ★ v1.3: Added superadmin with gold/amber styling
 
 export const roleBadge = {
+  superadmin: {
+    bg: '#FEF3C7',
+    text: '#92400E',
+    border: '#FDE68A',
+    icon: '👑',
+    label: { en: 'Super Admin', si: 'Super Admin' },
+  },
   admin: {
     bg: colors.primary[100],
     text: colors.primary[700],
@@ -264,32 +260,19 @@ export const roleBadge = {
   },
 } as const;
 
-// ─── CHART COLORS (for empirical data visualizations) ────────
+// ─── CHART COLORS ────────────────────────────────────────────
 
 export const chartColors = {
-  // Sequential palette (for ordered data)
   sequential: ['#6366F1', '#818CF8', '#A5B4FC', '#C7D2FE', '#E0E7FF'],
-  
-  // Categorical palette (for distinct categories)
   categorical: [
-    '#6366F1', // indigo
-    '#06B6D4', // cyan
-    '#10B981', // emerald
-    '#F59E0B', // amber
-    '#EF4444', // red
-    '#8B5CF6', // violet
-    '#EC4899', // pink
-    '#14B8A6', // teal
+    '#6366F1', '#06B6D4', '#10B981', '#F59E0B',
+    '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6',
   ],
-
-  // Diverging palette (for comparison: good vs bad)
   diverging: {
     positive: '#10B981',
     neutral:  '#94A3B8',
     negative: '#EF4444',
   },
-
-  // Risk heatmap
   riskMatrix: {
     low_low:     '#D1FAE5',
     low_med:     '#FEF3C7',
@@ -301,8 +284,6 @@ export const chartColors = {
     high_med:    '#FECACA',
     high_high:   '#FEE2E2',
   },
-
-  // Gradient fills for area/bar charts
   gradientFills: {
     primary:   { start: '#6366F1', end: '#8B5CF6' },
     secondary: { start: '#06B6D4', end: '#0891B2' },
@@ -313,7 +294,6 @@ export const chartColors = {
 } as const;
 
 // ─── DARK MODE COLORS ────────────────────────────────────────
-// v1.2 — 2026-02-17  Full dark palette with gradients
 
 export const darkColors = {
   primary: {
@@ -328,7 +308,6 @@ export const darkColors = {
   success: { ...colors.success },
   warning: { ...colors.warning },
   error: { ...colors.error },
-
   surface: {
     background: '#0F172A',
     card: '#1E293B',
@@ -338,7 +317,6 @@ export const darkColors = {
     hover: '#253348',
     cardAlt: '#162032',
   },
-
   text: {
     heading: '#F1F5F9',
     body: '#CBD5E1',
@@ -347,7 +325,6 @@ export const darkColors = {
     link: '#818CF8',
     linkHover: '#A5B4FC',
   },
-
   border: {
     light: '#334155',
     medium: '#475569',
@@ -356,7 +333,6 @@ export const darkColors = {
   },
 } as const;
 
-// Re-export as lightColors alias for components that need explicit light ref
 export const lightColors = colors;
 
 // ─── EXPORT COMPLETE THEME ───────────────────────────────────
