@@ -1,5 +1,18 @@
 // components/ProjectDashboard.tsx
-// v2.2 - 2026-02-17  Professional SVG icons, extended completeness calc
+// ═══════════════════════════════════════════════════════════════
+// Project Dashboard — full-screen modal overview
+// v2.3 — 2026-02-18
+//   - FIX: calculateOverallCompleteness now returns 0% for empty projects
+//   - FIX: readinessLevels with {level:null, justification:''} no longer
+//     count as filled (empty string '' was truthy in old !== null check)
+//   - FIX: Default enum fields (category, likelihood, impact) skipped
+//   - FIX: Numbers no longer count as real content
+//   - FIX: Uses binary section checks (filled/not) instead of fractional
+//     counting that produced false 1% values
+// v2.2 — 2026-02-17
+//   - Professional SVG icons, extended completeness calc
+// ═══════════════════════════════════════════════════════════════
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
 import ChartRenderer from './ChartRenderer.tsx';
@@ -7,7 +20,8 @@ import { lightColors, darkColors, shadows, radii, spacing, typography } from '..
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { ProgressRing } from '../design/index.ts';
 
-// --- Props ---
+// ─── Props ───────────────────────────────────────────────────
+
 interface ProjectDashboardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,7 +29,8 @@ interface ProjectDashboardProps {
   language: 'en' | 'si';
 }
 
-// --- Professional SVG Icons ---
+// ─── Professional SVG Icons ─────────────────────────────────
+
 const DashboardIcons = {
   document: (color: string) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -67,64 +82,148 @@ const DashboardIcons = {
   ),
 };
 
-// --- Section completeness calculator ---
-const calculateOverallCompleteness = (projectData: any): number => {
-  const sections = [
-    'problemAnalysis', 'projectIdea', 'generalObjectives',
-    'specificObjectives', 'projectManagement', 'activities',
-    'outputs', 'outcomes', 'impacts', 'risks', 'kers',
-  ];
+// ─── Helpers: detect real user-entered content ───────────────
+// v2.3 FIX: Immune to skeleton defaults
 
-  const SKIP_FIELDS = new Set([
-    'startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe',
-    'id', 'project_id', 'created_at', 'updated_at',
-  ]);
+const SKIP_KEYS = new Set([
+  'id', 'project_id', 'created_at', 'updated_at',
+  'category', 'likelihood', 'impact', 'type', 'dependencies',
+  'startDate', 'durationMonths', '_calculatedEndDate', '_projectTimeframe',
+]);
 
-  let filledSections = 0;
-  let totalSections = 0;
+const hasRealStr = (v: any): boolean =>
+  typeof v === 'string' && v.trim().length > 0;
 
-  for (const key of sections) {
-    const data = projectData?.[key];
-    if (data === undefined || data === null) continue;
-
-    totalSections++;
-
-    if (Array.isArray(data)) {
-      if (data.length === 0) continue;
-      const filled = data.filter((item: any) => {
-        if (typeof item === 'string') return item.trim().length > 0;
-        if (typeof item !== 'object' || item === null) return false;
-        const hasTitle = item.title && typeof item.title === 'string' && item.title.trim().length > 0;
-        const hasDesc = item.description && typeof item.description === 'string' && item.description.trim().length > 0;
-        return hasTitle || hasDesc;
-      });
-      filledSections += filled.length / data.length;
-    } else if (typeof data === 'object') {
-      const entries = Object.entries(data).filter(([k]) => !SKIP_FIELDS.has(k));
-      if (entries.length === 0) { filledSections += 1; continue; }
-      const filled = entries.filter(([_, v]) => {
-        if (typeof v === 'string') return v.trim().length > 0;
-        if (Array.isArray(v)) return v.length > 0;
-        if (typeof v === 'number') return true;
-        if (typeof v === 'object' && v !== null) {
-          return Object.values(v).some((sv: any) =>
-            typeof sv === 'string' ? sv.trim().length > 0 :
-            typeof sv === 'number' ? true :
-            Array.isArray(sv) ? sv.length > 0 :
-            sv !== null && sv !== undefined
-          );
-        }
-        return false;
-      });
-      filledSections += filled.length / entries.length;
-    }
-  }
-
-  if (totalSections === 0) return 0;
-  return Math.round((filledSections / totalSections) * 100);
+const arrHasContent = (arr: any[]): boolean => {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  return arr.some((item: any) => {
+    if (typeof item === 'string') return item.trim().length > 0;
+    if (typeof item !== 'object' || item === null) return false;
+    return Object.entries(item).some(([k, v]) => {
+      if (SKIP_KEYS.has(k)) return false;
+      if (typeof v === 'string') return v.trim().length > 0;
+      if (Array.isArray(v)) return arrHasContent(v);
+      return false;
+    });
+  });
 };
 
-// --- Component ---
+const objHasContent = (obj: any): boolean => {
+  if (!obj || typeof obj !== 'object') return false;
+  if (Array.isArray(obj)) return arrHasContent(obj);
+  return Object.entries(obj).some(([k, v]) => {
+    if (SKIP_KEYS.has(k)) return false;
+    if (typeof v === 'string') return v.trim().length > 0;
+    // DO NOT count numbers — durationMonths:24 is not user content
+    // DO NOT count null — readinessLevels level:null is not content
+    if (Array.isArray(v)) return arrHasContent(v);
+    if (typeof v === 'object' && v !== null) return objHasContent(v);
+    return false;
+  });
+};
+
+// ─── Section completeness calculator ─────────────────────────
+// v2.3 — Binary checks per section (filled or not), no fractional math
+// This prevents the old bug where 0.14/11*100 = 1.27 → rounded to 1%
+
+const calculateOverallCompleteness = (projectData: any): number => {
+  if (!projectData) return 0;
+
+  const sectionChecks: { key: string; check: (data: any) => boolean }[] = [
+    {
+      key: 'problemAnalysis',
+      check: (d) => {
+        if (!d) return false;
+        return (
+          hasRealStr(d.coreProblem?.title) ||
+          hasRealStr(d.coreProblem?.description) ||
+          arrHasContent(d.causes) ||
+          arrHasContent(d.consequences)
+        );
+      },
+    },
+    {
+      key: 'projectIdea',
+      check: (d) => {
+        if (!d) return false;
+        return (
+          hasRealStr(d.projectTitle) ||
+          hasRealStr(d.projectAcronym) ||
+          hasRealStr(d.mainAim) ||
+          hasRealStr(d.stateOfTheArt) ||
+          hasRealStr(d.proposedSolution) ||
+          arrHasContent(d.policies) ||
+          // Only count readiness levels if at least one level is a real number > 0
+          (d.readinessLevels && [
+            d.readinessLevels.TRL,
+            d.readinessLevels.SRL,
+            d.readinessLevels.ORL,
+            d.readinessLevels.LRL,
+          ].some((r: any) => typeof r?.level === 'number' && r.level > 0))
+        );
+      },
+    },
+    {
+      key: 'generalObjectives',
+      check: (d) => arrHasContent(d),
+    },
+    {
+      key: 'specificObjectives',
+      check: (d) => arrHasContent(d),
+    },
+    {
+      key: 'projectManagement',
+      check: (d) => {
+        if (!d) return false;
+        return hasRealStr(d.description) || objHasContent(d.structure);
+      },
+    },
+    {
+      key: 'activities',
+      check: (d) => {
+        if (!Array.isArray(d)) return false;
+        return d.some((wp: any) =>
+          hasRealStr(wp.title) ||
+          arrHasContent(wp.tasks) ||
+          arrHasContent(wp.milestones) ||
+          arrHasContent(wp.deliverables)
+        );
+      },
+    },
+    { key: 'outputs', check: (d) => arrHasContent(d) },
+    { key: 'outcomes', check: (d) => arrHasContent(d) },
+    { key: 'impacts', check: (d) => arrHasContent(d) },
+    {
+      key: 'risks',
+      check: (d) => {
+        if (!Array.isArray(d)) return false;
+        // Only count risks with real title, description, or mitigation
+        return d.some((r: any) =>
+          hasRealStr(r.title) || hasRealStr(r.description) || hasRealStr(r.mitigation)
+        );
+      },
+    },
+    {
+      key: 'kers',
+      check: (d) => arrHasContent(d),
+    },
+  ];
+
+  let filledCount = 0;
+  let totalCount = 0;
+
+  for (const { key, check } of sectionChecks) {
+    const data = projectData?.[key];
+    if (data === undefined || data === null) continue;
+    totalCount++;
+    if (check(data)) filledCount++;
+  }
+
+  return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
+};
+
+// ─── Component ───────────────────────────────────────────────
+
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   isOpen, onClose, projectData, language,
 }) => {
@@ -174,204 +273,6 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   );
 
   const pi = projectData?.projectIdea;
-  const wpCount = projectData?.activities?.length || 0;
-  const riskCount = projectData?.risks?.length || 0;
-  const objCount = (projectData?.generalObjectives?.length || 0) + (projectData?.specificObjectives?.length || 0);
-
-  if (!isOpen) return null;
-
-  // Icon color palette — subtle, professional
-  const iconColors = {
-    primary: colors.primary[500],
-    secondary: colors.secondary[500],
-    warning: colors.warning[500],
-    success: colors.success[500],
-  };
-
-  // Meta info card with SVG icon
-  const MetaCard = ({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) => (
-    <div style={{
-      backgroundColor: colors.surface.card,
-      borderRadius: radii.lg,
-      border: `1px solid ${colors.border.light}`,
-      padding: '16px 20px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '14px',
-    }}>
-      <div style={{
-        width: 40,
-        height: 40,
-        borderRadius: radii.lg,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        {icon}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-          {label}
-        </p>
-        <p style={{
-          fontSize: '15px', fontWeight: 700, color: colors.text.heading, margin: '2px 0 0',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {value || '—'}
-        </p>
-      </div>
-    </div>
-  );
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 90,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        backgroundColor: colors.surface.overlayBlur,
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          backgroundColor: colors.surface.background,
-          borderRadius: radii.xl,
-          boxShadow: shadows.xl,
-          width: '100%',
-          maxWidth: '1100px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          border: `1px solid ${colors.border.light}`,
-          animation: 'fadeIn 0.2s ease-out',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: `1px solid ${colors.border.light}`,
-          backgroundColor: colors.surface.card,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: colors.text.heading }}>
-              {t.title}
-            </h2>
-            <ProgressRing
-              value={overallCompleteness}
-              size={48}
-              strokeWidth={5}
-              color={overallCompleteness >= 80 ? colors.success[500] : overallCompleteness >= 40 ? colors.warning[500] : colors.error[500]}
-              label={`${overallCompleteness}%`}
-            />
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '8px',
-              borderRadius: radii.md,
-              color: colors.text.muted,
-              fontSize: '20px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.surface.sidebar; }}
-            onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-          {/* Meta cards row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.projectTitle} value={pi?.projectTitle || ''} icon={DashboardIcons.document(iconColors.primary)} />
-            <MetaCard label={t.acronym} value={pi?.projectAcronym || ''} icon={DashboardIcons.tag(iconColors.secondary)} />
-            <MetaCard label={t.duration} value={pi?.durationMonths ? `${pi.durationMonths} ${t.months}` : ''} icon={DashboardIcons.calendar(iconColors.primary)} />
-            <MetaCard label={t.startDate} value={pi?.startDate || ''} icon={DashboardIcons.play(iconColors.success)} />
-          </div>
-
-          {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-            <MetaCard label={t.workPackages} value={String(wpCount)} icon={DashboardIcons.layers(iconColors.primary)} />
-            <MetaCard label={t.risks} value={String(riskCount)} icon={DashboardIcons.shield(iconColors.warning)} />
-            <MetaCard label={t.objectives} value={String(objCount)} icon={DashboardIcons.target(iconColors.success)} />
-          </div>
-
-          {/* Charts */}
-          {structuralCharts.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '16px' }}>
-              {structuralCharts.map(chart => (
-                <ChartRenderer
-                  key={chart.id}
-                  data={chart}
-                  height={280}
-                  showTitle={true}
-                  showSource={false}
-                />
-              ))}
-            </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
-              color: colors.text.muted,
-              fontSize: '14px',
-            }}>
-              {t.noData}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: '16px 24px',
-          borderTop: `1px solid ${colors.border.light}`,
-          backgroundColor: colors.surface.card,
-          display: 'flex',
-          justifyContent: 'flex-end',
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '8px 20px',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: colors.text.body,
-              backgroundColor: colors.surface.sidebar,
-              border: `1px solid ${colors.border.light}`,
-              borderRadius: radii.md,
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.border.light; }}
-            onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.backgroundColor = colors.surface.sidebar; }}
-          >
-            {t.close}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default ProjectDashboard;
+  const wpCount = projectData?.activities?.filter((wp: any) => hasRealStr(wp.title)).length || 0;
+  const riskCount = projectData?.risks?.filter((r: any) => hasRealStr(r.title)).length || 0;
+  const objCount =
