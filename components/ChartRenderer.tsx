@@ -1,5 +1,7 @@
 // components/ChartRenderer.tsx
-// v1.4 — 2026-02-18 — FIX: Donut radii 30/48 always, SHORT label lines, percent-only labels
+// v1.5 — 2026-02-18 — FIX: Donut scales proportionally to container height
+//   height=160 → radii 30/48 (sidebar), height=280 → radii 52/84 (modal)
+//   Label lines always SHORT (8px), labels percent-only
 import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -64,22 +66,25 @@ const ComparisonBar: React.FC<{ data: ExtractedChartData; height: number }> = ({
   );
 };
 
-/* ─── DONUT — v1.4: Compact radii ALWAYS, short labels ───── */
+/* ─── DONUT — v1.5: proportional scaling, short labels ───── */
 
 const DonutChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ data, height }) => {
   const chartData = data.dataPoints.map(dp => ({ name: dp.label, value: dp.value, unit: dp.unit || '' }));
 
-  // Use the proven 30/48 radii that Beno confirmed as excellent.
-  // Scale up slightly for large containers (height > 300) but cap it.
-  const isLarge = height > 300;
-  const innerRadius = isLarge ? 38 : 30;
-  const outerRadius = isLarge ? 62 : 48;
-  const labelFontSize = isLarge ? 11 : 9;
+  // Proportional radii based on height:
+  //   h=160 → inner=30, outer=48  (DashboardPanel sidebar — confirmed excellent)
+  //   h=280 → inner=52, outer=84  (ProjectDashboard modal — fills space like radar)
+  //   Scales linearly between these anchor points
+  const innerRadius = Math.round(Math.min(Math.max(height * 0.19, 24), 70));
+  const outerRadius = Math.round(Math.min(Math.max(height * 0.30, 40), 110));
+
+  const isSmall = height <= 180;
+  const labelFontSize = isSmall ? 9 : 11;
 
   // Custom label: positioned CLOSE to donut edge = SHORT arrows
   const renderLabel = ({ percent, midAngle, outerRadius: oR, cx, cy }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = oR + 8;
+    const radius = oR + (isSmall ? 8 : 10);
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     const textAnchor = x > cx ? 'start' : 'end';
@@ -103,7 +108,7 @@ const DonutChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ da
         <Pie
           data={chartData}
           cx="50%"
-          cy="45%"
+          cy={isSmall ? '42%' : '45%'}
           innerRadius={innerRadius}
           outerRadius={outerRadius}
           paddingAngle={2}
@@ -118,11 +123,11 @@ const DonutChart: React.FC<{ data: ExtractedChartData; height: number }> = ({ da
         <Tooltip content={<CustomTooltip />} />
         <Legend
           wrapperStyle={{
-            fontSize: isLarge ? '11px' : '9px',
-            lineHeight: isLarge ? '18px' : '14px',
+            fontSize: isSmall ? '9px' : '11px',
+            lineHeight: isSmall ? '14px' : '18px',
           }}
           iconType="circle"
-          iconSize={isLarge ? 8 : 6}
+          iconSize={isSmall ? 6 : 8}
         />
       </PieChart>
     </ResponsiveContainer>
