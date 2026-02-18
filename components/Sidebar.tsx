@@ -1,13 +1,14 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
+// v1.7 — 2026-02-18
+//   ★ v1.7: Dark-mode sub-step & step text colors — use stepColor.main
+//     instead of stepColor.text in dark mode for legibility.
+//     Active step background also adapted for dark mode.
 // v1.6 — 2026-02-18
 //   - FIX: arrayHasContent helper — empty skeleton arrays no longer count as "filled"
-//     New projects correctly show 0% instead of false 40-100%
 // v1.5 — 2026-02-17
-//   - FIX: onCollapseChange prop — notifies App.tsx when sidebar
-//     collapses/expands so main content can adjust marginLeft
-//   - Previous (v1.4): Unified Admin/Settings, Dark mode, collapse
+//   - FIX: onCollapseChange prop
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo } from 'react';
@@ -58,7 +59,6 @@ const STEP_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
 
 const STEP_KEYS: StepColorKey[] = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
 
-// ─── Helper: does array contain at least one item with real content? ──
 function arrayHasContent(arr: any[] | undefined | null): boolean {
   if (!arr || arr.length === 0) return false;
   return arr.some((item: any) => {
@@ -72,7 +72,6 @@ function arrayHasContent(arr: any[] | undefined | null): boolean {
 }
 
 function getStepCompletionPercent(projectData: ProjectData, stepKey: string): number {
-  // Problem Analysis
   if (stepKey === 'problemAnalysis') {
     let filled = 0;
     const total = 3;
@@ -82,8 +81,6 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (arrayHasContent(pa?.consequences)) filled++;
     return Math.round((filled / total) * 100);
   }
-
-  // Project Idea
   if (stepKey === 'projectIdea') {
     let filled = 0;
     const total = 5;
@@ -95,8 +92,6 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (arrayHasContent(pi?.policies)) filled++;
     return Math.round((filled / total) * 100);
   }
-
-  // General Objectives (minimum 3 required)
   if (stepKey === 'generalObjectives') {
     const objs = projectData.generalObjectives;
     if (!arrayHasContent(objs)) return 0;
@@ -105,16 +100,12 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (withContent >= minRequired) return 100;
     return Math.round((withContent / minRequired) * 100);
   }
-
-  // Specific Objectives
   if (stepKey === 'specificObjectives') {
     const objs = projectData.specificObjectives;
     if (!arrayHasContent(objs)) return 0;
     const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim() && o.indicator?.trim()).length;
     return Math.round((Math.min(withContent, 5) / 5) * 100);
   }
-
-  // Activities
   if (stepKey === 'activities') {
     let filled = 0;
     const total = 3;
@@ -126,8 +117,6 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (arrayHasContent(projectData.risks)) filled++;
     return Math.round((filled / total) * 100);
   }
-
-  // Expected Results
   if (stepKey === 'expectedResults') {
     let filled = 0;
     const total = 4;
@@ -137,15 +126,28 @@ function getStepCompletionPercent(projectData: ProjectData, stepKey: string): nu
     if (arrayHasContent(projectData.kers)) filled++;
     return Math.round((filled / total) * 100);
   }
-
   return 0;
 }
-
-// ─── Overall completion ──────────────────────────────────────
 
 function getOverallCompletion(projectData: ProjectData): number {
   const percentages = STEP_KEYS.map((key) => getStepCompletionPercent(projectData, key));
   return Math.round(percentages.reduce((sum, v) => sum + v, 0) / percentages.length);
+}
+
+// ─── Dark-aware step color helper ★ v1.7 ─────────────────────
+
+function getStepTextColor(stepColor: typeof stepColors[StepColorKey], isDark: boolean): string {
+  // In dark mode, use the brighter 'main' color instead of the dark 'text' variant
+  return isDark ? stepColor.main : stepColor.text;
+}
+
+function getStepActiveBg(stepColor: typeof stepColors[StepColorKey], isDark: boolean): string {
+  // In dark mode, use a subtle transparent version of the main color
+  return isDark ? `${stepColor.main}18` : stepColor.light;
+}
+
+function getStepActiveBorder(stepColor: typeof stepColors[StepColorKey], isDark: boolean): string {
+  return isDark ? `${stepColor.main}40` : stepColor.border;
 }
 
 // ─── Props ───────────────────────────────────────────────────
@@ -169,38 +171,20 @@ interface SidebarProps {
   onLanguageSwitch: (lang: 'en' | 'si') => void;
   onSubStepClick: (subStepId: string) => void;
   isLoading: boolean;
-  // ★ v1.5: Notify parent when sidebar collapses/expands
   onCollapseChange?: (collapsed: boolean) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────
 
 const Sidebar: React.FC<SidebarProps> = ({
-  language,
-  projectData,
-  currentStepId,
-  setCurrentStepId,
-  completedStepsStatus,
-  displayTitle,
-  currentUser,
-  appLogo,
-  isAdmin,
-  isSidebarOpen,
-  onCloseSidebar,
-  onBackToWelcome,
-  onOpenProjectList,
-  onOpenAdminPanel,
-  onLogout,
-  onLanguageSwitch,
-  onSubStepClick,
-  isLoading,
-  // ★ v1.5: Destructure new prop
-  onCollapseChange,
+  language, projectData, currentStepId, setCurrentStepId, completedStepsStatus,
+  displayTitle, currentUser, appLogo, isAdmin, isSidebarOpen, onCloseSidebar,
+  onBackToWelcome, onOpenProjectList, onOpenAdminPanel, onLogout, onLanguageSwitch,
+  onSubStepClick, isLoading, onCollapseChange,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => getThemeMode() === 'dark');
 
-  // Desktop detection — replaces Tailwind lg: breakpoint
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   React.useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)');
@@ -209,24 +193,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Subscribe to theme changes
   React.useEffect(() => {
     return onThemeChange((mode) => setIsDark(mode === 'dark'));
   }, []);
 
   const activeColors = isDark ? darkColors : colors;
-
   const t = TEXT[language] || TEXT['en'];
   const STEPS = getSteps(language);
   const SUB_STEPS = getSubSteps(language);
-
   const overallCompletion = useMemo(() => getOverallCompletion(projectData), [projectData]);
 
   const collapsedWidth = 64;
   const expandedWidth = 280;
   const sidebarWidth = isCollapsed ? collapsedWidth : expandedWidth;
-
-  // ─── Styles ────────────────────────────────────────────────
 
   const sidebarStyle: React.CSSProperties = {
     position: 'fixed' as const,
@@ -246,222 +225,65 @@ const Sidebar: React.FC<SidebarProps> = ({
     color: activeColors.text.body,
   };
 
-  // Mobile transform
   const mobileTransform = isDesktop || isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)';
+  const responsiveStyle: React.CSSProperties = { ...sidebarStyle, transform: mobileTransform };
 
-  const responsiveStyle: React.CSSProperties = {
-    ...sidebarStyle,
-    transform: mobileTransform,
-  };
-
-  
-  // ─── Render ────────────────────────────────────────────────
-
-   return (
+  return (
     <>
-      {/* Mobile overlay */}
       {isSidebarOpen && (
-        <div
-          onClick={onCloseSidebar}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: activeColors.surface.overlay,
-            zIndex: zIndex.sidebar - 1,
-          }}
-          className="lg:hidden"
-        />
+        <div onClick={onCloseSidebar} style={{ position: 'fixed', inset: 0, background: activeColors.surface.overlay, zIndex: zIndex.sidebar - 1 }} className="lg:hidden" />
       )}
 
-      <aside
-        style={responsiveStyle}
-      >
+      <aside style={responsiveStyle}>
         {/* ═══ HEADER ═══ */}
-        <div style={{
-          padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : `${spacing.lg} ${spacing.lg}`,
-          borderBottom: `1px solid ${activeColors.border.light}`,
-          flexShrink: 0,
-        }}>
-          {/* Logo + Language */}
-          <div style={{
-            display: 'flex',
-            justifyContent: isCollapsed ? 'center' : 'space-between',
-            alignItems: 'center',
-            marginBottom: isCollapsed ? spacing.sm : spacing.lg,
-          }}>
-            <button
-              onBackToWelcome={() => pm.setCurrentStepId(1)}
-              style={{
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              title={t.backToHome}
-            >
-              <img
-                src={appLogo}
-                alt="Logo"
-                style={{
-                  height: isCollapsed ? 28 : 36,
-                  width: 'auto',
-                  objectFit: 'contain',
-                  transition: `height ${animation.duration.normal}`,
-                }}
-              />
+        <div style={{ padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : `${spacing.lg} ${spacing.lg}`, borderBottom: `1px solid ${activeColors.border.light}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', marginBottom: isCollapsed ? spacing.sm : spacing.lg }}>
+            <button onClick={onBackToWelcome} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }} title={t.backToHome}>
+              <img src={appLogo} alt="Logo" style={{ height: isCollapsed ? 28 : 36, width: 'auto', objectFit: 'contain', transition: `height ${animation.duration.normal}` }} />
             </button>
-
             {!isCollapsed && (
-              <div style={{
-                display: 'flex',
-                background: activeColors.surface.sidebar,
-                borderRadius: radii.md,
-                padding: '2px',
-                border: `1px solid ${activeColors.border.light}`,
-              }}>
+              <div style={{ display: 'flex', background: activeColors.surface.sidebar, borderRadius: radii.md, padding: '2px', border: `1px solid ${activeColors.border.light}` }}>
                 {(['si', 'en'] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    onClick={() => onLanguageSwitch(lang)}
-                    disabled={isLoading}
-                    style={{
-                      padding: '2px 8px',
-                      fontSize: typography.fontSize.xs,
-                      fontWeight: language === lang ? typography.fontWeight.bold : typography.fontWeight.medium,
-                      borderRadius: radii.sm,
-                      border: 'none',
-                      cursor: isLoading ? 'not-allowed' : 'pointer',
-                      background: language === lang ? activeColors.surface.card : 'transparent',
-                      color: language === lang ? activeColors.primary[600] : activeColors.text.muted,
-                      boxShadow: language === lang ? shadows.xs : 'none',
-                      transition: `all ${animation.duration.fast}`,
-                      opacity: isLoading ? 0.5 : 1,
-                    }}
-                  >
-                    {lang.toUpperCase()}
-                  </button>
+                  <button key={lang} onClick={() => onLanguageSwitch(lang)} disabled={isLoading} style={{
+                    padding: '2px 8px', fontSize: typography.fontSize.xs, fontWeight: language === lang ? typography.fontWeight.bold : typography.fontWeight.medium,
+                    borderRadius: radii.sm, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer',
+                    background: language === lang ? activeColors.surface.card : 'transparent',
+                    color: language === lang ? (isDark ? '#A5B4FC' : activeColors.primary[600]) : activeColors.text.muted,
+                    boxShadow: language === lang ? shadows.xs : 'none', transition: `all ${animation.duration.fast}`, opacity: isLoading ? 0.5 : 1,
+                  }}>{lang.toUpperCase()}</button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Overall Progress (collapsed = mini ring, expanded = full card) */}
           {isCollapsed ? (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: spacing.sm }}>
               <ProgressRing value={overallCompletion} size={40} strokeWidth={4} showLabel={true} labelSize="0.6rem" />
             </div>
           ) : (
             <>
-              {/* Project Card */}
-              <div style={{
-                background: activeColors.surface.card,
-                borderRadius: radii.lg,
-                padding: spacing.md,
-                border: `1px solid ${activeColors.border.light}`,
-                marginBottom: spacing.md,
-              }}>
-                <p style={{
-                  fontSize: '10px',
-                  textTransform: 'uppercase',
-                  fontWeight: typography.fontWeight.bold,
-                  color: activeColors.text.muted,
-                  marginBottom: '4px',
-                  letterSpacing: '0.05em',
-                  margin: '0 0 4px 0',
-                }}>
-                  {t.projects.currentProject}
-                </p>
+              <div style={{ background: activeColors.surface.card, borderRadius: radii.lg, padding: spacing.md, border: `1px solid ${activeColors.border.light}`, marginBottom: spacing.md }}>
+                <p style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: typography.fontWeight.bold, color: activeColors.text.muted, marginBottom: '4px', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>{t.projects.currentProject}</p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <h3 style={{
-                    fontSize: typography.fontSize.sm,
-                    fontWeight: typography.fontWeight.semibold,
-                    color: activeColors.text.heading,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    paddingRight: spacing.sm,
-                    margin: 0,
-                  }} title={displayTitle}>
-                    {displayTitle}
-                  </h3>
-                  <button
-                    onClick={onOpenProjectList}
-                    style={{
-                      padding: '4px',
-                      borderRadius: radii.sm,
-                      border: 'none',
-                      background: 'transparent',
-                      color: activeColors.primary[500],
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                    title={t.projects.switchProject}
-                  >
-                    <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
+                  <h3 style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: activeColors.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: spacing.sm, margin: 0 }} title={displayTitle}>{displayTitle}</h3>
+                  <button onClick={onOpenProjectList} style={{ padding: '4px', borderRadius: radii.sm, border: 'none', background: 'transparent', color: activeColors.primary[500], cursor: 'pointer', display: 'flex', alignItems: 'center' }} title={t.projects.switchProject}>
+                    <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                   </button>
                 </div>
               </div>
-
-              {/* Overall Progress Bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
                 <ProgressRing value={overallCompletion} size={36} strokeWidth={4} showLabel={true} labelSize="0.55rem" />
                 <div style={{ flex: 1 }}>
-                  <p style={{
-                    fontSize: typography.fontSize.xs,
-                    color: activeColors.text.muted,
-                    margin: 0,
-                  }}>
-                    {language === 'si' ? 'Skupni napredek' : 'Overall Progress'}
-                  </p>
-                  <div style={{
-                    height: 4,
-                    background: activeColors.border.light,
-                    borderRadius: radii.full,
-                    marginTop: 4,
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${overallCompletion}%`,
-                      background: activeColors.primary.gradient,
-                      borderRadius: radii.full,
-                      transition: `width ${animation.duration.slower} ${animation.easing.default}`,
-                    }} />
+                  <p style={{ fontSize: typography.fontSize.xs, color: activeColors.text.muted, margin: 0 }}>{language === 'si' ? 'Skupni napredek' : 'Overall Progress'}</p>
+                  <div style={{ height: 4, background: activeColors.border.light, borderRadius: radii.full, marginTop: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${overallCompletion}%`, background: activeColors.primary.gradient, borderRadius: radii.full, transition: `width ${animation.duration.slower} ${animation.easing.default}` }} />
                   </div>
                 </div>
               </div>
-
-              {/* User info */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: typography.fontSize.xs,
-                color: activeColors.text.muted,
-              }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: typography.fontSize.xs, color: activeColors.text.muted }}>
                 <span>{t.auth.welcome} <strong style={{ color: activeColors.text.body }}>{currentUser}</strong></span>
-                <button
-                  onClick={() => onOpenAdminPanel('profile')}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: activeColors.primary[500],
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: 0,
-                  }}
-                  title={t.auth.settings}
-                >
-                  <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                <button onClick={() => onOpenAdminPanel('profile')} style={{ border: 'none', background: 'none', color: activeColors.primary[500], cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }} title={t.auth.settings}>
+                  <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 </button>
               </div>
             </>
@@ -469,12 +291,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* ═══ STEP NAVIGATION ═══ */}
-        <nav style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: isCollapsed ? `${spacing.sm} ${spacing.xs}` : `${spacing.md} ${spacing.md}`,
-          minHeight: 0,
-        }} className="custom-scrollbar">
+        <nav style={{ flex: 1, overflowY: 'auto', padding: isCollapsed ? `${spacing.sm} ${spacing.xs}` : `${spacing.md} ${spacing.md}`, minHeight: 0 }} className="custom-scrollbar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: isCollapsed ? spacing.sm : '2px' }}>
             {STEPS.map((step: any, idx: number) => {
               const stepKey = step.key as StepColorKey;
@@ -491,16 +308,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => isClickable && setCurrentStepId(step.id)}
                     disabled={!isClickable}
                     style={{
-                      width: '100%',
-                      textAlign: 'left',
+                      width: '100%', textAlign: 'left',
                       padding: isCollapsed ? `${spacing.sm} 0` : `${spacing.md} ${spacing.lg}`,
                       borderRadius: radii.lg,
-                      border: isActive ? `1.5px solid ${stepColor.border}` : '1.5px solid transparent',
-                      background: isActive ? stepColor.light : 'transparent',
+                      // ★ v1.7: dark-aware active border & background
+                      border: isActive ? `1.5px solid ${getStepActiveBorder(stepColor, isDark)}` : '1.5px solid transparent',
+                      background: isActive ? getStepActiveBg(stepColor, isDark) : 'transparent',
                       cursor: isClickable ? 'pointer' : 'not-allowed',
                       opacity: isClickable ? 1 : 0.4,
-                      display: 'flex',
-                      alignItems: 'center',
+                      display: 'flex', alignItems: 'center',
                       gap: isCollapsed ? '0' : spacing.md,
                       justifyContent: isCollapsed ? 'center' : 'flex-start',
                       transition: `all ${animation.duration.fast} ${animation.easing.default}`,
@@ -510,71 +326,38 @@ const Sidebar: React.FC<SidebarProps> = ({
                   >
                     {isCollapsed ? (
                       <div style={{ position: 'relative' }}>
-                        <ProgressRing
-                          value={completionPct}
-                          size={36}
-                          strokeWidth={3}
-                          customColor={stepColor.main}
-                          showLabel={false}
-                        />
+                        <ProgressRing value={completionPct} size={36} strokeWidth={3} customColor={stepColor.main} showLabel={false} />
                         {StepIcon && (
-                          <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            <StepIcon style={{
-                              width: 16,
-                              height: 16,
-                              color: isActive ? stepColor.main : activeColors.text.muted,
-                            }} />
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <StepIcon style={{ width: 16, height: 16, color: isActive ? stepColor.main : activeColors.text.muted }} />
                           </div>
                         )}
                       </div>
                     ) : (
-                      <ProgressRing
-                        value={completionPct}
-                        size={32}
-                        strokeWidth={3}
-                        customColor={stepColor.main}
-                        showLabel={true}
-                        labelSize="0.5rem"
-                      />
+                      <ProgressRing value={completionPct} size={32} strokeWidth={3} customColor={stepColor.main} showLabel={true} labelSize="0.5rem" />
                     )}
-
                     {!isCollapsed && (
                       <span style={{
-                        flex: 1,
-                        fontSize: typography.fontSize.sm,
+                        flex: 1, fontSize: typography.fontSize.sm,
                         fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                        color: isActive ? stepColor.text : activeColors.text.body,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        // ★ v1.7: dark-aware step title color
+                        color: isActive ? getStepTextColor(stepColor, isDark) : activeColors.text.body,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         transition: `color ${animation.duration.fast}`,
                       }}>
                         {step.title}
                       </span>
                     )}
-
                     {!isCollapsed && isCompleted && (
-                      <ICONS.CHECK style={{
-                        width: 18,
-                        height: 18,
-                        color: stepColor.main,
-                        flexShrink: 0,
-                      }} />
+                      <ICONS.CHECK style={{ width: 18, height: 18, color: stepColor.main, flexShrink: 0 }} />
                     )}
                   </button>
 
+                  {/* ★ v1.7: Sub-steps with dark-aware colors */}
                   {!isCollapsed && isActive && SUB_STEPS[step.key as keyof typeof SUB_STEPS] && (SUB_STEPS[step.key as keyof typeof SUB_STEPS] as any[]).length > 0 && (
                     <div style={{
-                      paddingLeft: spacing['2xl'],
-                      marginTop: '2px',
-                      marginBottom: spacing.sm,
-                      borderLeft: `2px solid ${stepColor.border}`,
+                      paddingLeft: spacing['2xl'], marginTop: '2px', marginBottom: spacing.sm,
+                      borderLeft: `2px solid ${getStepActiveBorder(stepColor, isDark)}`,
                       marginLeft: spacing.xl,
                     }}>
                       {(SUB_STEPS[step.key as keyof typeof SUB_STEPS] as any[]).map((subStep: any) => {
@@ -584,37 +367,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                             key={subStep.id}
                             onClick={() => onSubStepClick(subStep.id)}
                             style={{
-                              width: '100%',
-                              textAlign: 'left',
+                              width: '100%', textAlign: 'left',
                               padding: `${spacing.xs} ${spacing.md}`,
-                              borderRadius: radii.md,
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: spacing.sm,
+                              borderRadius: radii.md, border: 'none', background: 'transparent',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: spacing.sm,
                               fontSize: typography.fontSize.xs,
-                              color: subCompleted ? stepColor.text : activeColors.text.muted,
+                              // ★ v1.7: KEY FIX — use main (bright) color in dark mode
+                              color: subCompleted ? getStepTextColor(stepColor, isDark) : activeColors.text.muted,
                               fontFamily: 'inherit',
                               transition: `all ${animation.duration.fast}`,
                             }}
                           >
                             {subCompleted ? (
-                              <ICONS.CHECK style={{
-                                width: 14,
-                                height: 14,
-                                color: stepColor.main,
-                                flexShrink: 0,
-                              }} />
+                              <ICONS.CHECK style={{ width: 14, height: 14, color: stepColor.main, flexShrink: 0 }} />
                             ) : (
-                              <div style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: radii.full,
-                                background: activeColors.border.medium,
-                                flexShrink: 0,
-                              }} />
+                              <div style={{ width: 6, height: 6, borderRadius: radii.full, background: activeColors.border.medium, flexShrink: 0 }} />
                             )}
                             <span>{subStep.title}</span>
                           </button>
@@ -629,204 +396,86 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* ═══ FOOTER ═══ */}
-        <div style={{
-          padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : spacing.lg,
-          borderTop: `1px solid ${activeColors.border.light}`,
-          flexShrink: 0,
-        }}>
-          {/* Admin/Settings button — visible for ALL users */}
+        <div style={{ padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : spacing.lg, borderTop: `1px solid ${activeColors.border.light}`, flexShrink: 0 }}>
           {!isCollapsed && (
-            <button
-              onClick={() => onOpenAdminPanel()}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: `${spacing.sm} ${spacing.lg}`,
-                borderRadius: radii.lg,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: typography.fontSize.sm,
-                color: activeColors.primary[600],
-                fontWeight: typography.fontWeight.medium,
-                display: 'flex',
-                alignItems: 'center',
-                gap: spacing.sm,
-                marginBottom: '2px',
-                fontFamily: 'inherit',
-              }}
-            >
+            <button onClick={() => onOpenAdminPanel()} style={{
+              width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
+              color: isDark ? '#A5B4FC' : activeColors.primary[600], fontWeight: typography.fontWeight.medium,
+              display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: '2px', fontFamily: 'inherit',
+            }}>
               <span>{isAdmin ? '🛡️' : '⚙️'}</span>
-              {isAdmin
-                ? (language === 'si' ? 'Admin / Nastavitve' : 'Admin / Settings')
-                : (language === 'si' ? 'Nastavitve' : 'Settings')}
+              {isAdmin ? (language === 'si' ? 'Admin / Nastavitve' : 'Admin / Settings') : (language === 'si' ? 'Nastavitve' : 'Settings')}
             </button>
           )}
-
           {isCollapsed && (
-            <button
-              onClick={() => onOpenAdminPanel()}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                padding: `${spacing.sm} 0`,
-                borderRadius: radii.lg,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                marginBottom: '2px',
-              }}
-              title={isAdmin ? 'Admin / Settings' : 'Settings'}
-            >
+            <button onClick={() => onOpenAdminPanel()} style={{
+              width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
+              borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginBottom: '2px',
+            }} title={isAdmin ? 'Admin / Settings' : 'Settings'}>
               <span style={{ fontSize: '18px' }}>{isAdmin ? '🛡️' : '⚙️'}</span>
             </button>
           )}
-
-          {/* Dark mode toggle — expanded */}
           {!isCollapsed && (
-            <button
-              onClick={() => { toggleTheme(); }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: `${spacing.sm} ${spacing.lg}`,
-                borderRadius: radii.lg,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: typography.fontSize.sm,
-                color: activeColors.text.muted,
-                display: 'flex',
-                alignItems: 'center',
-                gap: spacing.sm,
-                marginBottom: '2px',
-                fontFamily: 'inherit',
-              }}
-            >
+            <button onClick={() => { toggleTheme(); }} style={{
+              width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
+              color: activeColors.text.muted, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: '2px', fontFamily: 'inherit',
+            }}>
               {isDark ? (
-                <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
               ) : (
-                <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
+                <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
               )}
               <span>{isDark ? (language === 'si' ? 'Svetli način' : 'Light Mode') : (language === 'si' ? 'Temni način' : 'Dark Mode')}</span>
             </button>
           )}
-
-          {/* Dark mode toggle — collapsed */}
           {isCollapsed && (
-            <button
-              onClick={() => { toggleTheme(); }}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                padding: `${spacing.sm} 0`,
-                borderRadius: radii.lg,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                marginBottom: '2px',
-                color: activeColors.text.muted,
-              }}
-              title={isDark ? 'Light Mode' : 'Dark Mode'}
-            >
+            <button onClick={() => { toggleTheme(); }} style={{
+              width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
+              borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginBottom: '2px', color: activeColors.text.muted,
+            }} title={isDark ? 'Light Mode' : 'Dark Mode'}>
               {isDark ? (
-                <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
               ) : (
-                <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
+                <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
               )}
             </button>
           )}
-
-          <button
-            onClick={onLogout}
-            style={{
-              width: '100%',
-              textAlign: isCollapsed ? 'center' : 'left',
-              padding: `${spacing.sm} ${isCollapsed ? '0' : spacing.lg}`,
-              borderRadius: radii.lg,
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              fontSize: typography.fontSize.sm,
-              color: activeColors.text.muted,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isCollapsed ? 'center' : 'flex-start',
-              gap: spacing.sm,
-              fontFamily: 'inherit',
-              transition: `color ${animation.duration.fast}`,
-            }}
-          >
-            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+          <button onClick={onLogout} style={{
+            width: '100%', textAlign: isCollapsed ? 'center' : 'left',
+            padding: `${spacing.sm} ${isCollapsed ? '0' : spacing.lg}`, borderRadius: radii.lg, border: 'none',
+            background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm, color: activeColors.text.muted,
+            display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start',
+            gap: spacing.sm, fontFamily: 'inherit', transition: `color ${animation.duration.fast}`,
+          }}>
+            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             {!isCollapsed && <span>{t.auth.logout}</span>}
           </button>
-
           {!isCollapsed && (
-            <p style={{
-              fontSize: '10px',
-              color: activeColors.text.muted,
-              textAlign: 'center',
-              marginTop: spacing.sm,
-              opacity: 0.6,
-            }}>
-              © 2026 INFINITA d.o.o.
-            </p>
+            <p style={{ fontSize: '10px', color: activeColors.text.muted, textAlign: 'center', marginTop: spacing.sm, opacity: 0.6 }}>© 2026 INFINITA d.o.o.</p>
           )}
         </div>
-            </aside>
+      </aside>
 
-      {/* ★ v1.5: CollapseToggle — now also calls onCollapseChange */}
       {(isDesktop || isSidebarOpen) && (
         <button
-          onClick={() => {
-            const next = !isCollapsed;
-            setIsCollapsed(next);
-            onCollapseChange?.(next);
-          }}
+          onClick={() => { const next = !isCollapsed; setIsCollapsed(next); onCollapseChange?.(next); }}
           style={{
-            position: 'fixed',
-            top: 12,
-            left: sidebarWidth - 12,
-            width: 24,
-            height: 24,
-            borderRadius: radii.full,
-            background: activeColors.primary[500],
-            border: `2px solid ${activeColors.surface.card}`,
-            color: activeColors.text.inverse,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            zIndex: zIndex.sidebar + 1,
-            boxShadow: shadows.md,
+            position: 'fixed', top: 12, left: sidebarWidth - 12, width: 24, height: 24, borderRadius: radii.full,
+            background: activeColors.primary[500], border: `2px solid ${activeColors.surface.card}`,
+            color: activeColors.text.inverse, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', zIndex: zIndex.sidebar + 1, boxShadow: shadows.md,
             transition: `left ${animation.duration.normal} ${animation.easing.default}, transform ${animation.duration.fast} ${animation.easing.default}`,
           }}
           title={isCollapsed ? 'Expand' : 'Collapse'}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path
-              d={isCollapsed ? "M4 2L8 6L4 10" : "M8 2L4 6L8 10"}
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d={isCollapsed ? "M4 2L8 6L4 10" : "M8 2L4 6L8 10"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       )}
-      </>
+    </>
   );
 };
 export default Sidebar;
