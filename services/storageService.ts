@@ -1,13 +1,15 @@
 // services/storageService.ts
 // Supabase-backed storage service — replaces localStorage completely
 //
-// v5.0 — 2026-02-19
+// v5.1 — 2026-02-19
 // CHANGES:
+//   - ★ v5.1: Robust first-login setup after email confirmation
+//     → ensureUserHasOrg() creates org via SECURITY DEFINER RPC if missing
+//     → ensureApiKeySaved() saves API key from user_metadata if not yet in DB
+//     → login() and restoreSession() call both + reload settings
+//     → register() stores org_name, api_key, api_provider in user_metadata
+//     → Works with email confirmation ON or OFF
 //   - ★ v5.0: Registration + Email Confirmation fix
-//     → register() no longer tries to create org (user has no session yet)
-//     → login() detects first login (no org) and creates org via RPC create_org_for_new_user()
-//     → Org name stored in user_metadata during signup, consumed on first login
-//     → restoreSession() also checks for missing org and creates it
 //   - ★ v4.0: register() accepts orgName parameter
 //   - ★ v3.0: Multi-Tenant Organization integration
 //   - v2.2: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
@@ -37,51 +39,99 @@ async function getAuthUserId(): Promise<string | null> {
   return data.user?.id || null;
 }
 
-// ─── ★ v5.0: Create org on first login via SECURITY DEFINER RPC ─
-async function ensureUserHasOrg(userId: string, orgName?: string): Promise<void> {
-  // Check if user already has an organization
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', userId)
-    .limit(1)
-    .single();
+// ─── ★ v5.1: Create org on first login via SECURITY DEFINER RPC ─
+async function ensureUserHasOrg(userId: string, userMeta?: Record<string, any>): Promise<void> {
+  try {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .limit(1);
 
-  if (membership?.organization_id) {
-    // User already has an org — just make sure active_organization_id is set
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('active_organization_id')
-      .eq('id', userId)
+    if (membership && membership.length > 0) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('active_organization_id')
+        .eq('id', userId)
+        .single();
+
+      if (!profile?.active_organization_id) {
+        await supabase
+          .from('profiles')
+          .update({ active_organization_id: membership[0].organization_id })
+          .eq('id', userId);
+      }
+      return;
+    }
+
+    const orgName = userMeta?.org_name || userMeta?.display_name || 'My Organization';
+    console.log(`ensureUserHasOrg: No org found. Creating "${orgName}" for user ${userId}`);
+
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('create_org_for_new_user', {
+      p_user_id: userId,
+      p_org_name: orgName
+    });
+
+    if (rpcError) {
+      console.error('ensureUserHasOrg: RPC error:', rpcError.message);
+      return;
+    }
+
+    if (rpcResult?.success) {
+      console.log(`ensureUserHasOrg: ✅ Org created with ID ${rpcResult.orgId}`);
+    } else {
+      console.warn('ensureUserHasOrg: RPC returned failure:', rpcResult?.message);
+    }
+  } catch (err) {
+    console.error('ensureUserHasOrg: Unexpected error:', err);
+  }
+}
+
+// ─── ★ v5.1: Save API key from user_metadata on first login ─────
+async function ensureApiKeySaved(userId: string, userMeta?: Record<string, any>): Promise<void> {
+  try {
+    const metaApiKey = userMeta?.api_key;
+    const metaApiProvider = (userMeta?.api_provider || 'gemini') as AIProviderType;
+
+    if (!metaApiKey || metaApiKey.trim() === '') return;
+
+    const keyColumn = metaApiProvider === 'openai' ? 'openai_key'
+                    : metaApiProvider === 'openrouter' ? 'openrouter_key'
+                    : 'gemini_key';
+
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select(keyColumn)
+      .eq('user_id', userId)
       .single();
 
-    if (!profile?.active_organization_id) {
+    if (settings && settings[keyColumn]) return;
+
+    console.log(`ensureApiKeySaved: Saving ${keyColumn} from user_metadata for user ${userId}`);
+
+    const { error } = await supabase
+      .from('user_settings')
+      .update({ [keyColumn]: metaApiKey.trim(), ai_provider: metaApiProvider })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('ensureApiKeySaved: update failed, trying upsert...', error.message);
       await supabase
-        .from('profiles')
-        .update({ active_organization_id: membership.organization_id })
-        .eq('id', userId);
+        .from('user_settings')
+        .upsert(
+          { user_id: userId, [keyColumn]: metaApiKey.trim(), ai_provider: metaApiProvider },
+          { onConflict: 'user_id' }
+        );
     }
-    return;
-  }
 
-  // No org found — create one via SECURITY DEFINER RPC
-  const finalOrgName = orgName || 'My Organization';
-  console.log(`ensureUserHasOrg: Creating org "${finalOrgName}" for user ${userId}`);
+    if (cachedSettings) {
+      cachedSettings[keyColumn] = metaApiKey.trim();
+      cachedSettings.ai_provider = metaApiProvider;
+    }
 
-  const { data: rpcResult, error: rpcError } = await supabase.rpc('create_org_for_new_user', {
-    p_user_id: userId,
-    p_org_name: finalOrgName
-  });
-
-  if (rpcError) {
-    console.error('ensureUserHasOrg: RPC error:', rpcError.message);
-    return;
-  }
-
-  if (rpcResult?.success) {
-    console.log(`ensureUserHasOrg: Org created with ID ${rpcResult.orgId}`);
-  } else {
-    console.warn('ensureUserHasOrg: RPC returned failure:', rpcResult?.message);
+    console.log('ensureApiKeySaved: ✅ API key saved successfully');
+  } catch (err) {
+    console.error('ensureApiKeySaved: Unexpected error:', err);
   }
 }
 
@@ -121,10 +171,14 @@ export const storageService = {
 
       await this.loadSettings();
 
-      // ★ v5.0: Ensure user has an organization (creates on first login after email confirmation)
-      const orgNameFromMeta = data.user.user_metadata?.org_name;
-      await ensureUserHasOrg(data.user.id, orgNameFromMeta);
+      // ★ v5.1: Ensure org exists + API key is saved (first login after email confirmation)
+      const meta = data.user.user_metadata || {};
+      await ensureUserHasOrg(data.user.id, meta);
+      await ensureApiKeySaved(data.user.id, meta);
       await organizationService.loadActiveOrg();
+
+      // ★ v5.1: Reload settings after potential API key save
+      await this.loadSettings();
 
       return {
         success: true,
@@ -137,8 +191,8 @@ export const storageService = {
     return { success: false, message: 'Login failed' };
   },
 
-  // ★ v5.0: Simplified — stores orgName in user_metadata, does NOT create org here
-  // Org creation happens on first login (after email confirmation) via ensureUserHasOrg()
+  // ★ v5.1: Stores org_name, api_key, api_provider in user_metadata
+  // Org + API key setup happens on first login via ensureUserHasOrg + ensureApiKeySaved
   async register(
     email: string,
     displayName: string,
@@ -153,9 +207,9 @@ export const storageService = {
       options: {
         data: {
           display_name: displayName || email.split('@')[0],
-          org_name: orgName.trim() || 'My Organization',
-          api_key: apiKey.trim() || '',
-          api_provider: apiProvider
+          org_name: orgName && orgName.trim() !== '' ? orgName.trim() : (displayName || email.split('@')[0]) + "'s Organization",
+          api_key: apiKey && apiKey.trim() !== '' ? apiKey.trim() : '',
+          api_provider: apiProvider || 'gemini'
         }
       }
     });
@@ -168,17 +222,14 @@ export const storageService = {
     }
 
     if (data.user) {
-      // ★ v5.0: With email confirmation ON, user does NOT have a session yet.
-      // We check if session exists — if yes (email confirm OFF), proceed normally.
-      // If no session, return success with a message to check email.
-
+      // ★ v5.1: Check if session exists (email confirm OFF = immediate session)
       const { data: sessionData } = await supabase.auth.getSession();
 
       if (sessionData.session) {
         // Email confirmation is OFF — user has immediate session
         await new Promise(r => setTimeout(r, 1500));
 
-        // Save API key
+        // Save API key directly
         if (apiKey && apiKey.trim() !== '') {
           const keyColumn = apiProvider === 'openai' ? 'openai_key'
                           : apiProvider === 'openrouter' ? 'openrouter_key'
@@ -214,14 +265,17 @@ export const storageService = {
           id: data.user.id,
           email: email,
           displayName: profile?.display_name || displayName || email.split('@')[0],
-          role: profile?.role || 'user'
+          role: profile?.role || 'admin'
         };
 
         await this.loadSettings();
 
         // Create org via RPC
-        await ensureUserHasOrg(data.user.id, orgName.trim() || 'My Organization');
+        const meta = data.user.user_metadata || {};
+        await ensureUserHasOrg(data.user.id, meta);
+        await ensureApiKeySaved(data.user.id, meta);
         await organizationService.loadActiveOrg();
+        await this.loadSettings();
 
         // Force key into cache
         if (apiKey && apiKey.trim() !== '' && cachedSettings) {
@@ -247,8 +301,8 @@ export const storageService = {
         };
 
       } else {
-        // ★ v5.0: Email confirmation is ON — no session yet
-        // Org + API key will be set up on first login via login() → ensureUserHasOrg()
+        // ★ v5.1: Email confirmation is ON — no session yet
+        // Everything will be set up on first login via login() → ensureUserHasOrg + ensureApiKeySaved
         return {
           success: true,
           email,
@@ -351,32 +405,14 @@ export const storageService = {
 
       await this.loadSettings();
 
-      // ★ v5.0: Ensure user has org on session restore too (covers email confirmation redirect)
-      const orgNameFromMeta = authUser.user_metadata?.org_name;
-      await ensureUserHasOrg(userId, orgNameFromMeta);
+      // ★ v5.1: Ensure org exists + API key saved on session restore
+      const meta = authUser.user_metadata || {};
+      await ensureUserHasOrg(userId, meta);
+      await ensureApiKeySaved(userId, meta);
       await organizationService.loadActiveOrg();
 
-      // ★ v5.0: Save API key from metadata on first login (after email confirmation)
-      const metaApiKey = authUser.user_metadata?.api_key;
-      const metaApiProvider = authUser.user_metadata?.api_provider as AIProviderType;
-      if (metaApiKey && metaApiKey.trim() !== '') {
-        const keyColumn = metaApiProvider === 'openai' ? 'openai_key'
-                        : metaApiProvider === 'openrouter' ? 'openrouter_key'
-                        : 'gemini_key';
-
-        // Only save if not already saved
-        if (!cachedSettings?.[keyColumn]) {
-          await supabase
-            .from('user_settings')
-            .update({ [keyColumn]: metaApiKey.trim(), ai_provider: metaApiProvider || 'gemini' })
-            .eq('user_id', userId);
-
-          if (cachedSettings) {
-            cachedSettings[keyColumn] = metaApiKey.trim();
-            cachedSettings.ai_provider = metaApiProvider || 'gemini';
-          }
-        }
-      }
+      // ★ v5.1: Reload settings after potential API key save
+      await this.loadSettings();
 
       return cachedUser.email;
     }
@@ -390,7 +426,6 @@ export const storageService = {
   async loadSettings() {
     const userId = await this.getCurrentUserId();
     if (!userId) {
-      // ★ v4.0 fix: Don't wipe cached settings on Supabase error
       if (!cachedSettings) cachedSettings = {};
       return null;
     }
@@ -403,7 +438,6 @@ export const storageService = {
 
     if (error) {
       console.warn('loadSettings error:', error.message);
-      // ★ v4.0 fix: Keep existing cache if Supabase fails
       if (!cachedSettings) cachedSettings = {};
       return null;
     }
