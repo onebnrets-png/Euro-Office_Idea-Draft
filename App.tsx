@@ -340,7 +340,6 @@ const App = () => {
 
             {/* ★ v4.0: Conditional rendering — Dashboard or Project */}
             {/* Safety: if no project loaded but in project view, redirect to dashboard */}
-            {activeView === 'project' && !pm.currentProjectId && (() => { setTimeout(() => setActiveView('dashboard'), 0); return null; })()}
             {activeView === 'dashboard' ? (
               /* ═══ DASHBOARD HOME VIEW ═══ */
               <DashboardHome
