@@ -297,8 +297,9 @@ export interface SubStepDefinition {
   title: { en: string; si: string };
 }
 
+
 // ─── Admin Types ─────────────────────────────────────────────
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'superadmin';
 
 export interface AdminUserProfile {
   id: string;
