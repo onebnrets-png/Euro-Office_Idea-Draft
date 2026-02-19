@@ -1,19 +1,10 @@
 // types.ts
 // ═══════════════════════════════════════════════════════════════
 // Central type definitions for EU Project Idea Draft
-// v5.0 — 2026-02-16 — CHANGES:
-//   - FULL REWRITE: All interfaces now match the ACTUAL runtime
-//     data structures used by ProjectDisplay.tsx and geminiService.ts.
-//   - ProjectIdea: projectTitle, projectAcronym, mainAim, stateOfTheArt,
-//     proposedSolution, startDate, durationMonths, policies, readinessLevels
-//   - ProblemAnalysis.coreProblem: { title, description } object (not string)
-//   - ObjectiveItem: { title, description, indicator } (matches UI)
-//   - ResultItem: { title, description, indicator } (matches UI)
-//   - RiskItem: added 'title' field (matches UI + AI schema)
-//   - KERItem: simplified to match UI (id, title, description, exploitationStrategy)
-//   - TaskDependency: predecessorId (not taskId) to match AI schema
-//   - ReadinessLevels: { TRL, SRL, ORL, LRL } with { level, justification }
-//   - Previous v4.3 'environmental' RiskCategory preserved
+// v5.1 — 2026-02-19 — CHANGES:
+//   - ★ v5.1: Added OrgRole, Organization, OrganizationMember,
+//     OrganizationInstructions interfaces for multi-tenant support
+//   - v5.0: Full rewrite matching runtime data structures
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Problem Analysis ────────────────────────────────────────
@@ -115,7 +106,7 @@ export interface KERItem {
   exploitationStrategy: string;
 }
 
-// ─── Result Items (outputs, outcomes, impacts) ───────────────
+// ─── Result Items (outputs, outcomes, impacts) ──────────────
 export interface ResultItem {
   id?: string;
   title: string;
@@ -209,14 +200,14 @@ export interface ExportData {
   appVersion: string;
 }
 
-// ─── Chart Image Data ────────────────────────────────────────
+// ─── Chart Image Data ───────────────────────────────────────
 export interface ChartImageData {
   gantt?: string;
   pert?: string;
   organigram?: string;
 }
 
-// ─── Auth ────────────────────────────────────────────────────
+// ─── Auth ───────────────────────────────────────────────────
 export interface UserRecord {
   id: string;
   email: string;
@@ -230,7 +221,7 @@ export interface AuthResult {
   error?: string;
 }
 
-// ─── Instruction Types ───────────────────────────────────────
+// ─── Instruction Types ──────────────────────────────────────
 export interface InstructionSet {
   global: string;
   language: string;
@@ -246,7 +237,7 @@ export interface InstructionSet {
   chapter: string;
 }
 
-// ─── Gantt / PERT Internal ───────────────────────────────────
+// ─── Gantt / PERT Internal ──────────────────────────────────
 export interface GanttTask {
   id: string;
   wpId: string;
@@ -275,7 +266,7 @@ export interface PertNode {
   y?: number;
 }
 
-// ─── Readiness Level Definitions ─────────────────────────────
+// ─── Readiness Level Definitions ────────────────────────────
 export interface ReadinessLevelDefinition {
   key: string;
   name: string;
@@ -283,7 +274,7 @@ export interface ReadinessLevelDefinition {
   levels: { value: number; title: { en: string; si: string } }[];
 }
 
-// ─── Step Navigation ─────────────────────────────────────────
+// ─── Step Navigation ────────────────────────────────────────
 export interface StepDefinition {
   id: number;
   key: string;
@@ -297,8 +288,7 @@ export interface SubStepDefinition {
   title: { en: string; si: string };
 }
 
-
-// ─── Admin Types ─────────────────────────────────────────────
+// ─── Admin Types ────────────────────────────────────────────
 export type UserRole = 'admin' | 'user' | 'superadmin';
 
 export interface AdminUserProfile {
@@ -321,7 +311,7 @@ export interface AdminLogEntry {
   createdAt: string;
 }
 
-// ─── Empirical Data Visualization Types ──────────────────────
+// ─── Empirical Data Visualization Types ─────────────────────
 export type ChartType =
   | 'comparison_bar'
   | 'donut'
@@ -347,40 +337,34 @@ export interface ExtractedChartData {
   title: string;
   source?: string;
   dataPoints: ExtractedDataPoint[];
-  insight?: string;
-  sectionKey: string;
-  fieldPath: string;
 }
 
-export interface ProjectVisualizationData {
-  charts: ExtractedChartData[];
-  lastExtracted: string;
-}
-// ——— Organization Types (v6.0 — 2026-02-19) ———————————————————————————————
-export type OrgRole = 'member' | 'admin' | 'owner';
+// ─── ★ v5.1: Organization / Multi-Tenant Types ─────────────
+export type OrgRole = 'owner' | 'admin' | 'member';
 
 export interface Organization {
   id: string;
   name: string;
   slug: string;
-  logoUrl: string | null;
-  createdBy: string | null;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface OrganizationMember {
   id: string;
-  organizationId: string;
-  userId: string;
-  orgRole: OrgRole;
-  joinedAt: string;
+  organization_id: string;
+  user_id: string;
+  org_role: OrgRole;
+  joined_at: string;
   email?: string;
-  displayName?: string;
+  display_name?: string;
 }
 
 export interface OrganizationInstructions {
-  instructions: Record<string, string> | null;
-  updatedAt: string | null;
-  updatedBy: string | null;
+  id: string;
+  organization_id: string;
+  instruction_key: string;
+  instruction_value: string;
+  updated_at: string;
+  updated_by: string;
 }
