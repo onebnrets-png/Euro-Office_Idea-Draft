@@ -1,22 +1,18 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v3.0 — 2026-02-19
+// v4.0 — 2026-02-19
+//   ★ v4.0: Dashboard Home as default view after login
+//     - NEW: activeView state ('dashboard' | 'project')
+//     - NEW: DashboardHome component replaces auto-start step 1
+//     - NEW: Sidebar receives activeView + onOpenDashboard props
+//     - Dashboard is the landing page after login
+//     - ProjectDisplay shown only when user opens a project
 //   ★ v3.0: Multi-Tenant Organization integration
-//     - NEW: useOrganization hook — loads orgs, handles switching
-//     - NEW: orgHook.loadOrgs() called on login
-//     - NEW: Sidebar receives org props (activeOrg, userOrgs, onSwitchOrg)
-//     - NEW: On org switch → refresh projects, reset current project
-// v2.4 — 2026-02-18
-//   - REMOVED: StepNavigationBar from App toolbar (moved to ProjectDisplay header)
-//   - NEW: onStepClick + completedStepsStatus props passed to ProjectDisplay
-// v2.3 — 2026-02-18
-//   - REMOVED: WelcomeScreen (auto-start step 1)
-//   - NEW: StepNavigationBar in toolbar row 2 (now moved to ProjectDisplay)
-// v2.2 — 2026-02-18
-//   - NEW: Toolbar center — project acronym badge + full title (or placeholder)
-// v2.1 — 2026-02-17
-//   - FIX: Sidebar collapse → main content responsive marginLeft
+//   v2.4 — 2026-02-18: StepNavigationBar moved to ProjectDisplay
+//   v2.3 — 2026-02-18: WelcomeScreen removed
+//   v2.2 — 2026-02-18: Toolbar center — project acronym badge
+//   v2.1 — 2026-02-17: Sidebar collapse responsive marginLeft
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -31,10 +27,11 @@ import AdminPanel from './components/AdminPanel.tsx';
 import ProjectListModal from './components/ProjectListModal.tsx';
 import ProjectDashboard from './components/ProjectDashboard.tsx';
 import DashboardPanel from './components/DashboardPanel.tsx';
+import DashboardHome from './components/DashboardHome.tsx'; // ★ v4.0
 import Sidebar from './components/Sidebar.tsx';
 import SummaryModal from './components/SummaryModal.tsx';
 import { useAdmin } from './hooks/useAdmin.ts';
-import { useOrganization } from './hooks/useOrganization.ts'; // ★ v3.0
+import { useOrganization } from './hooks/useOrganization.ts';
 import { ensureGlobalInstructionsLoaded } from './services/globalInstructionsService.ts';
 import { ICONS, getSteps, BRAND_ASSETS } from './constants.tsx';
 import { TEXT } from './locales.ts';
@@ -124,8 +121,9 @@ const App = () => {
   const [isProjectListOpen, setIsProjectListOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [activeView, setActiveView] = useState<'dashboard' | 'project'>('dashboard'); // ★ v4.0
   const adminHook = useAdmin();
-  const orgHook = useOrganization(); // ★ v3.0
+  const orgHook = useOrganization();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
@@ -169,17 +167,16 @@ const App = () => {
   });
 
   /* ═══ EFFECTS ═══ */
-  // ★ v3.0: Load organizations on login
   useEffect(() => { if (auth.currentUser) { ensureGlobalInstructionsLoaded(); adminHook.checkAdminStatus(); orgHook.loadOrgs(); } }, [auth.currentUser]);
   useEffect(() => { initTheme(); const unsub = onThemeChange((m) => setIsDark(m === 'dark')); return unsub; }, []);
   useEffect(() => { if (pm.showProjectListOnLogin) { setIsProjectListOpen(true); pm.setShowProjectListOnLogin(false); } }, [pm.showProjectListOnLogin]);
 
-  // Auto-start step 1 when logged in and no step is selected
+  // ★ v4.0: On login, always start with dashboard view
   useEffect(() => {
-    if (auth.currentUser && pm.currentStepId === null) {
-      pm.setCurrentStepId(1);
+    if (auth.currentUser) {
+      setActiveView('dashboard');
     }
-  }, [auth.currentUser, pm.currentStepId]);
+  }, [auth.currentUser]);
 
   /* ═══ DERIVED STATE ═══ */
   const t = TEXT[language] || TEXT['en'];
@@ -190,21 +187,39 @@ const App = () => {
 
   /* ═══ HANDLERS ═══ */
   const handleSettingsClose = async () => { setIsSettingsOpen(false); setIsAdminPanelOpen(false); setAdminPanelInitialTab(undefined); await auth.checkApiKey(); auth.loadCustomLogo(); };
-  const handleLogout = async () => { await auth.handleLogout(); pm.resetOnLogout(); };
-  const handleSwitchProjectAndClose = async (projectId: string) => { await pm.handleSwitchProject(projectId); setIsProjectListOpen(false); };
-  const handleCreateProjectAndClose = async () => { try { await pm.handleCreateProject(); setIsProjectListOpen(false); } catch (e: any) { generation.setError(e.message); } };
+  const handleLogout = async () => { await auth.handleLogout(); pm.resetOnLogout(); setActiveView('dashboard'); };
+  const handleSwitchProjectAndClose = async (projectId: string) => { await pm.handleSwitchProject(projectId); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); };
+  const handleCreateProjectAndClose = async () => { try { await pm.handleCreateProject(); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(e.message); } };
   const handlePrint = () => window.print();
   const handleExportDocx = async () => { try { await pm.handleExportDocx(generation.setIsLoading); } catch (e: any) { alert(e.message); } };
-  const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => { generation.setIsLoading(true); try { await pm.handleImportProject(event); } catch (e: any) { generation.setError(`Failed to import: ${e.message}`); } finally { generation.setIsLoading(false); } };
+  const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => { generation.setIsLoading(true); try { await pm.handleImportProject(event); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(`Failed to import: ${e.message}`); } finally { generation.setIsLoading(false); } };
 
-  // ★ v3.0: Handle organization switch
+  // ★ v4.0: Open project from dashboard
+  const handleOpenProjectFromDashboard = async (projectId: string) => {
+    await pm.handleSwitchProject(projectId);
+    setActiveView('project');
+    pm.setCurrentStepId(1);
+  };
+
+  // ★ v4.0: Create project from dashboard
+  const handleCreateProjectFromDashboard = async () => {
+    try {
+      await pm.handleCreateProject();
+      setActiveView('project');
+      pm.setCurrentStepId(1);
+    } catch (e: any) {
+      generation.setError(e.message);
+    }
+  };
+
+  // Handle organization switch
   const handleSwitchOrg = async (orgId: string) => {
     const result = await orgHook.switchOrg(orgId);
     if (result.success) {
-      // Refresh projects for the new org (RLS will filter)
       await pm.refreshProjectList();
       pm.setCurrentProjectId(null);
       await pm.loadActiveProject();
+      setActiveView('dashboard');
     }
   };
 
@@ -287,21 +302,24 @@ const App = () => {
           )}
 
           {/* ═══ SIDEBAR ═══ */}
-          {/* ★ v3.0: Added org props */}
           <Sidebar
             language={language} projectData={pm.projectData} currentStepId={pm.currentStepId}
-            setCurrentStepId={pm.setCurrentStepId} completedStepsStatus={completedStepsStatus}
+            setCurrentStepId={(id: number) => { pm.setCurrentStepId(id); setActiveView('project'); }}
+            completedStepsStatus={completedStepsStatus}
             displayTitle={displayTitle} currentUser={auth.currentUser} appLogo={auth.appLogo}
             isAdmin={adminHook.isAdmin} isSidebarOpen={isSidebarOpen}
             activeOrg={orgHook.activeOrg} userOrgs={orgHook.userOrgs}
             onSwitchOrg={handleSwitchOrg} isSwitchingOrg={orgHook.isSwitching}
             onCloseSidebar={() => setIsSidebarOpen(false)}
-            onBackToWelcome={() => pm.setCurrentStepId(1)}
+            onBackToWelcome={() => setActiveView('dashboard')}
             onOpenProjectList={() => setIsProjectListOpen(true)}
             onOpenAdminPanel={(tab?: string) => { setAdminPanelInitialTab(tab); setIsAdminPanelOpen(true); }}
             onLogout={handleLogout} onLanguageSwitch={translation.handleLanguageSwitchRequest}
-            onSubStepClick={pm.handleSubStepClick} isLoading={!!generation.isLoading}
+            onSubStepClick={(subStepId: string) => { pm.handleSubStepClick(subStepId); setActiveView('project'); }}
+            isLoading={!!generation.isLoading}
             onCollapseChange={setSidebarCollapsed}
+            activeView={activeView}
+            onOpenDashboard={() => setActiveView('dashboard')}
           />
 
           {/* ═══ MAIN CONTENT ═══ */}
@@ -310,117 +328,146 @@ const App = () => {
             marginLeft: sidebarCollapsed ? 64 : 280, marginRight: 0,
             transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
-            {/* ═══ TOOLBAR — Row 1: Acronym + Title + Action Buttons ═══ */}
-            <div style={{
-              background: colors.surface.card, borderBottom: `1px solid ${colors.border.light}`,
-              padding: `${spacing.sm} ${spacing.lg}`, display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between', gap: spacing.sm, flexShrink: 0,
-            }}>
-              {/* Left: hamburger (mobile) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, flexShrink: 0 }}>
-                <div className="lg:hidden">
-                  <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
-                </div>
-              </div>
 
-              {/* Center: Project Acronym + Title */}
-              <div style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${spacing.md}`,
-              }}>
-                {pm.projectData?.projectIdea?.projectAcronym?.trim() ? (
-                  <>
-                    <span style={{
-                      fontSize: '13px', fontWeight: 800, color: colors.primary[600],
-                      background: isDark ? colors.primary[900] + '40' : colors.primary[50],
-                      border: `1.5px solid ${isDark ? colors.primary[700] : colors.primary[200]}`,
-                      padding: '3px 10px', borderRadius: radii.md, letterSpacing: '0.06em',
-                      whiteSpace: 'nowrap', flexShrink: 0, textTransform: 'uppercase',
-                    }}>
-                      {pm.projectData.projectIdea.projectAcronym.trim()}
-                    </span>
-                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: colors.border.medium, flexShrink: 0 }} />
-                    <span style={{
-                      fontSize: '13px', fontWeight: 600, color: colors.text.heading,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
-                    }} title={pm.projectData.projectIdea.projectTitle || ''}>
-                      {pm.projectData.projectIdea.projectTitle?.trim() || ''}
-                    </span>
-                  </>
-                ) : pm.projectData?.projectIdea?.projectTitle?.trim() ? (
-                  <span style={{
-                    fontSize: '13px', fontWeight: 600, color: colors.text.heading,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
-                  }} title={pm.projectData.projectIdea.projectTitle}>
-                    {pm.projectData.projectIdea.projectTitle.trim()}
-                  </span>
-                ) : (
-                  <span style={{
-                    fontSize: '13px', fontWeight: 500, color: colors.text.muted,
-                    fontStyle: 'italic', letterSpacing: '0.03em', opacity: 0.6, whiteSpace: 'nowrap',
+            {/* ★ v4.0: Conditional rendering — Dashboard or Project */}
+            {activeView === 'dashboard' ? (
+              /* ═══ DASHBOARD HOME VIEW ═══ */
+              <DashboardHome
+                language={language}
+                projectsMeta={pm.userProjects}
+                currentProjectId={pm.currentProjectId}
+                projectData={pm.projectData}
+                activeOrg={orgHook.activeOrg}
+                userOrgs={orgHook.userOrgs}
+                isAdmin={adminHook.isAdmin}
+                onOpenProject={handleOpenProjectFromDashboard}
+                onCreateProject={handleCreateProjectFromDashboard}
+                onOpenAdmin={(tab) => { setAdminPanelInitialTab(tab); setIsAdminPanelOpen(true); }}
+                onOpenSettings={() => { setAdminPanelInitialTab('ai'); setIsSettingsOpen(true); }}
+                onSwitchOrg={handleSwitchOrg}
+              />
+            ) : (
+              /* ═══ PROJECT VIEW ═══ */
+              <>
+                {/* Toolbar — Row 1: Acronym + Title + Action Buttons */}
+                <div style={{
+                  background: colors.surface.card, borderBottom: `1px solid ${colors.border.light}`,
+                  padding: `${spacing.sm} ${spacing.lg}`, display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', gap: spacing.sm, flexShrink: 0,
+                }}>
+                  {/* Left: hamburger (mobile) + back to dashboard */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, flexShrink: 0 }}>
+                    <div className="lg:hidden">
+                      <HamburgerIcon onClick={() => setIsSidebarOpen(true)} />
+                    </div>
+                    <ToolbarButton colors={colors} onClick={() => setActiveView('dashboard')}
+                      title={language === 'si' ? 'Nazaj na nadzorno ploščo' : 'Back to Dashboard'} variant="default"
+                      icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>}
+                    />
+                  </div>
+
+                  {/* Center: Project Acronym + Title */}
+                  <div style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${spacing.md}`,
                   }}>
-                    {language === 'si' ? 'NAZIV PROJEKTA' : 'PROJECT TITLE'}
-                  </span>
-                )}
-              </div>
+                    {pm.projectData?.projectIdea?.projectAcronym?.trim() ? (
+                      <>
+                        <span style={{
+                          fontSize: '13px', fontWeight: 800, color: colors.primary[600],
+                          background: isDark ? colors.primary[900] + '40' : colors.primary[50],
+                          border: `1.5px solid ${isDark ? colors.primary[700] : colors.primary[200]}`,
+                          padding: '3px 10px', borderRadius: radii.md, letterSpacing: '0.06em',
+                          whiteSpace: 'nowrap', flexShrink: 0, textTransform: 'uppercase',
+                        }}>
+                          {pm.projectData.projectIdea.projectAcronym.trim()}
+                        </span>
+                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: colors.border.medium, flexShrink: 0 }} />
+                        <span style={{
+                          fontSize: '13px', fontWeight: 600, color: colors.text.heading,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+                        }} title={pm.projectData.projectIdea.projectTitle || ''}>
+                          {pm.projectData.projectIdea.projectTitle?.trim() || ''}
+                        </span>
+                      </>
+                    ) : pm.projectData?.projectIdea?.projectTitle?.trim() ? (
+                      <span style={{
+                        fontSize: '13px', fontWeight: 600, color: colors.text.heading,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+                      }} title={pm.projectData.projectIdea.projectTitle}>
+                        {pm.projectData.projectIdea.projectTitle.trim()}
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '13px', fontWeight: 500, color: colors.text.muted,
+                        fontStyle: 'italic', letterSpacing: '0.03em', opacity: 0.6, whiteSpace: 'nowrap',
+                      }}>
+                        {language === 'si' ? 'NAZIV PROJEKTA' : 'PROJECT TITLE'}
+                      </span>
+                    )}
+                  </div>
 
-              {/* Right: Action buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-                <ToolbarButton colors={colors} onClick={() => setIsDashboardOpen(true)}
-                  title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'} variant="primary"
-                  icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>}
-                />
-                <ToolbarSeparator colors={colors} />
-                <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success"
-                  icon={<ICONS.SAVE style={{ width: 20, height: 20 }} />}
-                />
-                <label style={{
-                  padding: spacing.sm, borderRadius: radii.lg, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'pointer', transition: `all ${animation.duration.fast}`,
-                  color: colors.text.body,
-                }} title={t.importProject}>
-                  <ICONS.IMPORT style={{ width: 20, height: 20 }} />
-                  <input ref={pm.importInputRef} type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
-                </label>
-                <ToolbarSeparator colors={colors} />
-                <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx}
-                  icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
-                />
-                <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary}
-                  disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'}
-                  icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
-                />
-                <ToolbarButton colors={colors} onClick={handlePrint} title={t.print}
-                  icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
-                />
-              </div>
-            </div>
+                  {/* Right: Action buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+                    <ToolbarButton colors={colors} onClick={() => setIsDashboardOpen(true)}
+                      title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'} variant="primary"
+                      icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>}
+                    />
+                    <ToolbarSeparator colors={colors} />
+                    <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success"
+                      icon={<ICONS.SAVE style={{ width: 20, height: 20 }} />}
+                    />
+                    <label style={{
+                      padding: spacing.sm, borderRadius: radii.lg, display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', cursor: 'pointer', transition: `all ${animation.duration.fast}`,
+                      color: colors.text.body,
+                    }} title={t.importProject}>
+                      <ICONS.IMPORT style={{ width: 20, height: 20 }} />
+                      <input ref={pm.importInputRef} type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
+                    </label>
+                    <ToolbarSeparator colors={colors} />
+                    <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx}
+                      icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
+                    />
+                    <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary}
+                      disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'}
+                      icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
+                    />
+                    <ToolbarButton colors={colors} onClick={handlePrint} title={t.print}
+                      icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
+                    />
+                  </div>
+                </div>
 
-            {/* ═══ SCROLLABLE CONTENT — ProjectDisplay ═══ */}
-            <ProjectDisplay
-              projectData={pm.projectData}
-              activeStepId={pm.currentStepId}
-              language={language}
-              onUpdateData={pm.handleUpdateData}
-              onGenerateSection={generation.handleGenerateSection}
-              onGenerateCompositeSection={generation.handleGenerateCompositeSection}
-              onGenerateField={generation.handleGenerateField}
-              onAddItem={pm.handleAddItem}
-              onRemoveItem={pm.handleRemoveItem}
-              isLoading={generation.isLoading}
-              error={generation.error}
-              missingApiKey={auth.showAiWarning}
-              completedStepsStatus={completedStepsStatus}
-              onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
-            />
+                {/* Scrollable Content — ProjectDisplay */}
+                <ProjectDisplay
+                  projectData={pm.projectData}
+                  activeStepId={pm.currentStepId}
+                  language={language}
+                  onUpdateData={pm.handleUpdateData}
+                  onGenerateSection={generation.handleGenerateSection}
+                  onGenerateCompositeSection={generation.handleGenerateCompositeSection}
+                  onGenerateField={generation.handleGenerateField}
+                  onAddItem={pm.handleAddItem}
+                  onRemoveItem={pm.handleRemoveItem}
+                  isLoading={generation.isLoading}
+                  error={generation.error}
+                  missingApiKey={auth.showAiWarning}
+                  completedStepsStatus={completedStepsStatus}
+                  onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
+                />
+              </>
+            )}
           </main>
 
-          {/* ═══ DASHBOARD PANEL (right side) ═══ */}
-          <DashboardPanel
-            projectData={pm.projectData}
-            language={language}
-            onCollapseChange={setDashboardCollapsed}
-          />
+          {/* ═══ DASHBOARD PANEL (right side) — only in project view ═══ */}
+          {activeView === 'project' && (
+            <DashboardPanel
+              projectData={pm.projectData}
+              language={language}
+              onCollapseChange={setDashboardCollapsed}
+            />
+          )}
         </div>
       </div>
 
