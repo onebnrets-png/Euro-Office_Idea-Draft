@@ -1,442 +1,697 @@
-// components/AuthScreen.tsx
-// Supabase Auth - Email/Password login & registration + MFA verification
-// v3.1 — 2026-02-18
-//   ★ v3.1: Hardcoded EURO-OFFICE logo on Auth screen
-//   ★ v3.0: Multi-provider API key on registration
-//   v2.0 — 2026-02-17  Dark-mode: isDark + colors pattern
+// services/storageService.ts
+// Supabase-backed storage service — replaces localStorage completely
+//
+// v4.0 — 2026-02-19
+// CHANGES:
+//   - ★ v4.0: register() accepts orgName parameter
+//     → After signup, creates a new organization via organizationService.createOrg()
+//     → Sets the new user as 'owner' of that organization
+//     → Loads active org so sidebar & projects are org-scoped immediately
+//   - ★ v3.0: Multi-Tenant Organization integration
+//   - v2.2: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
+//   - v2.1: OpenAI key support, register() accepts apiProvider
+//   - v2.0: DB-1/DB-2/DB-3 fixes
 
-import React, { useState, useEffect } from 'react';
-import { storageService } from '../services/storageService.ts';
-import { isValidEmail, checkPasswordStrength, isPasswordSecure, generateDisplayNameFromEmail } from '../utils.ts';
-import { TEXT } from '../locales.ts';
-import type { Language } from '../types.ts';
-import type { AIProviderType } from '../services/aiProvider.ts';
-import { lightColors, darkColors, spacing, radii, shadows, typography } from '../design/theme.ts';
-import { getThemeMode, onThemeChange } from '../services/themeService.ts';
+import { supabase } from './supabaseClient.ts';
+import { createEmptyProjectData } from '../utils.ts';
+import type { AIProviderType } from './aiProvider.ts';
 import { BRAND_ASSETS } from '../constants.tsx';
+import { organizationService } from './organizationService.ts';
 
-// --- Prop Interfaces ---
-interface MFAVerifyScreenProps {
-  factorId: string;
-  language: Language;
-  onVerified: () => void;
-  onCancel: () => void;
+// ─── ID GENERATOR ────────────────────────────────────────────────
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+// ─── SUPERADMIN EMAIL (genesis, hardcoded) ───────────────────────
+const SUPERADMIN_EMAIL = 'beno.stern@infinita.si';
+
+// ─── LOCAL CACHE ─────────────────────────────────────────────────
+let cachedUser: { id: string; email: string; displayName: string; role: string } | null = null;
+let cachedSettings: Record<string, any> | null = null;
+let cachedProjectsMeta: any[] | null = null;
+
+// ─── HELPER ──────────────────────────────────────────────────────
+async function getAuthUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id || null;
 }
 
-interface AuthScreenProps {
-  onLoginSuccess: (displayName?: string) => void;
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  onOpenSettings: () => void;
-  needsMFAVerify?: boolean;
-  mfaFactorId?: string;
-  onMFAVerified: () => void;
-  onMFACancel: () => void;
-}
+export const storageService = {
 
-// ─── ★ v3.0: Provider config for registration ───────────────────
+  // ═══════════════════════════════════════════════════════════════
+  // AUTHENTICATION
+  // ═══════════════════════════════════════════════════════════════
 
-const PROVIDER_OPTIONS: { id: AIProviderType; label: string; labelSi: string; icon: string; placeholder: string; desc: string; descSi: string; link: string; linkLabel: string }[] = [
-  {
-    id: 'gemini',
-    label: 'Google Gemini',
-    labelSi: 'Google Gemini',
-    icon: '✨',
-    placeholder: 'AIza...',
-    desc: 'Get your free Gemini API key from Google AI Studio.',
-    descSi: 'Pridobi brezplačni Gemini API ključ iz Google AI Studio.',
-    link: 'https://aistudio.google.com/apikey',
-    linkLabel: 'Google AI Studio →',
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI (ChatGPT)',
-    labelSi: 'OpenAI (ChatGPT)',
-    icon: '🤖',
-    placeholder: 'sk-...',
-    desc: 'Get your OpenAI API key from platform.openai.com.',
-    descSi: 'Pridobi OpenAI API ključ iz platform.openai.com.',
-    link: 'https://platform.openai.com/api-keys',
-    linkLabel: 'OpenAI Platform →',
-  },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    labelSi: 'OpenRouter',
-    icon: '🔀',
-    placeholder: 'sk-or-...',
-    desc: 'Access 200+ models via OpenRouter. Get your key at openrouter.ai.',
-    descSi: 'Dostop do 200+ modelov prek OpenRouter. Pridobi ključ na openrouter.ai.',
-    link: 'https://openrouter.ai/keys',
-    linkLabel: 'OpenRouter →',
-  },
-];
+  async login(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-// --- MFA Verification Sub-Component ---
-const MFAVerifyScreen: React.FC<MFAVerifyScreenProps> = ({ factorId, language, onVerified, onCancel }) => {
-    const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
-    useEffect(() => {
-      const unsub = onThemeChange((m) => setIsDark(m === 'dark'));
-      return unsub;
-    }, []);
-    const colors = isDark ? darkColors : lightColors;
-
-    const [code, setCode] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleVerify = async () => {
-        setError('');
-        if (code.length !== 6) {
-            setError(language === 'si' ? 'Vnesi 6-mestno kodo.' : 'Enter a 6-digit code.');
-            return;
-        }
-        setLoading(true);
-        const result = await storageService.challengeAndVerifyMFA(factorId, code);
-        setLoading(false);
-        if (result.success) {
-            onVerified();
-        } else {
-            setError(result.message || (language === 'si' ? 'Napačna koda.' : 'Invalid code.'));
-            setCode('');
-        }
-    };
-
-    return (
-        <div style={{ background: colors.surface.background, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
-            <div style={{ background: colors.surface.card, borderRadius: radii.lg, boxShadow: shadows['2xl'], width: '100%', maxWidth: 448, padding: spacing['3xl'], position: 'relative', overflow: 'hidden', border: `1px solid ${colors.border.light}` }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: colors.primary.gradient }}></div>
-
-                <div style={{ textAlign: 'center', marginBottom: spacing['3xl'] }}>
-                    {/* ★ v3.1: Logo on MFA screen too */}
-                    <img src={BRAND_ASSETS.logoText} alt="EURO-OFFICE" style={{ height: 40, width: 'auto', objectFit: 'contain', marginBottom: spacing.lg }} />
-                    <div style={{ margin: '0 auto', width: 64, height: 64, background: isDark ? 'rgba(99,102,241,0.15)' : '#E0F2FE', borderRadius: radii.full, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg }}>
-                        <svg style={{ width: 32, height: 32, color: colors.primary[500] }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                    </div>
-                    <h1 style={{ fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold, color: colors.text.heading, marginBottom: spacing.sm }}>
-                        {language === 'si' ? 'Dvostopenjsko preverjanje' : 'Two-Factor Authentication'}
-                    </h1>
-                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm }}>
-                        {language === 'si'
-                            ? 'Odpri authenticator aplikacijo in vnesi 6-mestno kodo.'
-                            : 'Open your authenticator app and enter the 6-digit code.'}
-                    </p>
-                </div>
-
-                {error && (
-                    <div style={{ color: colors.error[500], fontSize: typography.fontSize.sm, textAlign: 'center', background: isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2', padding: spacing.sm, borderRadius: radii.md, border: `1px solid ${isDark ? 'rgba(239,68,68,0.2)' : '#FEE2E2'}`, marginBottom: spacing.lg }}>
-                        {error}
-                    </div>
-                )}
-
-                <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.xl }}>
-                    <input
-                        type="text"
-                        value={code}
-                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="000000"
-                        maxLength={6}
-                        style={{ flex: 1, padding: spacing.lg, border: `1px solid ${colors.border.medium}`, borderRadius: radii.lg, textAlign: 'center', fontSize: typography.fontSize['2xl'], letterSpacing: '0.5em', fontFamily: typography.fontFamily.mono, background: isDark ? colors.surface.background : '#FFFFFF', color: colors.text.heading }}
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && handleVerify()}
-                    />
-                </div>
-
-                <button
-                    onClick={handleVerify}
-                    disabled={loading || code.length !== 6}
-                    style={{ width: '100%', padding: `${spacing.md} 0`, background: colors.primary.gradient, color: '#FFFFFF', borderRadius: radii.lg, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.lg, border: 'none', cursor: loading || code.length !== 6 ? 'not-allowed' : 'pointer', opacity: loading || code.length !== 6 ? 0.5 : 1, boxShadow: shadows.sm }}
-                >
-                    {loading ? '...' : (language === 'si' ? 'Potrdi' : 'Verify')}
-                </button>
-
-                <div style={{ marginTop: spacing.lg, textAlign: 'center' }}>
-                    <button onClick={onCancel} style={{ fontSize: typography.fontSize.sm, color: colors.text.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                        {language === 'si' ? 'Prekliči in odjava' : 'Cancel and sign out'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Main AuthScreen ---
-
-const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLanguage, onOpenSettings, needsMFAVerify, mfaFactorId, onMFAVerified, onMFACancel }) => {
-    const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
-    useEffect(() => {
-      const unsub = onThemeChange((m) => setIsDark(m === 'dark'));
-      return unsub;
-    }, []);
-    const colors = isDark ? darkColors : lightColors;
-
-    const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('');
-    const [displayName, setDisplayName] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [apiKey, setApiKey] = useState('');
-    const [apiProvider, setApiProvider] = useState<AIProviderType>('gemini');
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
-
-    const t = TEXT[language].auth;
-    const pwStrength = checkPasswordStrength(password);
-
-    const currentProviderConfig = PROVIDER_OPTIONS.find(p => p.id === apiProvider) || PROVIDER_OPTIONS[0];
-
-    if (needsMFAVerify && mfaFactorId) {
-        return (
-            <MFAVerifyScreen factorId={mfaFactorId} language={language} onVerified={onMFAVerified} onCancel={onMFACancel} />
-        );
+    if (error) {
+      return { success: false, message: error.message };
     }
 
-    const handleLoginSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        const result = await storageService.login(email, password);
-        setLoading(false);
-        if (result.success) {
-            onLoginSuccess(result.displayName || email.split('@')[0]);
-        } else {
-            setError(result.message === 'Invalid login credentials' ? t.errorAuth : result.message || t.errorAuth);
+    if (data.user) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.warn('login: profiles query failed:', profileError.message,
+          '— falling back to auth.user metadata. Check RLS policies on profiles table.');
+      }
+
+      cachedUser = {
+        id: data.user.id,
+        email: profile?.email || data.user.email || email,
+        displayName: profile?.display_name
+          || data.user.user_metadata?.display_name
+          || email.split('@')[0],
+        role: profile?.role || 'user'
+      };
+
+      await this.loadSettings();
+
+      // ★ v3.0: Load active organization
+      await organizationService.loadActiveOrg();
+
+      return {
+        success: true,
+        email: cachedUser.email,
+        displayName: cachedUser.displayName,
+        role: cachedUser.role
+      };
+    }
+
+    return { success: false, message: 'Login failed' };
+  },
+
+  // ★ v4.0: Added orgName parameter
+  async register(
+    email: string,
+    displayName: string,
+    password: string,
+    apiKey: string = '',
+    apiProvider: AIProviderType = 'gemini',
+    orgName: string = ''
+  ) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName || email.split('@')[0]
         }
-    };
+      }
+    });
 
-    const handleRegisterSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setSuccessMessage('');
-        if (!isValidEmail(email)) { setError(t.errorEmailFormat || "Invalid email format"); return; }
-        if (!isPasswordSecure(password)) { setError(t.errorPasswordWeak || "Password is not secure enough"); return; }
-        if (password !== confirmPassword) { setError(t.errorMatch); return; }
-        setLoading(true);
-        const finalDisplayName = displayName.trim() || generateDisplayNameFromEmail(email);
-        const result = await storageService.register(email, finalDisplayName, password, apiKey, apiProvider);
-        setLoading(false);
-        if (result.success) {
-            onLoginSuccess(result.displayName || email.split('@')[0]);
-        } else {
-            setError(result.message || t.errorExists);
+    if (error) {
+      if (error.message.includes('already registered')) {
+        return { success: false, message: 'Email already registered' };
+      }
+      return { success: false, message: error.message };
+    }
+
+    if (data.user) {
+      // Wait for DB trigger to create profile + user_settings
+      await new Promise(r => setTimeout(r, 1500));
+
+      // Save key to correct column based on provider
+      if (apiKey && apiKey.trim() !== '') {
+        const keyColumn = apiProvider === 'openai' ? 'openai_key'
+                        : apiProvider === 'openrouter' ? 'openrouter_key'
+                        : 'gemini_key';
+
+        const { error: keyError } = await supabase
+          .from('user_settings')
+          .upsert(
+            {
+              user_id: data.user.id,
+              [keyColumn]: apiKey.trim(),
+              ai_provider: apiProvider
+            },
+            { onConflict: 'user_id' }
+          );
+
+        if (keyError) {
+          console.warn('register: Failed to save API key via upsert, trying update...', keyError.message);
+          await supabase
+            .from('user_settings')
+            .update({ [keyColumn]: apiKey.trim(), ai_provider: apiProvider })
+            .eq('user_id', data.user.id);
         }
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      cachedUser = {
+        id: data.user.id,
+        email: email,
+        displayName: profile?.display_name || displayName || email.split('@')[0],
+        role: profile?.role || 'user'
+      };
+
+      await this.loadSettings();
+
+      // ★ v4.0: Create organization and set user as owner
+      if (orgName && orgName.trim() !== '') {
+        try {
+          const createResult = await organizationService.createOrg(orgName.trim());
+          if (createResult.success && createResult.orgId) {
+            console.log(`register: Created org "${orgName}" with ID ${createResult.orgId}`);
+
+            // Set this org as the user's active organization
+            await supabase
+              .from('profiles')
+              .update({ active_organization_id: createResult.orgId })
+              .eq('id', data.user.id);
+
+            // Load active org into cache
+            await organizationService.loadActiveOrg();
+          } else {
+            console.warn('register: Failed to create organization:', createResult.message);
+            // Still try to load whatever org might exist
+            await organizationService.loadActiveOrg();
+          }
+        } catch (orgError) {
+          console.error('register: Organization creation error:', orgError);
+          await organizationService.loadActiveOrg();
+        }
+      } else {
+        // No org name provided — load whatever might be assigned
+        await organizationService.loadActiveOrg();
+      }
+
+      // Force key into cache if not loaded
+      if (apiKey && apiKey.trim() !== '' && cachedSettings) {
+        const keyColumn = apiProvider === 'openai' ? 'openai_key'
+                        : apiProvider === 'openrouter' ? 'openrouter_key'
+                        : 'gemini_key';
+        if (!cachedSettings[keyColumn]) {
+          console.warn('register: API key not found in loaded settings, forcing into cache');
+          cachedSettings[keyColumn] = apiKey.trim();
+          cachedSettings.ai_provider = apiProvider;
+        }
+      } else if (apiKey && apiKey.trim() !== '' && !cachedSettings) {
+        const keyColumn = apiProvider === 'openai' ? 'openai_key'
+                        : apiProvider === 'openrouter' ? 'openrouter_key'
+                        : 'gemini_key';
+        cachedSettings = { [keyColumn]: apiKey.trim(), ai_provider: apiProvider };
+      }
+
+      return {
+        success: true,
+        email,
+        displayName: cachedUser.displayName,
+        role: cachedUser.role
+      };
+    }
+
+    return { success: false, message: 'Registration failed' };
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+    return { success: true };
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // SESSION
+  // ═══════════════════════════════════════════════════════════════
+
+  async logout() {
+    await supabase.auth.signOut();
+    cachedUser = null;
+    cachedSettings = null;
+    cachedProjectsMeta = null;
+    organizationService.clearCache();
+  },
+
+  getCurrentUser(): string | null {
+    return cachedUser?.email || null;
+  },
+
+  getCurrentUserDisplayName(): string | null {
+    return cachedUser?.displayName || null;
+  },
+
+  getUserRole(): string {
+    return cachedUser?.role || 'user';
+  },
+
+  // ★ v2.2: Superadmin helpers
+  isSuperAdmin(): boolean {
+    return cachedUser?.role === 'superadmin';
+  },
+
+  isAdminOrSuperAdmin(): boolean {
+    return cachedUser?.role === 'admin' || cachedUser?.role === 'superadmin';
+  },
+
+  getSuperAdminEmail(): string {
+    return SUPERADMIN_EMAIL;
+  },
+
+  // ★ v3.0: Organization helpers
+  getActiveOrgId(): string | null {
+    return organizationService.getActiveOrgId();
+  },
+
+  getActiveOrgName(): string {
+    return organizationService.getActiveOrgName();
+  },
+
+  async getCurrentUserId(): Promise<string | null> {
+    if (cachedUser?.id) return cachedUser.id;
+    return await getAuthUserId();
+  },
+
+  async restoreSession() {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
+      const userId = data.session.user.id;
+      const authUser = data.session.user;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        console.warn('restoreSession: profiles query failed:', profileError.message,
+          '— falling back to auth.user metadata. Check RLS policies on profiles table.');
+      }
+
+      cachedUser = {
+        id: userId,
+        email: profile?.email || authUser.email || '',
+        displayName: profile?.display_name
+          || authUser.user_metadata?.display_name
+          || authUser.email?.split('@')[0]
+          || 'User',
+        role: profile?.role || 'user'
+      };
+
+      await this.loadSettings();
+
+      // ★ v3.0: Load active organization
+      await organizationService.loadActiveOrg();
+
+      return cachedUser.email;
+    }
+    return null;
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // USER SETTINGS
+  // ═══════════════════════════════════════════════════════════════
+
+  async loadSettings() {
+    const userId = await this.getCurrentUserId();
+    if (!userId) {
+      cachedSettings = {};
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.warn('loadSettings error:', error.message);
+      cachedSettings = {};
+      return null;
+    }
+
+    cachedSettings = data || {};
+    return data;
+  },
+
+  async ensureSettingsLoaded() {
+    if (cachedSettings === null) {
+      await this.loadSettings();
+    }
+  },
+
+  async updateSettings(updates: Record<string, any>) {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('updateSettings error:', error.message);
+      return;
+    }
+
+    if (cachedSettings === null) {
+      cachedSettings = { ...updates };
+    } else {
+      cachedSettings = { ...cachedSettings, ...updates };
+    }
+  },
+
+  // --- AI Provider ---
+  getAIProvider(): AIProviderType {
+    return (cachedSettings?.ai_provider as AIProviderType) || 'gemini';
+  },
+
+  async setAIProvider(provider: AIProviderType) {
+    await this.updateSettings({ ai_provider: provider });
+  },
+
+  // --- Gemini Key ---
+  getApiKey(): string | null {
+    return cachedSettings?.gemini_key || null;
+  },
+
+  async setApiKey(key: string) {
+    await this.updateSettings({ gemini_key: key.trim() || null });
+  },
+
+  async clearApiKey() {
+    await this.updateSettings({ gemini_key: null });
+  },
+
+  // --- OpenRouter Key ---
+  getOpenRouterKey(): string | null {
+    return cachedSettings?.openrouter_key || null;
+  },
+
+  async setOpenRouterKey(key: string) {
+    await this.updateSettings({ openrouter_key: key.trim() || null });
+  },
+
+  // --- OpenAI Key ---
+  getOpenAIKey(): string | null {
+    return cachedSettings?.openai_key || null;
+  },
+
+  async setOpenAIKey(key: string) {
+    await this.updateSettings({ openai_key: key.trim() || null });
+  },
+
+  // --- Custom Model ---
+  getCustomModel(): string | null {
+    return cachedSettings?.model || null;
+  },
+
+  async setCustomModel(model: string) {
+    await this.updateSettings({ model: model.trim() || null });
+  },
+
+  // --- Custom Logo --- ★ v2.2: Superadmin only
+  getCustomLogo(): string | null {
+    if (this.isSuperAdmin()) {
+      return cachedSettings?.custom_logo || null;
+    }
+    return null;
+  },
+
+  getEffectiveLogo(): string {
+    if (this.isSuperAdmin()) {
+      const customLogo = cachedSettings?.custom_logo;
+      if (customLogo) return customLogo;
+    }
+    return BRAND_ASSETS.logoText;
+  },
+
+  async saveCustomLogo(base64Data: string | null) {
+    if (!this.isSuperAdmin()) {
+      console.warn('saveCustomLogo: Only superadmin can change the logo.');
+      return;
+    }
+    await this.updateSettings({ custom_logo: base64Data });
+  },
+
+  // --- Custom Instructions ---
+  getCustomInstructions(): any {
+    return cachedSettings?.custom_instructions || null;
+  },
+
+  async saveCustomInstructions(instructions: any) {
+    await this.updateSettings({ custom_instructions: instructions });
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PROJECT MANAGEMENT — ★ v3.0: Organization-scoped
+  // ═══════════════════════════════════════════════════════════════
+
+  async getUserProjects(): Promise<any[]> {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, title, created_at, updated_at, organization_id')
+      .eq('owner_id', userId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Error loading projects:', error);
+      return [];
+    }
+
+    const projects = (data || []).map(p => ({
+      id: p.id,
+      title: p.title,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+      organizationId: p.organization_id,
+    }));
+
+    cachedProjectsMeta = projects;
+    return projects;
+  },
+
+  async createProject(initialData: any = null): Promise<any> {
+    const userId = await this.getCurrentUserId();
+    if (!userId) {
+      console.error('createProject: No user ID');
+      return null;
+    }
+
+    const newId = generateId();
+    const dataToSave = initialData || createEmptyProjectData();
+
+    const activeOrgId = organizationService.getActiveOrgId();
+
+    const { error: projError } = await supabase
+      .from('projects')
+      .insert({
+        id: newId,
+        owner_id: userId,
+        title: 'New Project',
+        organization_id: activeOrgId,
+      });
+
+    if (projError) {
+      console.error('Error creating project:', projError);
+      return null;
+    }
+
+    const { error: dataError } = await supabase
+      .from('project_data')
+      .insert([
+        { project_id: newId, language: 'en', data: dataToSave },
+        { project_id: newId, language: 'si', data: dataToSave }
+      ]);
+
+    if (dataError) {
+      console.error('Error creating project data:', dataError);
+    }
+
+    const meta = {
+      id: newId,
+      title: 'New Project',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      organizationId: activeOrgId,
     };
 
-    const EyeIcon = () => (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 20, height: 20, color: colors.text.muted }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-        </svg>
-    );
+    cachedProjectsMeta = null;
+    return meta;
+  },
 
-    const EyeSlashIcon = () => (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 20, height: 20, color: colors.text.muted }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
-        </svg>
-    );
+  async deleteProject(projectId: string) {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
 
-    const inputStyle: React.CSSProperties = {
-      width: '100%',
-      padding: spacing.sm,
-      border: `1px solid ${colors.border.medium}`,
-      borderRadius: radii.md,
-      background: isDark ? colors.surface.background : '#FFFFFF',
-      color: colors.text.heading,
-      fontSize: typography.fontSize.sm,
+    if (error) {
+      console.error('Error deleting project:', error);
+    }
+
+    cachedProjectsMeta = null;
+  },
+
+  setCurrentProjectId(projectId: string) {
+    sessionStorage.setItem('current_project_id', projectId);
+  },
+
+  getCurrentProjectId(): string | null {
+    return sessionStorage.getItem('current_project_id');
+  },
+
+  async loadProject(language: string = 'en', projectId: string | null = null): Promise<any> {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return createEmptyProjectData();
+
+    let targetId = projectId || this.getCurrentProjectId();
+
+    if (!targetId) {
+      const projects = await this.getUserProjects();
+      if (projects.length > 0) {
+        targetId = projects[0].id;
+        this.setCurrentProjectId(targetId);
+      } else {
+        const newProj = await this.createProject();
+        if (newProj) {
+          targetId = newProj.id;
+          this.setCurrentProjectId(targetId);
+        } else {
+          return createEmptyProjectData();
+        }
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('project_data')
+      .select('data')
+      .eq('project_id', targetId)
+      .eq('language', language)
+      .single();
+
+    if (error || !data) {
+      return createEmptyProjectData();
+    }
+
+    return data.data;
+  },
+
+  async saveProject(projectData: any, language: string = 'en', projectId: string | null = null) {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return;
+
+    let targetId = projectId || this.getCurrentProjectId();
+
+    if (!targetId) {
+      const newProj = await this.createProject(projectData);
+      if (newProj) {
+        targetId = newProj.id;
+        this.setCurrentProjectId(targetId);
+      } else {
+        return;
+      }
+    }
+
+    const { error: dataError } = await supabase
+      .from('project_data')
+      .upsert(
+        {
+          project_id: targetId,
+          language: language,
+          data: projectData
+        },
+        { onConflict: 'project_id,language' }
+      );
+
+    if (dataError) {
+      console.error('Error saving project data:', dataError);
+    }
+
+    const newTitle = projectData.projectIdea?.projectTitle;
+    if (newTitle && newTitle.trim() !== '') {
+      await supabase
+        .from('projects')
+        .update({ title: newTitle.trim() })
+        .eq('id', targetId);
+    }
+
+    cachedProjectsMeta = null;
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // MFA
+  // ═══════════════════════════════════════════════════════════════
+
+  async getMFAFactors(): Promise<{ totp: any[] }> {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) {
+      console.warn('getMFAFactors error:', error.message);
+      return { totp: [] };
+    }
+    return { totp: data?.totp || [] };
+  },
+
+  async enrollMFA(): Promise<{ factorId: string; qrUri: string; secret: string } | null> {
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName: 'INTERVENCIJSKA-LOGIKA'
+    });
+    if (error) {
+      console.error('enrollMFA error:', error.message);
+      return null;
+    }
+    return {
+      factorId: data.id,
+      qrUri: data.totp.uri,
+      secret: data.totp.secret
     };
+  },
 
-    const labelStyle: React.CSSProperties = {
-      display: 'block',
-      fontSize: typography.fontSize.sm,
-      fontWeight: typography.fontWeight.medium as any,
-      color: colors.text.body,
-      marginBottom: '4px',
+  async challengeAndVerifyMFA(factorId: string, code: string): Promise<{ success: boolean; message?: string }> {
+    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+    if (challengeError) {
+      return { success: false, message: challengeError.message };
+    }
+
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId,
+      challengeId: challenge.id,
+      code
+    });
+
+    if (verifyError) {
+      return { success: false, message: verifyError.message };
+    }
+
+    return { success: true };
+  },
+
+  async unenrollMFA(factorId: string): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId });
+    if (error) {
+      return { success: false, message: error.message };
+    }
+    return { success: true };
+  },
+
+  async getAAL(): Promise<{ currentLevel: string; nextLevel: string }> {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error) {
+      console.warn('getAAL error:', error.message);
+      return { currentLevel: 'aal1', nextLevel: 'aal1' };
+    }
+    return {
+      currentLevel: data.currentLevel || 'aal1',
+      nextLevel: data.nextLevel || 'aal1'
     };
-
-    return (
-        <div style={{ background: colors.surface.background, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
-            {/* Top right controls */}
-            <div style={{ position: 'absolute', top: spacing.lg, right: spacing.lg, zIndex: 10, display: 'flex', gap: spacing.sm }}>
-                <button
-                    onClick={onOpenSettings}
-                    style={{ padding: spacing.sm, background: colors.surface.card, borderRadius: radii.md, boxShadow: shadows.sm, border: `1px solid ${colors.border.light}`, color: colors.text.body, cursor: 'pointer', display: 'flex' }}
-                    title={t.settings}
-                >
-                    <svg style={{ width: 20, height: 20 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                </button>
-
-                <div style={{ background: colors.surface.card, borderRadius: radii.md, boxShadow: shadows.sm, border: `1px solid ${colors.border.light}`, display: 'flex', overflow: 'hidden' }}>
-                    <button onClick={() => setLanguage('si')} style={{ padding: '4px 12px', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium as any, ...(language === 'si' ? { background: isDark ? colors.primary[800] : '#E0F2FE', color: isDark ? colors.primary[200] : '#0369A1' } : { color: colors.text.body, background: 'transparent' }), border: 'none', cursor: 'pointer' }}>SI</button>
-                    <div style={{ width: 1, background: colors.border.light }}></div>
-                    <button onClick={() => setLanguage('en')} style={{ padding: '4px 12px', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium as any, ...(language === 'en' ? { background: isDark ? colors.primary[800] : '#E0F2FE', color: isDark ? colors.primary[200] : '#0369A1' } : { color: colors.text.body, background: 'transparent' }), border: 'none', cursor: 'pointer' }}>EN</button>
-                </div>
-            </div>
-
-            {/* Card */}
-            <div style={{ background: colors.surface.card, borderRadius: radii.lg, boxShadow: shadows['2xl'], width: '100%', maxWidth: 480, padding: spacing['3xl'], position: 'relative', overflow: 'hidden', border: `1px solid ${colors.border.light}` }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: colors.primary.gradient }}></div>
-
-               {/* ★ v3.1: Hardcoded EURO-OFFICE logo + heading */}
-<div style={{ textAlign: 'center', marginBottom: spacing['3xl'] }}>
-    <img
-      src={BRAND_ASSETS.logoText}
-      alt="EURO-OFFICE"
-      style={{
-        height: 48,
-        width: 'auto',
-        objectFit: 'contain',
-        marginBottom: spacing.lg,
-        display: 'block',
-        marginLeft: 'auto',
-        marginRight: 'auto',
-      }}
-    />
-                    <h1 style={{ fontSize: typography.fontSize['3xl'], fontWeight: typography.fontWeight.bold, color: colors.text.heading, marginBottom: spacing.sm }}>
-                        {isLogin ? t.loginTitle : t.registerTitle}
-                    </h1>
-                    <p style={{ color: colors.text.muted }}>EU Intervention Logic AI Assistant</p>
-                </div>
-
-                <form onSubmit={isLogin ? handleLoginSubmit : handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}>
-
-                    <div>
-                        <label style={labelStyle}>{t.emailLabel || "Email Address"}</label>
-                        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} placeholder="user@example.com" />
-                    </div>
-
-                    {!isLogin && (
-                        <div>
-                            <label style={labelStyle}>{t.displayNameLabel || "Username / Display Name"}</label>
-                            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} style={inputStyle} placeholder={email.split('@')[0] || "Optional"} />
-                            <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, marginTop: '4px' }}>{t.displayNameDesc || "If empty, we'll use your email prefix."}</p>
-                        </div>
-                    )}
-
-                    <div>
-                        <label style={labelStyle}>{t.password}</label>
-                        <div style={{ position: 'relative' }}>
-                            <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
-                            <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
-                                {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
-                            </button>
-                        </div>
-                        {!isLogin && (
-                            <div style={{ marginTop: spacing.sm, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: typography.fontSize.xs }}>
-                                <span style={{ color: pwStrength.length ? colors.success[500] : colors.text.muted, fontWeight: pwStrength.length ? 700 : 400 }}>{pwStrength.length ? "\u2713" : "\u25CB"} {t.pwRuleChars || "8+ Characters"}</span>
-                                <span style={{ color: pwStrength.hasNumber ? colors.success[500] : colors.text.muted, fontWeight: pwStrength.hasNumber ? 700 : 400 }}>{pwStrength.hasNumber ? "\u2713" : "\u25CB"} {t.pwRuleNumber || "Number (0-9)"}</span>
-                                <span style={{ color: pwStrength.hasSpecial ? colors.success[500] : colors.text.muted, fontWeight: pwStrength.hasSpecial ? 700 : 400 }}>{pwStrength.hasSpecial ? "\u2713" : "\u25CB"} {t.pwRuleSign || "Symbol (!@#)"}</span>
-                                <span style={{ color: (pwStrength.hasUpper || pwStrength.hasLower) ? colors.success[500] : colors.text.muted, fontWeight: (pwStrength.hasUpper || pwStrength.hasLower) ? 700 : 400 }}>{(pwStrength.hasUpper || pwStrength.hasLower) ? "\u2713" : "\u25CB"} {t.pwRuleLetters || "Letters"}</span>
-                            </div>
-                        )}
-                    </div>
-
-                    {!isLogin && (
-                        <div>
-                            <label style={labelStyle}>{t.confirmPassword}</label>
-                            <div style={{ position: 'relative' }}>
-                                <input type={showConfirmPassword ? "text" : "password"} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
-                                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
-                                    {showConfirmPassword ? <EyeSlashIcon /> : <EyeIcon />}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ═══ ★ v3.0: MULTI-PROVIDER API KEY SECTION ═══ */}
-                    {!isLogin && (
-                        <div style={{ background: colors.surface.sidebar, padding: spacing.md, borderRadius: radii.md, border: `1px solid ${colors.border.light}`, marginTop: spacing.sm }}>
-
-                            <label style={{ display: 'block', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold as any, color: colors.primary[isDark ? 300 : 700], marginBottom: spacing.sm }}>
-                                {language === 'si' ? 'AI Ponudnik & API Ključ' : 'AI Provider & API Key'}
-                                <span style={{ fontWeight: typography.fontWeight.normal as any, color: colors.text.muted, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>
-                                    ({language === 'si' ? 'opcijsko — lahko dodaš tudi pozneje' : 'optional — you can add later too'})
-                                </span>
-                            </label>
-
-                            <div style={{ marginBottom: spacing.sm }}>
-                                <select
-                                    value={apiProvider}
-                                    onChange={(e) => { setApiProvider(e.target.value as AIProviderType); setApiKey(''); }}
-                                    style={{
-                                        width: '100%',
-                                        padding: `${spacing.sm} ${spacing.md}`,
-                                        border: `1px solid ${colors.border.medium}`,
-                                        borderRadius: radii.md,
-                                        background: isDark ? colors.surface.background : '#FFFFFF',
-                                        color: colors.text.heading,
-                                        fontSize: typography.fontSize.sm,
-                                        fontWeight: typography.fontWeight.medium as any,
-                                        cursor: 'pointer',
-                                        appearance: 'none',
-                                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`,
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'right 12px center',
-                                        paddingRight: '36px',
-                                    }}
-                                >
-                                    {PROVIDER_OPTIONS.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.icon} {language === 'si' ? p.labelSi : p.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <input
-                                type="password"
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                style={{ ...inputStyle, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}
-                                placeholder={currentProviderConfig.placeholder}
-                            />
-
-                            <div style={{ marginTop: spacing.sm, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
-                                <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, margin: 0, flex: 1 }}>
-                                    {language === 'si' ? currentProviderConfig.descSi : currentProviderConfig.desc}
-                                </p>
-                                <a
-                                    href={currentProviderConfig.link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                        fontSize: typography.fontSize.xs,
-                                        color: colors.primary[isDark ? 300 : 600],
-                                        fontWeight: typography.fontWeight.semibold as any,
-                                        textDecoration: 'none',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    {currentProviderConfig.linkLabel}
-                                </a>
-                            </div>
-                        </div>
-                    )}
-
-                    {error && (<div style={{ color: colors.error[500], fontSize: typography.fontSize.sm, textAlign: 'center', background: isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2', padding: spacing.sm, borderRadius: radii.md, border: `1px solid ${isDark ? 'rgba(239,68,68,0.2)' : '#FEE2E2'}` }}>{error}</div>)}
-                    {successMessage && (<div style={{ color: colors.success[500], fontSize: typography.fontSize.sm, textAlign: 'center', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', padding: spacing.sm, borderRadius: radii.md, border: `1px solid ${isDark ? 'rgba(16,185,129,0.2)' : '#D1FAE5'}` }}>{successMessage}</div>)}
-
-                    <button type="submit" disabled={loading} style={{ width: '100%', padding: `${spacing.sm} 0`, background: colors.primary.gradient, color: '#FFFFFF', borderRadius: radii.md, fontWeight: typography.fontWeight.semibold as any, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, boxShadow: shadows.sm, fontSize: typography.fontSize.base }}>
-                        {loading ? '...' : (isLogin ? t.loginBtn : t.registerBtn)}
-                    </button>
-                </form>
-
-                <div style={{ marginTop: spacing.xl, textAlign: 'center', fontSize: typography.fontSize.sm, borderTop: `1px solid ${colors.border.light}`, paddingTop: spacing.lg }}>
-                    <p style={{ color: colors.text.body }}>
-                        {isLogin ? t.switchMsg : t.switchMsgLogin}
-                        <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setDisplayName(''); setPassword(''); setConfirmPassword(''); setApiKey(''); setApiProvider('gemini'); setSuccessMessage(''); }} style={{ marginLeft: spacing.sm, color: colors.primary[isDark ? 300 : 600], background: 'none', border: 'none', cursor: 'pointer', fontWeight: typography.fontWeight.semibold as any, textDecoration: 'underline' }}>
-                            {isLogin ? t.switchAction : t.switchActionLogin}
-                        </button>
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+  }
 };
-
-export default AuthScreen;
