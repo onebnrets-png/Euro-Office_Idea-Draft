@@ -190,6 +190,15 @@ const App = () => {
   const handleLogout = async () => { await auth.handleLogout(); pm.resetOnLogout(); setActiveView('dashboard'); };
   const handleSwitchProjectAndClose = async (projectId: string) => { await pm.handleSwitchProject(projectId); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); };
   const handleCreateProjectAndClose = async () => { try { await pm.handleCreateProject(); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(e.message); } };
+  const handleDeleteProjectWrapped = async (projectId: string) => {
+    await pm.handleDeleteProject(projectId);
+    // If no projects left, or the deleted project was the current one, go to dashboard
+    if (pm.currentProjectId === projectId || pm.userProjects.length <= 1) {
+      setActiveView('dashboard');
+      setIsProjectListOpen(false);
+    }
+  };
+
   const handlePrint = () => window.print();
   const handleExportDocx = async () => { try { await pm.handleExportDocx(generation.setIsLoading); } catch (e: any) { alert(e.message); } };
   const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => { generation.setIsLoading(true); try { await pm.handleImportProject(event); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(`Failed to import: ${e.message}`); } finally { generation.setIsLoading(false); } };
