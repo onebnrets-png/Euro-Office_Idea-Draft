@@ -1,31 +1,22 @@
 // services/storageService.ts
 // Supabase-backed storage service — replaces localStorage completely
 //
-// v3.0 — 2026-02-19
+// v4.0 — 2026-02-19
 // CHANGES:
+//   - ★ v4.0: register() accepts orgName parameter
+//     → After signup, creates a new organization via organizationService.createOrg()
+//     → Sets the new user as 'owner' of that organization
+//     → Loads active org so sidebar & projects are org-scoped immediately
 //   - ★ v3.0: Multi-Tenant Organization integration
-//     - login() and restoreSession() call organizationService.loadActiveOrg()
-//     - register() auto-loads active org after signup
-//     - logout() calls organizationService.clearCache()
-//     - createProject() sets organization_id from active org
-//     - getUserProjects() filters by active organization
-//     - NEW: getActiveOrgId(), getActiveOrgName()
-//
-// v2.2 — 2026-02-18
-//   - isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
-//   - getEffectiveLogo(), saveCustomLogo() guarded
-//
-// v2.1 — 2026-02-18
-//   - OpenAI key support, register() accepts apiProvider
-//
-// v2.0 — 2026-02-17
-//   - DB-1/DB-2/DB-3 fixes
+//   - v2.2: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
+//   - v2.1: OpenAI key support, register() accepts apiProvider
+//   - v2.0: DB-1/DB-2/DB-3 fixes
 
 import { supabase } from './supabaseClient.ts';
 import { createEmptyProjectData } from '../utils.ts';
 import type { AIProviderType } from './aiProvider.ts';
 import { BRAND_ASSETS } from '../constants.tsx';
-import { organizationService } from './organizationService.ts'; // ★ v3.0
+import { organizationService } from './organizationService.ts';
 
 // ─── ID GENERATOR ────────────────────────────────────────────────
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -79,8 +70,6 @@ export const storageService = {
       };
 
       await this.loadSettings();
-
-      // ★ v3.0: Load active organization
       await organizationService.loadActiveOrg();
 
       return {
@@ -94,7 +83,15 @@ export const storageService = {
     return { success: false, message: 'Login failed' };
   },
 
-  async register(email: string, displayName: string, password: string, apiKey: string = '', apiProvider: AIProviderType = 'gemini') {
+  // ★ v4.0: Added orgName parameter
+  async register(
+    email: string,
+    displayName: string,
+    password: string,
+    apiKey: string = '',
+    apiProvider: AIProviderType = 'gemini',
+    orgName: string = ''
+  ) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -113,7 +110,7 @@ export const storageService = {
     }
 
     if (data.user) {
-      // Wait for DB trigger to create profile + user_settings + org membership
+      // Wait for DB trigger to create profile + user_settings
       await new Promise(r => setTimeout(r, 1500));
 
       // Save key to correct column based on provider
@@ -157,8 +154,32 @@ export const storageService = {
 
       await this.loadSettings();
 
-      // ★ v3.0: Load active organization (auto-assigned by trigger)
-      await organizationService.loadActiveOrg();
+      // ★ v4.0: Create organization and set user as owner
+      if (orgName && orgName.trim() !== '') {
+        try {
+          const createResult = await organizationService.createOrg(orgName.trim());
+          if (createResult.success && createResult.orgId) {
+            console.log(`register: Created org "${orgName}" with ID ${createResult.orgId}`);
+
+            // Set this org as the user's active organization
+            await supabase
+              .from('profiles')
+              .update({ active_organization_id: createResult.orgId })
+              .eq('id', data.user.id);
+
+            // Load active org into cache
+            await organizationService.loadActiveOrg();
+          } else {
+            console.warn('register: Failed to create organization:', createResult.message);
+            await organizationService.loadActiveOrg();
+          }
+        } catch (orgError) {
+          console.error('register: Organization creation error:', orgError);
+          await organizationService.loadActiveOrg();
+        }
+      } else {
+        await organizationService.loadActiveOrg();
+      }
 
       // Force key into cache if not loaded
       if (apiKey && apiKey.trim() !== '' && cachedSettings) {
@@ -208,7 +229,6 @@ export const storageService = {
     cachedUser = null;
     cachedSettings = null;
     cachedProjectsMeta = null;
-    // ★ v3.0: Clear org cache
     organizationService.clearCache();
   },
 
@@ -224,7 +244,6 @@ export const storageService = {
     return cachedUser?.role || 'user';
   },
 
-  // ★ v2.2: Superadmin helpers
   isSuperAdmin(): boolean {
     return cachedUser?.role === 'superadmin';
   },
@@ -237,7 +256,6 @@ export const storageService = {
     return SUPERADMIN_EMAIL;
   },
 
-  // ★ v3.0: Organization helpers
   getActiveOrgId(): string | null {
     return organizationService.getActiveOrgId();
   },
@@ -279,8 +297,6 @@ export const storageService = {
       };
 
       await this.loadSettings();
-
-      // ★ v3.0: Load active organization
       await organizationService.loadActiveOrg();
 
       return cachedUser.email;
@@ -342,7 +358,6 @@ export const storageService = {
     }
   },
 
-  // --- AI Provider ---
   getAIProvider(): AIProviderType {
     return (cachedSettings?.ai_provider as AIProviderType) || 'gemini';
   },
@@ -351,7 +366,6 @@ export const storageService = {
     await this.updateSettings({ ai_provider: provider });
   },
 
-  // --- Gemini Key ---
   getApiKey(): string | null {
     return cachedSettings?.gemini_key || null;
   },
@@ -364,7 +378,6 @@ export const storageService = {
     await this.updateSettings({ gemini_key: null });
   },
 
-  // --- OpenRouter Key ---
   getOpenRouterKey(): string | null {
     return cachedSettings?.openrouter_key || null;
   },
@@ -373,7 +386,6 @@ export const storageService = {
     await this.updateSettings({ openrouter_key: key.trim() || null });
   },
 
-  // --- OpenAI Key ---
   getOpenAIKey(): string | null {
     return cachedSettings?.openai_key || null;
   },
@@ -382,7 +394,6 @@ export const storageService = {
     await this.updateSettings({ openai_key: key.trim() || null });
   },
 
-  // --- Custom Model ---
   getCustomModel(): string | null {
     return cachedSettings?.model || null;
   },
@@ -391,7 +402,6 @@ export const storageService = {
     await this.updateSettings({ model: model.trim() || null });
   },
 
-  // --- Custom Logo --- ★ v2.2: Superadmin only
   getCustomLogo(): string | null {
     if (this.isSuperAdmin()) {
       return cachedSettings?.custom_logo || null;
@@ -399,7 +409,6 @@ export const storageService = {
     return null;
   },
 
-  // ★ v2.2: Effective logo — what should actually be displayed
   getEffectiveLogo(): string {
     if (this.isSuperAdmin()) {
       const customLogo = cachedSettings?.custom_logo;
@@ -409,7 +418,6 @@ export const storageService = {
   },
 
   async saveCustomLogo(base64Data: string | null) {
-    // ★ v2.2: Only superadmin can change the logo
     if (!this.isSuperAdmin()) {
       console.warn('saveCustomLogo: Only superadmin can change the logo.');
       return;
@@ -417,7 +425,6 @@ export const storageService = {
     await this.updateSettings({ custom_logo: base64Data });
   },
 
-  // --- Custom Instructions ---
   getCustomInstructions(): any {
     return cachedSettings?.custom_instructions || null;
   },
@@ -427,14 +434,13 @@ export const storageService = {
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // PROJECT MANAGEMENT — ★ v3.0: Organization-scoped
+  // PROJECT MANAGEMENT — Organization-scoped
   // ═══════════════════════════════════════════════════════════════
 
   async getUserProjects(): Promise<any[]> {
     const userId = await this.getCurrentUserId();
     if (!userId) return [];
 
-    // ★ v3.0: RLS handles org filtering via get_active_org_id()
     const { data, error } = await supabase
       .from('projects')
       .select('id, title, created_at, updated_at, organization_id')
@@ -467,8 +473,6 @@ export const storageService = {
 
     const newId = generateId();
     const dataToSave = initialData || createEmptyProjectData();
-
-    // ★ v3.0: Set organization_id from active org
     const activeOrgId = organizationService.getActiveOrgId();
 
     const { error: projError } = await supabase
