@@ -27,7 +27,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { storageService } from './storageService';
-import { getGlobalOverrideSync } from './globalInstructionsService.ts';
+import { getEffectiveOverrideSync as getGlobalOverrideSync } from './globalInstructionsService.ts';
 
 // ───────────────────────────────────────────────────────────────
 // LANGUAGE DIRECTIVES — ★ ONLY constant that keeps .si ★
