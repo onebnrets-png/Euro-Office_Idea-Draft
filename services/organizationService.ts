@@ -1,7 +1,7 @@
 // services/organizationService.ts
 // ═══════════════════════════════════════════════════════════════
 // Organization Service — Multi-Tenant organization management
-// v1.0 — 2026-02-19
+// v1.1 — 2026-02-19
 //
 // ARCHITECTURE:
 //   - Manages organizations, members, and org-level instructions
@@ -37,7 +37,6 @@ export interface OrganizationMember {
   userId: string;
   orgRole: 'member' | 'admin' | 'owner';
   joinedAt: string;
-  // Joined from profiles:
   email?: string;
   displayName?: string;
 }
@@ -84,10 +83,6 @@ export const organizationService = {
   // ACTIVE ORGANIZATION
   // ═══════════════════════════════════════════════════════════
 
-  /**
-   * Get the user's active organization (cached).
-   * Returns null if user has no active org set.
-   */
   getActiveOrg(): Organization | null {
     return cachedActiveOrg;
   },
@@ -100,15 +95,10 @@ export const organizationService = {
     return cachedActiveOrg?.name || 'No Organization';
   },
 
-  /**
-   * Load the user's active organization from DB.
-   * Call this after login / session restore.
-   */
   async loadActiveOrg(): Promise<Organization | null> {
     const userId = await getAuthUserId();
     if (!userId) return null;
 
-    // Get active_organization_id from profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('active_organization_id')
@@ -120,7 +110,6 @@ export const organizationService = {
       return null;
     }
 
-    // Fetch org details
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('*')
@@ -136,10 +125,6 @@ export const organizationService = {
     return cachedActiveOrg;
   },
 
-  /**
-   * Switch the user's active organization.
-   * Updates profiles.active_organization_id and refreshes cache.
-   */
   async switchOrg(orgId: string): Promise<{ success: boolean; message?: string }> {
     const userId = await getAuthUserId();
     if (!userId) return { success: false, message: 'Not authenticated' };
@@ -156,5 +141,331 @@ export const organizationService = {
       return { success: false, message: 'You are not a member of this organization' };
     }
 
-    // Update active
-  
+    // Update active_organization_id in profiles
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ active_organization_id: orgId })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('[OrgService] Failed to switch org:', updateError.message);
+      return { success: false, message: updateError.message };
+    }
+
+    // Refresh cache
+    await this.loadActiveOrg();
+
+    // Invalidate org instructions cache (new org = new rules)
+    cachedOrgInstructions = null;
+    cachedOrgInstructionsOrgId = null;
+
+    console.log(`[OrgService] Switched to org: ${cachedActiveOrg?.name || orgId}`);
+    return { success: true };
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // USER'S ORGANIZATIONS
+  // ═══════════════════════════════════════════════════════════
+
+  async getUserOrgs(): Promise<Organization[]> {
+    const userId = await getAuthUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('organization_id, organizations(*)')
+      .eq('user_id', userId);
+
+    if (error || !data) {
+      console.warn('[OrgService] Failed to load user orgs:', error?.message);
+      return [];
+    }
+
+    cachedUserOrgs = data
+      .map((row: any) => row.organizations)
+      .filter(Boolean)
+      .map(mapOrg);
+
+    return cachedUserOrgs;
+  },
+
+  async getUserOrgRole(orgId: string): Promise<OrgRole | null> {
+    const userId = await getAuthUserId();
+    if (!userId) return null;
+
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('org_role')
+      .eq('user_id', userId)
+      .eq('organization_id', orgId)
+      .single();
+
+    if (error || !data) return null;
+    return data.org_role as OrgRole;
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // ORGANIZATION CRUD
+  // ═══════════════════════════════════════════════════════════
+
+  async createOrg(name: string, slug: string): Promise<{ success: boolean; org?: Organization; message?: string }> {
+    const userId = await getAuthUserId();
+    if (!userId) return { success: false, message: 'Not authenticated' };
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .insert({ name, slug, created_by: userId })
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    // Auto-add creator as owner
+    await supabase
+      .from('organization_members')
+      .insert({ organization_id: data.id, user_id: userId, org_role: 'owner' });
+
+    // Create empty instructions row
+    await supabase
+      .from('organization_instructions')
+      .insert({ organization_id: data.id, instructions: null, updated_by: userId });
+
+    const org = mapOrg(data);
+    cachedUserOrgs = null; // invalidate
+    return { success: true, org };
+  },
+
+  async updateOrg(orgId: string, updates: { name?: string; slug?: string; logo_url?: string | null }): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase
+      .from('organizations')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', orgId);
+
+    if (error) return { success: false, message: error.message };
+
+    // Refresh cache if active org was updated
+    if (cachedActiveOrg?.id === orgId) {
+      await this.loadActiveOrg();
+    }
+    cachedUserOrgs = null;
+    return { success: true };
+  },
+
+  async deleteOrg(orgId: string): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase
+      .from('organizations')
+      .delete()
+      .eq('id', orgId);
+
+    if (error) return { success: false, message: error.message };
+
+    if (cachedActiveOrg?.id === orgId) {
+      cachedActiveOrg = null;
+    }
+    cachedUserOrgs = null;
+    return { success: true };
+  },
+
+  async getAllOrgs(): Promise<Organization[]> {
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('*')
+      .order('name');
+
+    if (error || !data) return [];
+    return data.map(mapOrg);
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // MEMBER MANAGEMENT
+  // ═══════════════════════════════════════════════════════════
+
+  async getOrgMembers(orgId: string): Promise<OrganizationMember[]> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*, profiles(email, display_name)')
+      .eq('organization_id', orgId)
+      .order('joined_at');
+
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      userId: row.user_id,
+      orgRole: row.org_role as OrgRole,
+      joinedAt: row.joined_at,
+      email: row.profiles?.email || '',
+      displayName: row.profiles?.display_name || '',
+    }));
+  },
+
+  async addMember(orgId: string, userEmail: string, role: OrgRole = 'member'): Promise<{ success: boolean; message?: string }> {
+    // Find user by email
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', userEmail)
+      .single();
+
+    if (profileError || !profile) {
+      return { success: false, message: 'User not found with this email' };
+    }
+
+    // Check if already member
+    const { data: existing } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('user_id', profile.id)
+      .single();
+
+    if (existing) {
+      return { success: false, message: 'User is already a member of this organization' };
+    }
+
+    const { error } = await supabase
+      .from('organization_members')
+      .insert({ organization_id: orgId, user_id: profile.id, org_role: role });
+
+    if (error) return { success: false, message: error.message };
+    return { success: true };
+  },
+
+  async updateMemberRole(orgId: string, userId: string, newRole: OrgRole): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase
+      .from('organization_members')
+      .update({ org_role: newRole })
+      .eq('organization_id', orgId)
+      .eq('user_id', userId);
+
+    if (error) return { success: false, message: error.message };
+    return { success: true };
+  },
+
+  async removeMember(orgId: string, userId: string): Promise<{ success: boolean; message?: string }> {
+    const { error } = await supabase
+      .from('organization_members')
+      .delete()
+      .eq('organization_id', orgId)
+      .eq('user_id', userId);
+
+    if (error) return { success: false, message: error.message };
+    return { success: true };
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // ORGANIZATION INSTRUCTIONS
+  // ═══════════════════════════════════════════════════════════
+
+  async getOrgInstructions(orgId: string): Promise<OrganizationInstructions | null> {
+    const { data, error } = await supabase
+      .from('organization_instructions')
+      .select('*')
+      .eq('organization_id', orgId)
+      .single();
+
+    if (error || !data) return null;
+
+    return {
+      instructions: data.instructions || null,
+      updatedAt: data.updated_at || null,
+      updatedBy: data.updated_by || null,
+    };
+  },
+
+  async getActiveOrgInstructions(): Promise<Record<string, string> | null> {
+    const orgId = cachedActiveOrg?.id;
+    if (!orgId) return null;
+
+    // Return cached if same org
+    if (cachedOrgInstructionsOrgId === orgId && cachedOrgInstructions !== undefined) {
+      return cachedOrgInstructions;
+    }
+
+    const result = await this.getOrgInstructions(orgId);
+    cachedOrgInstructions = result?.instructions || null;
+    cachedOrgInstructionsOrgId = orgId;
+    return cachedOrgInstructions;
+  },
+
+  /**
+   * Synchronous version — returns cached org instructions.
+   * Used by Instructions.ts via getEffectiveOverrideSync.
+   */
+  getActiveOrgInstructionsSync(): Record<string, string> | null {
+    if (cachedOrgInstructionsOrgId === cachedActiveOrg?.id) {
+      return cachedOrgInstructions;
+    }
+    return null;
+  },
+
+  async saveOrgInstructions(orgId: string, instructions: Record<string, string>): Promise<{ success: boolean; message?: string }> {
+    const userId = await getAuthUserId();
+
+    const { error } = await supabase
+      .from('organization_instructions')
+      .upsert(
+        {
+          organization_id: orgId,
+          instructions,
+          updated_at: new Date().toISOString(),
+          updated_by: userId,
+        },
+        { onConflict: 'organization_id' }
+      );
+
+    if (error) return { success: false, message: error.message };
+
+    // Update cache if active org
+    if (cachedActiveOrg?.id === orgId) {
+      cachedOrgInstructions = instructions;
+      cachedOrgInstructionsOrgId = orgId;
+    }
+
+    return { success: true };
+  },
+
+  async resetOrgInstructions(orgId: string): Promise<{ success: boolean; message?: string }> {
+    const userId = await getAuthUserId();
+
+    const { error } = await supabase
+      .from('organization_instructions')
+      .upsert(
+        {
+          organization_id: orgId,
+          instructions: null,
+          updated_at: new Date().toISOString(),
+          updated_by: userId,
+        },
+        { onConflict: 'organization_id' }
+      );
+
+    if (error) return { success: false, message: error.message };
+
+    if (cachedActiveOrg?.id === orgId) {
+      cachedOrgInstructions = null;
+      cachedOrgInstructionsOrgId = orgId;
+    }
+
+    return { success: true };
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // CACHE MANAGEMENT
+  // ═══════════════════════════════════════════════════════════
+
+  invalidateOrgInstructionsCache(): void {
+    cachedOrgInstructions = null;
+    cachedOrgInstructionsOrgId = null;
+  },
+
+  clearCache(): void {
+    cachedActiveOrg = null;
+    cachedUserOrgs = null;
+    cachedOrgInstructions = null;
+    cachedOrgInstructionsOrgId = null;
+  },
+};
