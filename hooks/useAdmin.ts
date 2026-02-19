@@ -3,12 +3,12 @@
 // Admin hook — user management, role changes, delete users,
 // delete organizations, self-delete, instructions, audit log.
 //
-// v1.2 — 2026-02-19
+// v1.3 — 2026-02-19
+//   ★ v1.3: RPC-based delete (SECURITY DEFINER bypass RLS)
+//     - deleteSelf()  → calls supabase.rpc('delete_user_account')
+//     - deleteUser()  → calls supabase.rpc('admin_delete_user')
+//     - deleteOrgUser() and deleteOrganization() retained
 //   ★ v1.2: Delete capabilities (3 levels)
-//     - deleteUser(): SuperAdmin deletes any user
-//     - deleteOrgUser(): Org owner/admin deletes user from their org
-//     - deleteSelf(): User deletes own account
-//     - deleteOrganization(): Org owner/SuperAdmin deletes entire org
 //   ★ v1.1: Superadmin support
 //   v1.0: Initial implementation
 // ═══════════════════════════════════════════════════════════════
@@ -160,37 +160,31 @@ export const useAdmin = () => {
   }, [checkAdminStatus, users]);
 
   // ═══════════════════════════════════════════════════════════
-  // ★ v1.2: DELETE OPERATIONS — 3 LEVELS
+  // ★ v1.3: DELETE OPERATIONS — RPC-based (SECURITY DEFINER)
   // ═══════════════════════════════════════════════════════════
 
   /**
    * Internal helper: Remove all data for a given user ID.
+   * Used by deleteOrgUser as fallback.
    * Deletes: project_data → projects → user_settings → org_memberships → profile
    */
   const _purgeUserData = useCallback(async (userId: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      // 1. Get user's projects
       const { data: userProjects } = await supabase
         .from('projects')
         .select('id')
         .eq('owner_id', userId);
 
-      // 2. Delete project_data for those projects
       if (userProjects && userProjects.length > 0) {
         for (const p of userProjects) {
           await supabase.from('project_data').delete().eq('project_id', p.id);
         }
-        // 3. Delete projects
         await supabase.from('projects').delete().eq('owner_id', userId);
       }
 
-      // 4. Delete user_settings
       await supabase.from('user_settings').delete().eq('user_id', userId);
-
-      // 5. Delete organization_members entries
       await supabase.from('organization_members').delete().eq('user_id', userId);
 
-      // 6. Delete profile
       const { error: profileError } = await supabase.from('profiles').delete().eq('id', userId);
       if (profileError) {
         console.error('_purgeUserData: profiles delete error:', profileError.message);
@@ -204,60 +198,73 @@ export const useAdmin = () => {
     }
   }, []);
 
-  /**
-   * LEVEL 1: SuperAdmin deletes ANY user.
-   */
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 1: SuperAdmin deletes ANY user (via RPC)
+  // ─────────────────────────────────────────────────────────
   const deleteUser = useCallback(async (userId: string): Promise<{ success: boolean; message?: string }> => {
-    if (!storageService.isSuperAdmin()) {
-      return { success: false, message: 'Only SuperAdmin can delete users globally.' };
-    }
-
-    const currentUserId = await storageService.getCurrentUserId();
-    if (userId === currentUserId) {
-      return { success: false, message: 'Cannot delete your own account from here. Use "Delete my account" instead.' };
-    }
-
-    const targetUser = users.find(u => u.id === userId);
-    if (targetUser?.role === 'superadmin') {
-      return { success: false, message: 'Cannot delete another SuperAdmin.' };
-    }
-
     try {
-      const result = await _purgeUserData(userId);
-      if (!result.success) return result;
+      if (!isSuperAdmin) {
+        return { success: false, message: 'Only SuperAdmin can delete users globally.' };
+      }
 
-      // Try to delete auth user (may fail without service_role key)
-      try {
-        await supabase.auth.admin.deleteUser(userId);
-      } catch (e) {
-        console.warn('deleteUser: auth.admin.deleteUser not available (expected in client-side).');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, message: 'No authenticated user' };
+
+      if (userId === user.id) {
+        return { success: false, message: 'Cannot delete your own account from here. Use "Delete my account" instead.' };
+      }
+
+      const targetUser = users.find(u => u.id === userId);
+      if (targetUser?.role === 'superadmin') {
+        return { success: false, message: 'Cannot delete another SuperAdmin.' };
+      }
+
+      // ★ RPC klic na SECURITY DEFINER funkcijo
+      const { data, error } = await supabase.rpc('admin_delete_user', {
+        target_user_id: userId
+      });
+
+      if (error) {
+        console.error('deleteUser RPC error:', error);
+        return { success: false, message: error.message };
+      }
+
+      // Preveri odgovor iz DB funkcije
+      const result = typeof data === 'string' ? JSON.parse(data) : data;
+      if (!result.success) {
+        return { success: false, message: result.message || 'Delete failed in database' };
       }
 
       // Audit log
-      await supabase.from('admin_log').insert({
-        admin_id: currentUserId,
-        action: 'user_delete',
-        target_user_id: userId,
-        details: {
-          deleted_email: targetUser?.email || 'unknown',
-          deleted_by: 'superadmin',
-          deleted_at: new Date().toISOString(),
-        },
-      });
+      try {
+        await supabase.from('admin_log').insert({
+          admin_id: user.id,
+          action: 'user_delete',
+          target_user_id: userId,
+          details: {
+            deleted_email: targetUser?.email || 'unknown',
+            deleted_by: 'superadmin',
+            method: 'admin_delete_user_rpc',
+            deleted_at: new Date().toISOString(),
+          },
+        });
+      } catch (logErr) {
+        console.warn('Audit log insert failed:', logErr);
+      }
 
+      // Osveži seznam userjev
       await fetchUsers();
-      return { success: true };
+      return { success: true, message: 'User deleted successfully' };
+
     } catch (err: any) {
+      console.error('deleteUser exception:', err);
       return { success: false, message: err.message || 'Delete failed' };
     }
-  }, [users, _purgeUserData, fetchUsers]);
+  }, [isSuperAdmin, users, fetchUsers]);
 
-  /**
-   * LEVEL 2: Org Owner/Admin removes a user from THEIR organization.
-   * - Removes membership + user's projects in that org
-   * - If user has no remaining org memberships → full account purge
-   * - If alsoDeleteAccount=true → force full purge
-   */
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 2: Org Owner/Admin removes user from THEIR org
+  // ─────────────────────────────────────────────────────────
   const deleteOrgUser = useCallback(async (
     userId: string,
     orgId: string,
@@ -270,7 +277,6 @@ export const useAdmin = () => {
       return { success: false, message: 'Cannot remove yourself. Use "Delete my account" instead.' };
     }
 
-    // Check caller is owner/admin of this org, or superadmin
     const callerOrgRole = await organizationService.getUserOrgRole(orgId);
     const callerIsSuperAdmin = storageService.isSuperAdmin();
 
@@ -278,7 +284,6 @@ export const useAdmin = () => {
       return { success: false, message: 'Only organization owner, admin, or SuperAdmin can remove users.' };
     }
 
-    // Check target's role in org — cannot remove owner unless superadmin
     const { data: targetMembership } = await supabase
       .from('organization_members')
       .select('org_role')
@@ -291,7 +296,7 @@ export const useAdmin = () => {
     }
 
     try {
-      // 1. Delete user's projects that belong to this org
+      // Delete user's projects in this org
       const { data: orgProjects } = await supabase
         .from('projects')
         .select('id')
@@ -305,30 +310,36 @@ export const useAdmin = () => {
         await supabase.from('projects').delete().eq('owner_id', userId).eq('organization_id', orgId);
       }
 
-      // 2. Remove membership
+      // Remove membership
       await supabase
         .from('organization_members')
         .delete()
         .eq('organization_id', orgId)
         .eq('user_id', userId);
 
-      // 3. If user's active_org was this org, clear it
+      // Clear active_org if it was this one
       await supabase
         .from('profiles')
         .update({ active_organization_id: null })
         .eq('id', userId)
         .eq('active_organization_id', orgId);
 
-      // 4. Check remaining memberships
+      // Check remaining memberships
       const { data: remainingMemberships } = await supabase
         .from('organization_members')
         .select('id')
         .eq('user_id', userId);
 
-      // 5. Full purge if requested or no orgs left
+      // Full purge if requested or no orgs left
       if (alsoDeleteAccount || !remainingMemberships || remainingMemberships.length === 0) {
-        await _purgeUserData(userId);
-        try { await supabase.auth.admin.deleteUser(userId); } catch (e) { /* expected */ }
+        // Use RPC for reliable purge
+        const { data: rpcData, error: rpcError } = await supabase.rpc('delete_user_account', {
+          target_user_id: userId
+        });
+        if (rpcError) {
+          console.warn('RPC fallback for full purge failed, using _purgeUserData:', rpcError);
+          await _purgeUserData(userId);
+        }
       }
 
       // Audit log
@@ -352,83 +363,54 @@ export const useAdmin = () => {
     }
   }, [users, _purgeUserData, fetchUsers]);
 
-  /**
-   * LEVEL 3: User deletes their OWN account (self-delete).
-   * - If owner of org with no other members → deletes org too
-   * - If owner of org WITH other members → blocks (must transfer first)
-   * - Removes all data and logs out
-   */
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 3: User deletes OWN account (self-delete via RPC)
+  // ─────────────────────────────────────────────────────────
   const deleteSelf = useCallback(async (): Promise<{ success: boolean; message?: string }> => {
-    const currentUserId = await storageService.getCurrentUserId();
-    if (!currentUserId) return { success: false, message: 'Not authenticated' };
-
-    // SuperAdmin cannot self-delete (safety)
-    if (storageService.isSuperAdmin()) {
-      return { success: false, message: 'SuperAdmin cannot delete own account. Demote yourself first.' };
-    }
-
     try {
-      // Check if user is owner of any org
-      const { data: ownedOrgs } = await supabase
-        .from('organization_members')
-        .select('organization_id, organizations(name)')
-        .eq('user_id', currentUserId)
-        .eq('org_role', 'owner');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, message: 'No authenticated user' };
 
-      if (ownedOrgs && ownedOrgs.length > 0) {
-        for (const oo of ownedOrgs) {
-          const { data: otherMembers } = await supabase
-            .from('organization_members')
-            .select('id')
-            .eq('organization_id', oo.organization_id)
-            .neq('user_id', currentUserId);
-
-          if (otherMembers && otherMembers.length > 0) {
-            const orgName = (oo as any).organizations?.name || oo.organization_id;
-            return {
-              success: false,
-              message: `You are the owner of "${orgName}" which has other members. Transfer ownership or remove all members first.`
-            };
-          }
-
-          // No other members → delete the entire org
-          await supabase.from('organization_instructions').delete().eq('organization_id', oo.organization_id);
-
-          const { data: orgProjects } = await supabase
-            .from('projects')
-            .select('id')
-            .eq('organization_id', oo.organization_id);
-
-          if (orgProjects) {
-            for (const p of orgProjects) {
-              await supabase.from('project_data').delete().eq('project_id', p.id);
-            }
-            await supabase.from('projects').delete().eq('organization_id', oo.organization_id);
-          }
-
-          await supabase.from('organization_members').delete().eq('organization_id', oo.organization_id);
-          await supabase.from('organizations').delete().eq('id', oo.organization_id);
-        }
+      // SuperAdmin cannot self-delete (safety)
+      if (isSuperAdmin) {
+        return { success: false, message: 'SuperAdmin cannot delete own account. Demote yourself first.' };
       }
 
-      // Purge user's own data (remaining projects, settings, memberships, profile)
-      const result = await _purgeUserData(currentUserId);
-      if (!result.success) return result;
+      // ★ RPC klic na SECURITY DEFINER funkcijo
+      const { data, error } = await supabase.rpc('delete_user_account', {
+        target_user_id: user.id
+      });
 
-      // Logout
-      await storageService.logout();
+      if (error) {
+        console.error('deleteSelf RPC error:', error);
+        return { success: false, message: error.message };
+      }
 
-      return { success: true };
+      // Preveri odgovor iz DB funkcije
+      const result = typeof data === 'string' ? JSON.parse(data) : data;
+      if (!result.success) {
+        return { success: false, message: result.message || 'Self-delete failed in database' };
+      }
+
+      // Odjava
+      try {
+        await storageService.logout();
+      } catch (logoutErr) {
+        console.warn('Logout after self-delete failed, forcing signOut:', logoutErr);
+        await supabase.auth.signOut();
+      }
+
+      return { success: true, message: 'Account deleted successfully' };
+
     } catch (err: any) {
+      console.error('deleteSelf exception:', err);
       return { success: false, message: err.message || 'Self-delete failed' };
     }
-  }, [_purgeUserData]);
+  }, [isSuperAdmin]);
 
-  /**
-   * Delete an entire organization and ALL its data.
-   * Only org owner or superadmin can do this.
-   * Does NOT delete user accounts — only removes memberships.
-   */
+  // ─────────────────────────────────────────────────────────
+  // Delete entire organization (owner or superadmin)
+  // ─────────────────────────────────────────────────────────
   const deleteOrganization = useCallback(async (orgId: string): Promise<{ success: boolean; message?: string }> => {
     const currentUserId = await storageService.getCurrentUserId();
     if (!currentUserId) return { success: false, message: 'Not authenticated' };
@@ -441,34 +423,33 @@ export const useAdmin = () => {
     }
 
     try {
-      // 1. Get all projects in this org
+      // Get all projects in this org
       const { data: orgProjects } = await supabase
         .from('projects')
         .select('id')
         .eq('organization_id', orgId);
 
-      // 2. Delete project_data
+      // Delete project_data
       if (orgProjects && orgProjects.length > 0) {
         for (const p of orgProjects) {
           await supabase.from('project_data').delete().eq('project_id', p.id);
         }
-        // 3. Delete projects
         await supabase.from('projects').delete().eq('organization_id', orgId);
       }
 
-      // 4. Delete org instructions
+      // Delete org instructions
       await supabase.from('organization_instructions').delete().eq('organization_id', orgId);
 
-      // 5. Get members before deleting
+      // Get members before deleting
       const { data: members } = await supabase
         .from('organization_members')
         .select('user_id')
         .eq('organization_id', orgId);
 
-      // 6. Delete all memberships
+      // Delete all memberships
       await supabase.from('organization_members').delete().eq('organization_id', orgId);
 
-      // 7. Clear active_organization_id for affected users
+      // Clear active_organization_id for affected users
       if (members && members.length > 0) {
         for (const m of members) {
           await supabase
@@ -479,7 +460,7 @@ export const useAdmin = () => {
         }
       }
 
-      // 8. Delete the organization
+      // Delete the organization
       const { error: deleteError } = await supabase
         .from('organizations')
         .delete()
@@ -703,10 +684,10 @@ export const useAdmin = () => {
     resetInstructionsToDefault,
     clearError: () => setError(null),
 
-    // ★ v1.2: Delete actions
-    deleteUser,          // Level 1: SuperAdmin deletes any user
+    // ★ v1.3: Delete actions (RPC-based)
+    deleteUser,          // Level 1: SuperAdmin deletes any user (RPC)
     deleteOrgUser,       // Level 2: Org owner/admin removes user from org
-    deleteSelf,          // Level 3: User deletes own account
+    deleteSelf,          // Level 3: User deletes own account (RPC)
     deleteOrganization,  // Org owner/SuperAdmin deletes entire org
   };
 };
