@@ -356,3 +356,31 @@ export interface ProjectVisualizationData {
   charts: ExtractedChartData[];
   lastExtracted: string;
 }
+// ——— Organization Types (v6.0 — 2026-02-19) ———————————————————————————————
+export type OrgRole = 'member' | 'admin' | 'owner';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organizationId: string;
+  userId: string;
+  orgRole: OrgRole;
+  joinedAt: string;
+  email?: string;
+  displayName?: string;
+}
+
+export interface OrganizationInstructions {
+  instructions: Record<string, string> | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
