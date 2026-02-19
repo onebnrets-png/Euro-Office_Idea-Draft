@@ -1,21 +1,17 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
-// v2.0 — 2026-02-19
+// v3.0 — 2026-02-19
+//   ★ v3.0: Dashboard Home integration
+//     - NEW: activeView prop ('dashboard' | 'project')
+//     - NEW: onOpenDashboard prop
+//     - NEW: Dashboard button at top of navigation (Home icon)
+//     - Visual indicator for active view (Dashboard vs Project steps)
 //   ★ v2.0: Organization Switcher (Multi-Tenant)
-//     - NEW: activeOrg, userOrgs, onSwitchOrg, isSwitchingOrg props
-//     - NEW: Organization Switcher UI (dropdown or label)
-//     - Collapsed mode shows org initial badge
-// v1.8 — 2026-02-18
-//   ★ v1.8: Superadmin support
-//     - 👑 icon + "Super Admin / Settings" label in footer
-//     - Imports storageService for isSuperAdmin() check
-// v1.7 — 2026-02-18
-//   - Dark-mode sub-step & step text colors
-// v1.6 — 2026-02-18
-//   - arrayHasContent helper fix
-// v1.5 — 2026-02-17
-//   - onCollapseChange prop
+//   v1.8: Superadmin support
+//   v1.7: Dark-mode sub-step & step text colors
+//   v1.6: arrayHasContent helper fix
+//   v1.5: onCollapseChange prop
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo } from 'react';
@@ -164,7 +160,6 @@ interface SidebarProps {
   currentUser: string;
   appLogo: string;
   isAdmin: boolean;
-  // ★ v2.0: Organization props
   activeOrg: { id: string; name: string; slug: string } | null;
   userOrgs: { id: string; name: string; slug: string }[];
   onSwitchOrg: (orgId: string) => void;
@@ -179,6 +174,9 @@ interface SidebarProps {
   onSubStepClick: (subStepId: string) => void;
   isLoading: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
+  // ★ v3.0: Dashboard integration
+  activeView: 'dashboard' | 'project';
+  onOpenDashboard: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────
@@ -186,10 +184,11 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({
   language, projectData, currentStepId, setCurrentStepId, completedStepsStatus,
   displayTitle, currentUser, appLogo, isAdmin,
-  activeOrg, userOrgs, onSwitchOrg, isSwitchingOrg,  // ★ v2.0
+  activeOrg, userOrgs, onSwitchOrg, isSwitchingOrg,
   isSidebarOpen, onCloseSidebar,
   onBackToWelcome, onOpenProjectList, onOpenAdminPanel, onLogout, onLanguageSwitch,
   onSubStepClick, isLoading, onCollapseChange,
+  activeView, onOpenDashboard, // ★ v3.0
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => getThemeMode() === 'dark');
@@ -212,7 +211,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const SUB_STEPS = getSubSteps(language);
   const overallCompletion = useMemo(() => getOverallCompletion(projectData), [projectData]);
 
-  // ★ v1.8: Superadmin detection
   const isSuperAdmin = storageService.isSuperAdmin();
 
   const collapsedWidth = 64;
@@ -240,13 +238,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   const mobileTransform = isDesktop || isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)';
   const responsiveStyle: React.CSSProperties = { ...sidebarStyle, transform: mobileTransform };
 
-  // ★ v1.8: Footer icon and label based on role
   const footerIcon = isSuperAdmin ? '👑' : isAdmin ? '🛡️' : '⚙️';
   const footerLabel = isSuperAdmin
     ? (language === 'si' ? 'Super Admin / Nastavitve' : 'Super Admin / Settings')
     : isAdmin
       ? (language === 'si' ? 'Admin / Nastavitve' : 'Admin / Settings')
       : (language === 'si' ? 'Nastavitve' : 'Settings');
+
+  // ★ v3.0: Dashboard active state
+  const isDashboardActive = activeView === 'dashboard';
 
   return (
     <>
@@ -258,7 +258,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* ═══ HEADER ═══ */}
         <div style={{ padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : `${spacing.lg} ${spacing.lg}`, borderBottom: `1px solid ${tc.border.light}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', marginBottom: isCollapsed ? spacing.sm : spacing.lg }}>
-            <button onClick={onBackToWelcome} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }} title={t.backToHome}>
+            <button onClick={onOpenDashboard} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }} title={language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}>
               <img src={appLogo} alt="Logo" style={{ height: isCollapsed ? 28 : 36, width: 'auto', objectFit: 'contain', transition: `height ${animation.duration.normal}` }} />
             </button>
             {!isCollapsed && (
@@ -282,58 +282,28 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ) : (
             <>
-              {/* ═══ Organization Switcher ═══ */}
+              {/* Organization Switcher */}
               {activeOrg && (
                 <div style={{
-                  background: tc.surface.card,
-                  borderRadius: radii.lg,
-                  padding: `${spacing.sm} ${spacing.md}`,
-                  border: `1px solid ${tc.border.light}`,
+                  background: tc.surface.card, borderRadius: radii.lg,
+                  padding: `${spacing.sm} ${spacing.md}`, border: `1px solid ${tc.border.light}`,
                   marginBottom: spacing.md,
                 }}>
-                  <div style={{
-                    fontSize: '10px',
-                    color: tc.text.muted,
-                    marginBottom: '4px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    fontWeight: typography.fontWeight.bold,
-                  }}>
+                  <div style={{ fontSize: '10px', color: tc.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: typography.fontWeight.bold }}>
                     {language === 'si' ? 'Organizacija' : 'Organization'}
                   </div>
                   {userOrgs.length <= 1 ? (
-                    <div style={{
-                      fontSize: typography.fontSize.sm,
-                      color: tc.text.heading,
-                      fontWeight: typography.fontWeight.medium,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
+                    <div style={{ fontSize: typography.fontSize.sm, color: tc.text.heading, fontWeight: typography.fontWeight.medium, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {activeOrg.name}
                     </div>
                   ) : (
-                    <select
-                      value={activeOrg.id}
-                      onChange={(e) => onSwitchOrg(e.target.value)}
-                      disabled={isSwitchingOrg}
-                      style={{
-                        width: '100%',
-                        padding: `${spacing.xs} ${spacing.sm}`,
-                        borderRadius: radii.md,
-                        border: `1px solid ${tc.border.light}`,
-                        background: tc.surface.primary,
-                        color: tc.text.heading,
-                        fontSize: typography.fontSize.sm,
-                        fontWeight: typography.fontWeight.medium,
-                        cursor: isSwitchingOrg ? 'wait' : 'pointer',
-                        outline: 'none',
-                        opacity: isSwitchingOrg ? 0.6 : 1,
-                      }}
-                    >
-                      {userOrgs.map((org) => (
-                        <option key={org.id} value={org.id}>{org.name}</option>
-                      ))}
+                    <select value={activeOrg.id} onChange={(e) => onSwitchOrg(e.target.value)} disabled={isSwitchingOrg} style={{
+                      width: '100%', padding: `${spacing.xs} ${spacing.sm}`, borderRadius: radii.md,
+                      border: `1px solid ${tc.border.light}`, background: tc.surface.primary,
+                      color: tc.text.heading, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium,
+                      cursor: isSwitchingOrg ? 'wait' : 'pointer', outline: 'none', opacity: isSwitchingOrg ? 0.6 : 1,
+                    }}>
+                      {userOrgs.map((org) => (<option key={org.id} value={org.id}>{org.name}</option>))}
                     </select>
                   )}
                 </div>
@@ -368,41 +338,93 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* ═══ Organization badge — collapsed mode ═══ */}
+        {/* Organization badge — collapsed mode */}
         {isCollapsed && activeOrg && (
-          <div
-            title={activeOrg.name}
-            style={{
-              padding: spacing.sm,
-              textAlign: 'center',
-              borderBottom: `1px solid ${tc.border.light}`,
-            }}
-          >
+          <div title={activeOrg.name} style={{ padding: spacing.sm, textAlign: 'center', borderBottom: `1px solid ${tc.border.light}` }}>
             <div style={{
-              width: 28,
-              height: 28,
-              borderRadius: radii.full,
+              width: 28, height: 28, borderRadius: radii.full,
               background: isDark ? `${tc.primary[500]}30` : tc.primary[50],
               color: isDark ? tc.primary[300] : tc.primary[700],
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: typography.fontSize.xs,
-              fontWeight: typography.fontWeight.bold,
-              margin: '0 auto',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, margin: '0 auto',
             }}>
               {activeOrg.name.charAt(0).toUpperCase()}
             </div>
           </div>
         )}
 
-        {/* ═══ STEP NAVIGATION ═══ */}
+        {/* ═══ NAVIGATION ═══ */}
         <nav style={{ flex: 1, overflowY: 'auto', padding: isCollapsed ? `${spacing.sm} ${spacing.xs}` : `${spacing.md} ${spacing.md}`, minHeight: 0 }} className="custom-scrollbar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: isCollapsed ? spacing.sm : '2px' }}>
+
+            {/* ★ v3.0: DASHBOARD BUTTON */}
+            <button
+              onClick={onOpenDashboard}
+              style={{
+                width: '100%', textAlign: 'left',
+                padding: isCollapsed ? `${spacing.sm} 0` : `${spacing.md} ${spacing.lg}`,
+                borderRadius: radii.lg,
+                border: isDashboardActive ? `1.5px solid ${isDark ? tc.primary[500] + '40' : tc.primary[200]}` : '1.5px solid transparent',
+                background: isDashboardActive ? (isDark ? `${tc.primary[500]}18` : tc.primary[50]) : 'transparent',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+                gap: isCollapsed ? '0' : spacing.md,
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                transition: `all ${animation.duration.fast} ${animation.easing.default}`,
+                fontFamily: 'inherit',
+                marginBottom: isCollapsed ? spacing.xs : spacing.sm,
+              }}
+              title={isCollapsed ? (language === 'si' ? 'Nadzorna plošča' : 'Dashboard') : undefined}
+            >
+              <div style={{
+                width: isCollapsed ? 36 : 32, height: isCollapsed ? 36 : 32,
+                borderRadius: radii.lg,
+                background: isDashboardActive ? (isDark ? `${tc.primary[500]}25` : tc.primary[100]) : (isDark ? 'rgba(99,102,241,0.08)' : tc.primary[50]),
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <svg style={{ width: 18, height: 18, color: isDashboardActive ? tc.primary[500] : tc.text.muted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                </svg>
+              </div>
+              {!isCollapsed && (
+                <span style={{
+                  flex: 1, fontSize: typography.fontSize.sm,
+                  fontWeight: isDashboardActive ? typography.fontWeight.semibold : typography.fontWeight.medium,
+                  color: isDashboardActive ? (isDark ? tc.primary[300] : tc.primary[700]) : tc.text.body,
+                  transition: `color ${animation.duration.fast}`,
+                }}>
+                  {language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}
+                </span>
+              )}
+            </button>
+
+            {/* Separator between Dashboard and Steps */}
+            {!isCollapsed && (
+              <div style={{
+                height: 1, background: tc.border.light,
+                margin: `${spacing.xs} ${spacing.md} ${spacing.sm}`,
+              }} />
+            )}
+            {isCollapsed && (
+              <div style={{ height: 1, background: tc.border.light, margin: `0 ${spacing.xs} ${spacing.xs}` }} />
+            )}
+
+            {/* Step navigation label */}
+            {!isCollapsed && (
+              <p style={{
+                fontSize: '10px', textTransform: 'uppercase', fontWeight: typography.fontWeight.bold,
+                color: tc.text.muted, letterSpacing: '0.08em',
+                padding: `0 ${spacing.lg}`, margin: `0 0 ${spacing.xs} 0`,
+              }}>
+                {language === 'si' ? 'Koraki projekta' : 'Project Steps'}
+              </p>
+            )}
+
+            {/* STEP NAVIGATION */}
             {STEPS.map((step: any, idx: number) => {
               const stepKey = step.key as StepColorKey;
               const stepColor = stepColors[stepKey];
-              const isActive = currentStepId === step.id;
+              const isActive = activeView === 'project' && currentStepId === step.id;
               const isCompleted = completedStepsStatus[idx];
               const isClickable = step.id === 1 || completedStepsStatus[0];
               const completionPct = getStepCompletionPercent(projectData, step.key);
