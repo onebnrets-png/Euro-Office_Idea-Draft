@@ -212,7 +212,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
         }
     };
 
-    const handleRegisterSubmit = async (e: React.FormEvent) => {
+        const handleRegisterSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setSuccessMessage('');
@@ -232,7 +232,29 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
         const finalDisplayName = displayName.trim() || generateDisplayNameFromEmail(email);
         const result = await storageService.register(email, finalDisplayName, password, apiKey, apiProvider, trimmedOrgName);
         setLoading(false);
+
         if (result.success) {
+            // ★ v5.1 FIX: Check if email confirmation is required
+            if (result.needsEmailConfirmation) {
+                // DO NOT call onLoginSuccess — show confirmation message instead
+                setSuccessMessage(
+                    language === 'si'
+                        ? '✅ Registracija uspešna! Preverite svoj e-poštni predal in kliknite povezavo za potrditev. Po potrditvi se lahko prijavite.'
+                        : '✅ Registration successful! Please check your email inbox and click the confirmation link. After confirming, you can sign in.'
+                );
+                // Reset form to login mode after short delay
+                setTimeout(() => {
+                    setIsLogin(true);
+                    setPassword('');
+                    setConfirmPassword('');
+                    setApiKey('');
+                    setOrgName('');
+                    setDisplayName('');
+                }, 100);
+                return;  // ← CRITICAL: Stop here, do NOT enter the app
+            }
+
+            // Email confirmation OFF — user has session, enter app
             onLoginSuccess(result.displayName || email.split('@')[0]);
         } else {
             setError(result.message || t.errorExists);
