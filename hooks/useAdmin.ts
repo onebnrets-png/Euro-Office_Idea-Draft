@@ -3,7 +3,11 @@
 // Admin hook — user management, role changes, delete users,
 // delete organizations, self-delete, instructions, audit log.
 //
-// v1.3 — 2026-02-19
+// v1.4 — 2026-02-19
+//   ★ v1.4: Organization isolation — users only see their own org members
+//     - fetchUsers() filters by active organization for admin/owner
+//     - SuperAdmin still sees ALL users across all organizations
+//     - fetchAdminLog() scoped to org for non-superadmin
 //   ★ v1.3: RPC-based delete (SECURITY DEFINER bypass RLS)
 //     - deleteSelf()  → calls supabase.rpc('delete_user_account')
 //     - deleteUser()  → calls supabase.rpc('admin_delete_user')
@@ -28,6 +32,7 @@ export interface AdminUser {
   role: 'admin' | 'user' | 'superadmin';
   createdAt: string;
   lastSignIn: string | null;
+  orgRole?: string; // ★ v1.4: role within the organization (owner/admin/member)
 }
 
 export interface AdminLogEntry {
@@ -76,7 +81,7 @@ export const useAdmin = () => {
     checkAdminStatus();
   }, [checkAdminStatus]);
 
-  // ─── Fetch all users ──────────────────────────────────────
+  // ─── ★ v1.4: Fetch users — org-scoped for admin, global for superadmin ───
 
   const fetchUsers = useCallback(async () => {
     if (!checkAdminStatus()) return;
@@ -85,27 +90,93 @@ export const useAdmin = () => {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id, email, display_name, role, created_at, last_sign_in')
-        .order('created_at', { ascending: true });
+      const isSuperRole = storageService.isSuperAdmin();
+      const activeOrgId = storageService.getActiveOrgId();
 
-      if (fetchError) {
-        console.error('fetchUsers error:', fetchError.message);
-        setError(fetchError.message);
-        return;
+      if (isSuperRole) {
+        // ────────────────────────────────────────────────────
+        // SuperAdmin: sees ALL users across ALL organizations
+        // ────────────────────────────────────────────────────
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('id, email, display_name, role, created_at, last_sign_in')
+          .order('created_at', { ascending: true });
+
+        if (fetchError) {
+          console.error('fetchUsers error:', fetchError.message);
+          setError(fetchError.message);
+          return;
+        }
+
+        const mapped: AdminUser[] = (data || []).map((p: any) => ({
+          id: p.id,
+          email: p.email,
+          displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
+          role: p.role || 'user',
+          createdAt: p.created_at,
+          lastSignIn: p.last_sign_in,
+        }));
+
+        setUsers(mapped);
+
+      } else {
+        // ────────────────────────────────────────────────────
+        // Admin/Owner: sees ONLY users in their own organization
+        // ────────────────────────────────────────────────────
+        if (!activeOrgId) {
+          console.warn('fetchUsers: No active organization — cannot list users.');
+          setUsers([]);
+          return;
+        }
+
+        // Step 1: Get all member user_ids + org_roles for this org
+        const { data: orgMembers, error: membersError } = await supabase
+          .from('organization_members')
+          .select('user_id, org_role')
+          .eq('organization_id', activeOrgId);
+
+        if (membersError) {
+          console.error('fetchUsers: org members query error:', membersError.message);
+          setError(membersError.message);
+          return;
+        }
+
+        if (!orgMembers || orgMembers.length === 0) {
+          setUsers([]);
+          return;
+        }
+
+        const memberIds = orgMembers.map(m => m.user_id);
+        const orgRoleMap: Record<string, string> = {};
+        for (const m of orgMembers) {
+          orgRoleMap[m.user_id] = m.org_role;
+        }
+
+        // Step 2: Fetch profiles only for these member IDs
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('id, email, display_name, role, created_at, last_sign_in')
+          .in('id', memberIds)
+          .order('created_at', { ascending: true });
+
+        if (fetchError) {
+          console.error('fetchUsers error:', fetchError.message);
+          setError(fetchError.message);
+          return;
+        }
+
+        const mapped: AdminUser[] = (data || []).map((p: any) => ({
+          id: p.id,
+          email: p.email,
+          displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
+          role: p.role || 'user',
+          createdAt: p.created_at,
+          lastSignIn: p.last_sign_in,
+          orgRole: orgRoleMap[p.id] || 'member',
+        }));
+
+        setUsers(mapped);
       }
-
-      const mapped: AdminUser[] = (data || []).map((p: any) => ({
-        id: p.id,
-        email: p.email,
-        displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
-        role: p.role || 'user',
-        createdAt: p.created_at,
-        lastSignIn: p.last_sign_in,
-      }));
-
-      setUsers(mapped);
     } catch (err: any) {
       console.error('fetchUsers exception:', err);
       setError(err.message || 'Failed to fetch users');
@@ -132,6 +203,23 @@ export const useAdmin = () => {
     const targetUser = users.find(u => u.id === targetUserId);
     if ((newRole === 'superadmin' || targetUser?.role === 'superadmin') && !storageService.isSuperAdmin()) {
       return { success: false, message: 'Only Super Admin can modify Super Admin roles' };
+    }
+
+    // ★ v1.4: Non-superadmin can only change roles within their org
+    if (!storageService.isSuperAdmin()) {
+      const activeOrgId = storageService.getActiveOrgId();
+      if (activeOrgId) {
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', activeOrgId)
+          .eq('user_id', targetUserId)
+          .limit(1);
+
+        if (!membership || membership.length === 0) {
+          return { success: false, message: 'User is not in your organization' };
+        }
+      }
     }
 
     try {
@@ -491,7 +579,7 @@ export const useAdmin = () => {
     }
   }, [fetchUsers]);
 
-  // ─── Fetch audit log ───────────────────────────────────────
+  // ─── ★ v1.4: Fetch audit log — org-scoped for non-superadmin ───
 
   const fetchAdminLog = useCallback(async (limit: number = 50) => {
     if (!checkAdminStatus()) return;
@@ -500,19 +588,43 @@ export const useAdmin = () => {
     setError(null);
 
     try {
-      const { data: logData, error: logError } = await supabase
-        .from('admin_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const isSuperRole = storageService.isSuperAdmin();
 
-      if (logError) {
-        console.error('fetchAdminLog error:', logError.message);
-        setError(logError.message);
-        return;
+      let logData: any[] = [];
+
+      if (isSuperRole) {
+        // SuperAdmin sees ALL audit logs
+        const { data, error: logError } = await supabase
+          .from('admin_log')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (logError) {
+          console.error('fetchAdminLog error:', logError.message);
+          setError(logError.message);
+          return;
+        }
+        logData = data || [];
+      } else {
+        // Admin sees only their own actions
+        const currentUserId = await storageService.getCurrentUserId();
+        const { data, error: logError } = await supabase
+          .from('admin_log')
+          .select('*')
+          .eq('admin_id', currentUserId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (logError) {
+          console.error('fetchAdminLog error:', logError.message);
+          setError(logError.message);
+          return;
+        }
+        logData = data || [];
       }
 
-      const entries: AdminLogEntry[] = (logData || []).map((entry: any) => {
+      const entries: AdminLogEntry[] = logData.map((entry: any) => {
         const adminUser = users.find(u => u.id === entry.admin_id);
         const targetUser = users.find(u => u.id === entry.target_user_id);
 
