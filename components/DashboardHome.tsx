@@ -142,22 +142,38 @@ const ProjectChartsCard: React.FC<{
   currentProjectId: string | null;
   onOpenProject: (projectId: string) => void;
 }> = ({ language, isDark, colors: c, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
-  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
 
-  const activeId = selectedProjectId || hoveredProjectId || (projectsMeta.length > 0 ? projectsMeta[0].id : null);
+  // Stabilize: only use selectedProjectId for chart display, hover just highlights
+  const activeId = selectedProjectId || (projectsMeta.length > 0 && currentProjectId ? currentProjectId : projectsMeta[0]?.id || null);
 
+  // Memoize charts data to prevent recalculation on every render
   const chartsData = useMemo(() => {
-    if (!activeId || !projectData) return null;
-    if (activeId === currentProjectId && projectData) {
-      try {
-        return extractStructuralData(projectData);
-      } catch { return null; }
+    if (!activeId || !projectData || activeId !== currentProjectId) return null;
+    try {
+      return extractStructuralData(projectData);
+    } catch {
+      return null;
     }
-    return null;
   }, [activeId, currentProjectId, projectData]);
 
-  const activeMeta = projectsMeta.find(p => p.id === activeId);
+  const activeMeta = useMemo(() => {
+    return projectsMeta.find(p => p.id === (hoveredProjectId || activeId));
+  }, [projectsMeta, hoveredProjectId, activeId]);
+
+  // Stable click handler – no state thrashing
+  const handleProjectClick = useCallback((projectId: string) => {
+    setSelectedProjectId(prev => prev === projectId ? null : projectId);
+  }, []);
+
+  const handleMouseEnter = useCallback((projectId: string) => {
+    setHoveredProjectId(projectId);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredProjectId(null);
+  }, []);
 
   return (
     <div style={{ display: 'flex', gap: spacing.md, height: '100%', minHeight: 280 }}>
@@ -176,27 +192,37 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
         {projectsMeta.map(p => {
-          const isActive = p.id === activeId;
+          const isSelected = p.id === selectedProjectId;
+          const isHovered = p.id === hoveredProjectId;
+          const isHighlighted = isSelected || (isHovered && !selectedProjectId);
           return (
             <div
               key={p.id}
-              onMouseEnter={() => setHoveredProjectId(p.id)}
-              onMouseLeave={() => setHoveredProjectId(null)}
-              onClick={() => setSelectedProjectId(prev => prev === p.id ? null : p.id)}
+              onMouseEnter={() => handleMouseEnter(p.id)}
+              onMouseLeave={handleMouseLeave}
+              onClick={() => handleProjectClick(p.id)}
               style={{
                 padding: `${spacing.xs} ${spacing.sm}`,
                 borderRadius: radii.md,
                 cursor: 'pointer',
-                background: isActive ? (isDark ? c.primary[900] + '40' : c.primary[50]) : 'transparent',
-                borderLeft: isActive ? `3px solid ${c.primary[500]}` : '3px solid transparent',
+                background: isSelected
+                  ? (isDark ? c.primary[900] + '60' : c.primary[100])
+                  : isHovered
+                    ? (isDark ? c.primary[900] + '25' : c.primary[50])
+                    : 'transparent',
+                borderLeft: isSelected
+                  ? `3px solid ${c.primary[500]}`
+                  : isHovered
+                    ? `3px solid ${c.primary[300]}`
+                    : '3px solid transparent',
                 marginBottom: 2,
-                transition: `all ${animation.duration.fast} ${animation.easing.default}`,
+                transition: 'background 0.15s ease, border-left 0.15s ease',
               }}
             >
               <div style={{
                 fontSize: typography.fontSize.xs,
-                fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                color: isActive ? c.primary[600] : c.text.body,
+                fontWeight: isHighlighted ? typography.fontWeight.semibold : typography.fontWeight.medium,
+                color: isSelected ? c.primary[700] : isHovered ? c.primary[600] : c.text.body,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
@@ -209,10 +235,10 @@ const ProjectChartsCard: React.FC<{
         })}
       </div>
 
-      {/* RIGHT: Charts for selected/hovered project */}
+      {/* RIGHT: Charts for selected project */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
         {activeMeta && (
-          <div style={{ marginBottom: spacing.xs }}>
+          <div style={{ marginBottom: spacing.xs, flexShrink: 0 }}>
             <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>
               {activeMeta.title || activeMeta.name || 'Project'}
             </div>
@@ -233,7 +259,7 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {activeId && !chartsData && activeId !== currentProjectId && (
+        {activeId && activeId !== currentProjectId && (
           <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
             <div style={{ marginBottom: spacing.sm }}>
               {language === 'si'
@@ -241,7 +267,7 @@ const ProjectChartsCard: React.FC<{
                 : 'Charts are shown for the currently loaded project. Open this project to view its charts.'}
             </div>
             <button
-              onClick={() => onOpenProject(activeId)}
+              onClick={(e) => { e.stopPropagation(); onOpenProject(activeId); }}
               style={{
                 background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
                 padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
@@ -253,14 +279,14 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {activeId && chartsData && chartsData.length > 0 && (
+        {activeId && activeId === currentProjectId && chartsData && chartsData.length > 0 && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap: spacing.sm,
           }}>
             {chartsData.map((chart: any, idx: number) => (
-              <div key={idx} style={{
+              <div key={`chart-${idx}-${chart.type}`} style={{
                 background: isDark ? c.surface.sidebar : c.surface.main,
                 borderRadius: radii.lg,
                 border: `1px solid ${c.border.light}`,
@@ -282,13 +308,7 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {activeId && chartsData && chartsData.length === 0 && (
-          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
-            {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
-          </div>
-        )}
-
-        {activeId && activeId === currentProjectId && !chartsData && (
+        {activeId && activeId === currentProjectId && (!chartsData || chartsData.length === 0) && (
           <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
             {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
           </div>
@@ -297,6 +317,7 @@ const ProjectChartsCard: React.FC<{
     </div>
   );
 };
+
 // ——— AI Chatbot with Conversations + Knowledge Base ———————————
 
 const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null }> = ({ language, isDark, colors: c, activeOrg }) => {
