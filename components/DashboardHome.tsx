@@ -529,13 +529,17 @@ const ProjectChartsCard: React.FC<{
               padding: spacing.md, background: isDark ? '#1e1e2e' : '#f8fafc',
               borderRadius: radii.lg, border: `1px solid ${c.border.light}`, minHeight: chartH,
             }}>
-              <DesignProgressRing
-                value={completeness} size={isNarrow ? 60 : 80} strokeWidth={6}
-                showLabel={true} labelSize={isNarrow ? '0.65rem' : '0.8rem'}
+                            <DesignProgressRing
+                value={completeness}
+                size={isNarrow ? 60 : 80}
+                strokeWidth={6}
+                showLabel={true}
+                labelSize={isNarrow ? '0.65rem' : '0.8rem'}
               />
               <div style={{ textAlign: 'center' as const }}>
                 <div style={{
-                  fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold,
+                  fontSize: typography.fontSize.xs,
+                  fontWeight: typography.fontWeight.semibold,
                   color: c.text.heading,
                 }}>
                   {language === 'si' ? 'Zapolnjenost' : 'Completeness'}
@@ -544,6 +548,7 @@ const ProjectChartsCard: React.FC<{
               </div>
             </div>
 
+            {/* Charts */}
             {chartsData && chartsData.length > 0 && chartsData.map((chart: ExtractedChartData, idx: number) => (
               <div key={`c-${idx}-${chart.chartType}`} style={{ flexShrink: 0, width: chartW }}>
                 <ChartRenderer data={chart} width={chartW} height={chartH} showTitle={true} showSource={false} />
