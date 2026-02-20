@@ -335,7 +335,15 @@ const App = () => {
             onOpenProjectList={() => setIsProjectListOpen(true)}
             onOpenAdminPanel={(tab?: string) => { setAdminPanelInitialTab(tab); setIsAdminPanelOpen(true); }}
             onLogout={handleLogout} onLanguageSwitch={translation.handleLanguageSwitchRequest}
-            onSubStepClick={(subStepId: string) => { pm.handleSubStepClick(subStepId); setActiveView('project'); }}
+            onSubStepClick={(subStepId: string) => {
+  setActiveView('project');
+  // Počakaj da se ProjectDisplay renderira, nato scrollaj
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      pm.handleSubStepClick(subStepId);
+    }, 100);
+  });
+}}
             isLoading={!!generation.isLoading}
             onCollapseChange={setSidebarCollapsed}
             activeView={activeView}
