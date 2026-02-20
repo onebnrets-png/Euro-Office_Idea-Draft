@@ -8,7 +8,7 @@
 //     RIGHT = horizontal scrollable row of charts (same size as DashboardPanel: 260×160)
 //   - FIX: Scroll-to-top on mount
 //   - FIX: Stable 2-column grid for all cards
-//   - NOTE: NO Ajax — pure React + HTML5 drag-and-drop
+//   - FIX: Single definition of ProjectChartsCard (no duplicates)
 // ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -61,7 +61,7 @@ const DEFAULT_CARD_ORDER: CardId[] = ['projects', 'chatbot', 'statistics', 'admi
 const CHAT_STORAGE_KEY = 'euro-office-chat-conversations';
 const MAX_CONVERSATIONS = 20;
 
-// Chart size constants — SAME as DashboardPanel (width=260, height=160)
+// Chart size — SAME as DashboardPanel (width ~260, height 160)
 const CHART_WIDTH = 260;
 const CHART_HEIGHT = 160;
 
@@ -105,36 +105,70 @@ const ProgressRing: React.FC<{ percent: number; size?: number; strokeWidth?: num
 interface CardProps {
   id: CardId; title: string; icon: string; children: React.ReactNode;
   isDark: boolean; colors: any; wide?: boolean;
-  dragHandlers: { onDragStart: (e: React.DragEvent, id: CardId) => void; onDragOver: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent, id: CardId) => void; onDragEnd: () => void; };
+  dragHandlers: {
+    onDragStart: (e: React.DragEvent, id: CardId) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent, id: CardId) => void;
+    onDragEnd: () => void;
+  };
   draggingId: CardId | null;
 }
 
 const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark, colors: c, wide, dragHandlers, draggingId }) => {
   const isDragging = draggingId === id;
   return (
-    <div draggable onDragStart={(e) => dragHandlers.onDragStart(e, id)} onDragOver={dragHandlers.onDragOver} onDrop={(e) => dragHandlers.onDrop(e, id)} onDragEnd={dragHandlers.onDragEnd}
+    <div
+      draggable
+      onDragStart={(e) => dragHandlers.onDragStart(e, id)}
+      onDragOver={dragHandlers.onDragOver}
+      onDrop={(e) => dragHandlers.onDrop(e, id)}
+      onDragEnd={dragHandlers.onDragEnd}
       style={{
-        background: c.surface.card, borderRadius: radii.xl,
+        background: c.surface.card,
+        borderRadius: radii.xl,
         border: `1px solid ${isDragging ? c.primary[400] : c.border.light}`,
-        boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden',
-        opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)',
+        boxShadow: isDragging ? shadows.xl : shadows.card,
+        overflow: 'hidden',
+        opacity: isDragging ? 0.7 : 1,
+        transform: isDragging ? 'scale(1.02)' : 'scale(1)',
         transition: `all ${animation.duration.fast} ${animation.easing.default}`,
         gridColumn: wide ? '1 / -1' : 'span 1',
-        display: 'flex', flexDirection: 'column' as const, cursor: 'grab', minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column' as const,
+        cursor: 'grab',
+        minHeight: 0,
+      }}
+    >
+      <div style={{
+        padding: `${spacing.md} ${spacing.lg}`,
+        borderBottom: `1px solid ${c.border.light}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: spacing.sm,
+        flexShrink: 0,
       }}>
-      <div style={{ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${c.border.light}`, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0 }}>
         <span style={{ fontSize: '18px' }}>{icon}</span>
-        <h3 style={{ margin: 0, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading, flex: 1 }}>{title}</h3>
+        <h3 style={{
+          margin: 0, fontSize: typography.fontSize.sm,
+          fontWeight: typography.fontWeight.semibold,
+          color: c.text.heading, flex: 1,
+        }}>{title}</h3>
         <div style={{ cursor: 'grab', color: c.text.muted, display: 'flex' }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/>
+            <circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/>
+            <circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/>
+          </svg>
         </div>
       </div>
-      <div style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0 }}>{children}</div>
+      <div style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0 }}>
+        {children}
+      </div>
     </div>
   );
 };
 
-// ——— Project Charts Card — HORIZONTAL layout ———————
+// ——— Project Charts Card — HORIZONTAL layout, acronyms left ———
 
 const ProjectChartsCard: React.FC<{
   language: 'en' | 'si';
@@ -173,13 +207,19 @@ const ProjectChartsCard: React.FC<{
 
   return (
     <div style={{ display: 'flex', gap: spacing.md, minHeight: 220 }}>
-      {/* LEFT: Acronym list — narrow column */}
+      {/* LEFT: Acronym list */}
       <div style={{
         width: 140, minWidth: 120, flexShrink: 0,
         borderRight: `1px solid ${c.border.light}`,
         overflowY: 'auto', paddingRight: spacing.sm,
       }}>
-        <div style={{ fontSize: '10px', color: c.text.muted, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+        <div style={{
+          fontSize: '10px', color: c.text.muted,
+          fontWeight: typography.fontWeight.semibold,
+          marginBottom: spacing.sm,
+          textTransform: 'uppercase' as const,
+          letterSpacing: '0.05em',
+        }}>
           {language === 'si' ? 'Projekti' : 'Projects'} ({projectsMeta.length})
         </div>
         {projectsMeta.length === 0 && (
@@ -216,7 +256,6 @@ const ProjectChartsCard: React.FC<{
                 transition: 'background 0.15s ease, border-left 0.15s ease',
               }}
             >
-              {/* Acronym — bold, primary line */}
               <div style={{
                 fontSize: '12px',
                 fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.semibold,
@@ -225,7 +264,6 @@ const ProjectChartsCard: React.FC<{
               }}>
                 {p.acronym || p.title?.substring(0, 10) || '—'}
               </div>
-              {/* Title — small, secondary line */}
               <div style={{
                 fontSize: '9px', color: c.text.muted,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -242,7 +280,7 @@ const ProjectChartsCard: React.FC<{
         })}
       </div>
 
-      {/* RIGHT: Charts — HORIZONTAL scroll, same size as DashboardPanel */}
+      {/* RIGHT: Charts — horizontal scroll */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs }}>
         {/* Project name header */}
         {activeId && (() => {
@@ -252,13 +290,22 @@ const ProjectChartsCard: React.FC<{
             <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs }}>
               {meta.acronym && (
                 <span style={{
-                  fontSize: '11px', background: isDark ? c.primary[900] : c.primary[100], color: c.primary[700],
-                  padding: '2px 8px', borderRadius: radii.full, fontWeight: typography.fontWeight.bold,
+                  fontSize: '11px',
+                  background: isDark ? c.primary[900] : c.primary[100],
+                  color: c.primary[700],
+                  padding: '2px 8px',
+                  borderRadius: radii.full,
+                  fontWeight: typography.fontWeight.bold,
                 }}>
                   {meta.acronym}
                 </span>
               )}
-              <span style={{ fontSize: typography.fontSize.xs, color: c.text.heading, fontWeight: typography.fontWeight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{
+                fontSize: typography.fontSize.xs,
+                color: c.text.heading,
+                fontWeight: typography.fontWeight.semibold,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
                 {meta.title || meta.name || ''}
               </span>
             </div>
@@ -267,14 +314,21 @@ const ProjectChartsCard: React.FC<{
 
         {/* No project selected */}
         {!activeId && (
-          <div style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const, padding: spacing.xl, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{
+            color: c.text.muted, fontSize: typography.fontSize.sm,
+            textAlign: 'center' as const, padding: spacing.xl,
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             {language === 'si' ? 'Izberite projekt za prikaz grafik' : 'Select a project to view charts'}
           </div>
         )}
 
         {/* Project not loaded — offer to open */}
         {activeId && activeId !== currentProjectId && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column' as const,
+            alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+          }}>
             <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
               {language === 'si'
                 ? 'Odprite projekt za prikaz grafik.'
@@ -283,9 +337,10 @@ const ProjectChartsCard: React.FC<{
             <button
               onClick={(e) => { e.stopPropagation(); onOpenProject(activeId); }}
               style={{
-                background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
-                padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
-                cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+                background: c.primary[500], color: '#fff', border: 'none',
+                borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`,
+                fontSize: typography.fontSize.xs, cursor: 'pointer',
+                fontWeight: typography.fontWeight.semibold,
               }}
             >
               {language === 'si' ? 'Odpri projekt' : 'Open project'}
@@ -293,7 +348,7 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {/* ★ v4.2: HORIZONTAL chart row — scrollable, same size as DashboardPanel */}
+        {/* HORIZONTAL chart row */}
         {activeId && activeId === currentProjectId && chartsData && chartsData.length > 0 && (
           <div style={{
             flex: 1,
@@ -306,10 +361,7 @@ const ProjectChartsCard: React.FC<{
             alignItems: 'flex-start',
           }}>
             {chartsData.map((chart: ExtractedChartData, idx: number) => (
-              <div key={`chart-${idx}-${chart.chartType}`} style={{
-                flexShrink: 0,
-                width: CHART_WIDTH,
-              }}>
+              <div key={`chart-${idx}-${chart.chartType}`} style={{ flexShrink: 0, width: CHART_WIDTH }}>
                 <ChartRenderer
                   data={chart}
                   width={CHART_WIDTH}
@@ -324,7 +376,10 @@ const ProjectChartsCard: React.FC<{
 
         {/* No chart data */}
         {activeId && activeId === currentProjectId && (!chartsData || chartsData.length === 0) && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column' as const,
+            alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+          }}>
             <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
               {language === 'si'
                 ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.'
@@ -342,198 +397,19 @@ const ProjectChartsCard: React.FC<{
   );
 };
 
-// ——— Project Charts Card (replaces old Recent Activity) ———————
+// ——— AI Chatbot with Conversations + Knowledge Base ———————————
 
-const ProjectChartsCard: React.FC<{
+const AIChatbot: React.FC<{
   language: 'en' | 'si';
   isDark: boolean;
   colors: any;
-  projectsMeta: any[];
-  projectData: any;
-  currentProjectId: string | null;
-  onOpenProject: (projectId: string) => void;
-}> = ({ language, isDark, colors: c, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
-
-  // Stabilize: only use selectedProjectId for chart display, hover just highlights
-  const activeId = selectedProjectId || (projectsMeta.length > 0 && currentProjectId ? currentProjectId : projectsMeta[0]?.id || null);
-
-  // Memoize charts data to prevent recalculation on every render
-  const chartsData = useMemo(() => {
-    if (!activeId || !projectData || activeId !== currentProjectId) return null;
-    try {
-      return extractStructuralData(projectData);
-    } catch {
-      return null;
-    }
-  }, [activeId, currentProjectId, projectData]);
-
-  const activeMeta = useMemo(() => {
-    return projectsMeta.find(p => p.id === (hoveredProjectId || activeId));
-  }, [projectsMeta, hoveredProjectId, activeId]);
-
-  // Stable click handler – no state thrashing
-  const handleProjectClick = useCallback((projectId: string) => {
-    setSelectedProjectId(prev => prev === projectId ? null : projectId);
-  }, []);
-
-  const handleMouseEnter = useCallback((projectId: string) => {
-    setHoveredProjectId(projectId);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setHoveredProjectId(null);
-  }, []);
-
-  return (
-    <div style={{ display: 'flex', gap: spacing.md, height: '100%', minHeight: 280 }}>
-      {/* LEFT: Project list */}
-      <div style={{
-        width: 200, minWidth: 180, flexShrink: 0,
-        borderRight: `1px solid ${c.border.light}`,
-        overflowY: 'auto', paddingRight: spacing.sm,
-      }}>
-        <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
-          {language === 'si' ? 'Projekti' : 'Projects'} ({projectsMeta.length})
-        </div>
-        {projectsMeta.length === 0 && (
-          <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontStyle: 'italic' }}>
-            {language === 'si' ? 'Ni projektov' : 'No projects'}
-          </div>
-        )}
-        {projectsMeta.map(p => {
-          const isSelected = p.id === selectedProjectId;
-          const isHovered = p.id === hoveredProjectId;
-          const isHighlighted = isSelected || (isHovered && !selectedProjectId);
-          return (
-            <div
-              key={p.id}
-              onMouseEnter={() => handleMouseEnter(p.id)}
-              onMouseLeave={handleMouseLeave}
-              onClick={() => handleProjectClick(p.id)}
-              style={{
-                padding: `${spacing.xs} ${spacing.sm}`,
-                borderRadius: radii.md,
-                cursor: 'pointer',
-                background: isSelected
-                  ? (isDark ? c.primary[900] + '60' : c.primary[100])
-                  : isHovered
-                    ? (isDark ? c.primary[900] + '25' : c.primary[50])
-                    : 'transparent',
-                borderLeft: isSelected
-                  ? `3px solid ${c.primary[500]}`
-                  : isHovered
-                    ? `3px solid ${c.primary[300]}`
-                    : '3px solid transparent',
-                marginBottom: 2,
-                transition: 'background 0.15s ease, border-left 0.15s ease',
-              }}
-            >
-              <div style={{
-                fontSize: typography.fontSize.xs,
-                fontWeight: isHighlighted ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                color: isSelected ? c.primary[700] : isHovered ? c.primary[600] : c.text.body,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
-              </div>
-              {p.acronym && (
-                <div style={{ fontSize: '10px', color: c.text.muted }}>{p.acronym}</div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* RIGHT: Charts for selected project */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
-        {activeMeta && (
-          <div style={{ marginBottom: spacing.xs, flexShrink: 0 }}>
-            <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>
-              {activeMeta.title || activeMeta.name || 'Project'}
-            </div>
-            {activeMeta.acronym && (
-              <span style={{
-                fontSize: '10px', background: isDark ? c.primary[900] : c.primary[100], color: c.primary[700],
-                padding: '1px 6px', borderRadius: radii.full, fontWeight: typography.fontWeight.semibold,
-              }}>
-                {activeMeta.acronym}
-              </span>
-            )}
-          </div>
-        )}
-
-        {!activeId && (
-          <div style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const, padding: spacing.xl }}>
-            {language === 'si' ? 'Izberite projekt za prikaz grafik' : 'Select a project to view charts'}
-          </div>
-        )}
-
-        {activeId && activeId !== currentProjectId && (
-          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
-            <div style={{ marginBottom: spacing.sm }}>
-              {language === 'si'
-                ? 'Grafike so prikazane za trenutno naložen projekt. Odprite ta projekt za prikaz.'
-                : 'Charts are shown for the currently loaded project. Open this project to view its charts.'}
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenProject(activeId); }}
-              style={{
-                background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
-                padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
-                cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
-              }}
-            >
-              {language === 'si' ? 'Odpri projekt' : 'Open project'}
-            </button>
-          </div>
-        )}
-
-        {activeId && activeId === currentProjectId && chartsData && chartsData.length > 0 && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: spacing.sm,
-          }}>
-            {chartsData.map((chart: any, idx: number) => (
-              <div key={`chart-${idx}-${chart.type}`} style={{
-                background: isDark ? c.surface.sidebar : c.surface.main,
-                borderRadius: radii.lg,
-                border: `1px solid ${c.border.light}`,
-                padding: spacing.sm,
-                minHeight: 160,
-              }}>
-                <div style={{
-                  fontSize: '10px', fontWeight: typography.fontWeight.semibold,
-                  color: c.text.muted, marginBottom: spacing.xs,
-                  textTransform: 'uppercase' as const, letterSpacing: '0.05em',
-                }}>
-                  {chart.title || chart.type}
-                </div>
-                <div style={{ height: 140 }}>
-                  <ChartRenderer data={chart} compact={true} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeId && activeId === currentProjectId && (!chartsData || chartsData.length === 0) && (
-          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
-            {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ——— AI Chatbot with Conversations + Knowledge Base ———————————
-
-const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null }> = ({ language, isDark, colors: c, activeOrg }) => {
+  activeOrg: any | null;
+}> = ({ language, isDark, colors: c, activeOrg }) => {
   const [conversations, setConversations] = useState<ChatConversation[]>(() => {
-    try { const s = localStorage.getItem(CHAT_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
+    try {
+      const s = localStorage.getItem(CHAT_STORAGE_KEY);
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
   });
   const [activeConvoId, setActiveConvoId] = useState<string | null>(() => conversations[0]?.id || null);
   const [input, setInput] = useState('');
@@ -542,18 +418,23 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeConvo = conversations.find(c => c.id === activeConvoId) || null;
+  const activeConvo = conversations.find(cv => cv.id === activeConvoId) || null;
   const messages = activeConvo?.messages || [];
 
   useEffect(() => {
     try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversations)); } catch {}
   }, [conversations]);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
 
   const createNewConvo = useCallback(() => {
     const id = `chat-${Date.now()}`;
-    const newConvo: ChatConversation = { id, title: language === 'si' ? 'Nov pogovor' : 'New conversation', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+    const newConvo: ChatConversation = {
+      id, title: language === 'si' ? 'Nov pogovor' : 'New conversation',
+      messages: [], createdAt: Date.now(), updatedAt: Date.now(),
+    };
     setConversations(prev => {
       let updated = [newConvo, ...prev];
       if (updated.length > MAX_CONVERSATIONS) updated = updated.slice(0, MAX_CONVERSATIONS);
@@ -564,15 +445,15 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
   }, [language]);
 
   const deleteConvo = useCallback((id: string) => {
-    setConversations(prev => prev.filter(c => c.id !== id));
+    setConversations(prev => prev.filter(cv => cv.id !== id));
     if (activeConvoId === id) setActiveConvoId(null);
   }, [activeConvoId]);
 
   const updateConvoMessages = useCallback((convoId: string, newMessages: ChatMessage[]) => {
-    setConversations(prev => prev.map(c => {
-      if (c.id !== convoId) return c;
-      const title = newMessages.find(m => m.role === 'user')?.content.substring(0, 40) || c.title;
-      return { ...c, messages: newMessages, title, updatedAt: Date.now() };
+    setConversations(prev => prev.map(cv => {
+      if (cv.id !== convoId) return cv;
+      const title = newMessages.find(m => m.role === 'user')?.content.substring(0, 40) || cv.title;
+      return { ...cv, messages: newMessages, title, updatedAt: Date.now() };
     }));
   }, []);
 
@@ -583,7 +464,10 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
     let convoId = activeConvoId;
     if (!convoId) {
       convoId = `chat-${Date.now()}`;
-      const newConvo: ChatConversation = { id: convoId, title: trimmed.substring(0, 40), messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+      const newConvo: ChatConversation = {
+        id: convoId, title: trimmed.substring(0, 40),
+        messages: [], createdAt: Date.now(), updatedAt: Date.now(),
+      };
       setConversations(prev => {
         let updated = [newConvo, ...prev];
         if (updated.length > MAX_CONVERSATIONS) updated = updated.slice(0, MAX_CONVERSATIONS);
@@ -605,8 +489,12 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
       if (activeOrg?.id) {
         try {
           const kbResults = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5);
-          if (kbResults.length > 0) kbContext = '\n\n--- KNOWLEDGE BASE (internal documents) ---\n' + kbResults.join('\n\n');
-        } catch (e) { console.warn('[Chatbot] KB search failed:', e); }
+          if (kbResults.length > 0) {
+            kbContext = '\n\n--- KNOWLEDGE BASE (internal documents) ---\n' + kbResults.join('\n\n');
+          }
+        } catch (e) {
+          console.warn('[Chatbot] KB search failed:', e);
+        }
 
         try {
           const instructions = await organizationService.getActiveOrgInstructions?.(activeOrg.id);
@@ -646,7 +534,7 @@ Assistant:`;
         content: language === 'si'
           ? `Napaka: ${e.message || 'Neznana napaka'}. Preverite AI nastavitve.`
           : `Error: ${e.message || 'Unknown error'}. Check AI settings.`,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       updateConvoMessages(convoId, [...currentMessages, errorMsg]);
     } finally {
@@ -657,11 +545,13 @@ Assistant:`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', minHeight: 300 }}>
+      {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, flexShrink: 0 }}>
         <button onClick={createNewConvo} style={{
           background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
           padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs,
-          cursor: 'pointer', fontWeight: typography.fontWeight.semibold, display: 'flex', alignItems: 'center', gap: '4px',
+          cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+          display: 'flex', alignItems: 'center', gap: '4px',
         }}>
           + {language === 'si' ? 'Nov pogovor' : 'New chat'}
         </button>
@@ -679,6 +569,7 @@ Assistant:`;
         )}
       </div>
 
+      {/* History panel */}
       {showHistory && (
         <div style={{
           maxHeight: 150, overflowY: 'auto', marginBottom: spacing.sm,
@@ -697,24 +588,36 @@ Assistant:`;
               background: conv.id === activeConvoId ? (isDark ? c.primary[900] + '30' : c.primary[50]) : 'transparent',
               cursor: 'pointer', borderBottom: `1px solid ${c.border.light}`,
             }}>
-              <div onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }}
-                style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div
+                onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }}
+                style={{
+                  flex: 1, fontSize: typography.fontSize.xs, color: c.text.body,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+              >
                 {conv.title}
               </div>
               <div style={{ fontSize: '9px', color: c.text.muted, flexShrink: 0 }}>
                 {new Date(conv.updatedAt).toLocaleDateString()}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }}
-                style={{ background: 'none', border: 'none', color: c.error[500], cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1 }}
-                title={language === 'si' ? 'Izbriši' : 'Delete'}>×</button>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }}
+                style={{
+                  background: 'none', border: 'none', color: c.error[500],
+                  cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1,
+                }}
+                title={language === 'si' ? 'Izbriši' : 'Delete'}
+              >×</button>
             </div>
           ))}
         </div>
       )}
 
+      {/* Messages area */}
       <div style={{
         flex: 1, overflowY: 'auto', minHeight: 0,
-        display: 'flex', flexDirection: 'column' as const, gap: spacing.xs, marginBottom: spacing.sm,
+        display: 'flex', flexDirection: 'column' as const, gap: spacing.xs,
+        marginBottom: spacing.sm,
       }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.xl }}>
@@ -733,7 +636,8 @@ Assistant:`;
             padding: `${spacing.xs} ${spacing.sm}`,
             fontSize: typography.fontSize.xs,
             border: msg.role === 'assistant' ? `1px solid ${c.border.light}` : 'none',
-            whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const,
+            whiteSpace: 'pre-wrap' as const,
+            wordBreak: 'break-word' as const,
           }}>
             {msg.content}
           </div>
@@ -753,8 +657,11 @@ Assistant:`;
         <div ref={chatEndRef} />
       </div>
 
+      {/* Input area */}
       <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0 }}>
-        <input ref={inputRef} value={input}
+        <input
+          ref={inputRef}
+          value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'}
@@ -766,13 +673,18 @@ Assistant:`;
             color: c.text.body, fontSize: typography.fontSize.xs, outline: 'none',
           }}
         />
-        <button onClick={handleSend} disabled={isGenerating || !input.trim()}
+        <button
+          onClick={handleSend}
+          disabled={isGenerating || !input.trim()}
           style={{
             background: c.primary[500], color: '#fff', border: 'none',
             borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`,
-            fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer',
-            opacity: isGenerating || !input.trim() ? 0.5 : 1, fontWeight: typography.fontWeight.semibold,
-          }}>
+            fontSize: typography.fontSize.xs,
+            cursor: isGenerating ? 'not-allowed' : 'pointer',
+            opacity: isGenerating || !input.trim() ? 0.5 : 1,
+            fontWeight: typography.fontWeight.semibold,
+          }}
+        >
           {isGenerating ? '...' : '➤'}
         </button>
       </div>
@@ -795,7 +707,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     return unsub;
   }, []);
 
-  // ★ v4.2: Scroll to top on mount
+  // Scroll to top on mount
   useEffect(() => {
     if (containerRef.current) containerRef.current.scrollTop = 0;
     const contentArea = document.getElementById('main-content-area');
@@ -803,13 +715,16 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     window.scrollTo(0, 0);
   }, []);
 
-  // Card order + drag-and-drop (HTML5 Drag-and-Drop API — NOT Ajax!)
+  // Card order + drag-and-drop (HTML5 Drag-and-Drop API)
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => {
     try {
       const saved = localStorage.getItem('euro-office-card-order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const allCards = [...new Set([...parsed.filter((c: string) => DEFAULT_CARD_ORDER.includes(c as CardId)), ...DEFAULT_CARD_ORDER])];
+        const allCards = [...new Set([
+          ...parsed.filter((cid: string) => DEFAULT_CARD_ORDER.includes(cid as CardId)),
+          ...DEFAULT_CARD_ORDER,
+        ])];
         return allCards as CardId[];
       }
     } catch {}
@@ -872,7 +787,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
         </p>
       </div>
 
-      {/* Cards Grid — 2-column, activity card spans full width */}
+      {/* Cards Grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -927,12 +842,16 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                           display: 'flex', alignItems: 'center', gap: spacing.sm,
                           padding: spacing.sm, borderRadius: radii.md,
                           border: `1px solid ${p.id === currentProjectId ? c.primary[400] : c.border.light}`,
-                          cursor: 'pointer', background: p.id === currentProjectId ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent',
+                          cursor: 'pointer',
+                          background: p.id === currentProjectId ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent',
                           transition: `all ${animation.duration.fast} ${animation.easing.default}`,
                         }}>
                         <ProgressRing percent={progress} size={40} strokeWidth={4} color={c.primary[500]} bgColor={c.border.light} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: c.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{
+                            fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold,
+                            color: c.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
                             {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
                           </div>
                           {p.acronym && <div style={{ fontSize: '10px', color: c.text.muted }}>{p.acronym}</div>}
@@ -962,13 +881,25 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm, justifyContent: 'center' }}>
-                    <div style={{ padding: spacing.sm, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main, border: `1px solid ${c.border.light}` }}>
+                    <div style={{
+                      padding: spacing.sm, borderRadius: radii.md,
+                      background: isDark ? c.surface.sidebar : c.surface.main,
+                      border: `1px solid ${c.border.light}`,
+                    }}>
                       <div style={{ fontSize: '20px', fontWeight: typography.fontWeight.bold, color: c.primary[600] }}>{totalProjects}</div>
-                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Skupaj projektov' : 'Total Projects'}</div>
+                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>
+                        {language === 'si' ? 'Skupaj projektov' : 'Total Projects'}
+                      </div>
                     </div>
-                    <div style={{ padding: spacing.sm, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main, border: `1px solid ${c.border.light}` }}>
+                    <div style={{
+                      padding: spacing.sm, borderRadius: radii.md,
+                      background: isDark ? c.surface.sidebar : c.surface.main,
+                      border: `1px solid ${c.border.light}`,
+                    }}>
                       <div style={{ fontSize: '20px', fontWeight: typography.fontWeight.bold, color: c.success[600] }}>{userOrgs.length}</div>
-                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Organizacije' : 'Organizations'}</div>
+                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>
+                        {language === 'si' ? 'Organizacije' : 'Organizations'}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -996,7 +927,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                         textAlign: 'left' as const,
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900] + '30' : c.primary[50]; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
                       <span>{item.icon}</span> {item.label}
                     </button>
                   ))}
@@ -1033,7 +965,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                             textAlign: 'left' as const, width: '100%',
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.surface.sidebar : c.surface.main; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
                           🏢 {org.name}
                         </button>
                       ))}
@@ -1046,7 +979,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
               {cardId === 'aiSettings' && (
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
                   <p style={{ fontSize: typography.fontSize.xs, color: c.text.muted, margin: 0 }}>
-                    {language === 'si' ? 'Konfigurirajte AI ponudnika in API ključ za generiranje vsebin.' : 'Configure your AI provider and API key for content generation.'}
+                    {language === 'si'
+                      ? 'Konfigurirajte AI ponudnika in API ključ za generiranje vsebin.'
+                      : 'Configure your AI provider and API key for content generation.'}
                   </p>
                   <button onClick={onOpenSettings} style={{
                     background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
@@ -1058,7 +993,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                 </div>
               )}
 
-              {/* ═══ PROJECT CHARTS CARD (wide = span 2) ═══ */}
+              {/* ═══ PROJECT CHARTS CARD (wide = full width) ═══ */}
               {cardId === 'activity' && (
                 <ProjectChartsCard
                   language={language} isDark={isDark} colors={c}
