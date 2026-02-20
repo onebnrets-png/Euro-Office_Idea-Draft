@@ -1,7 +1,8 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v4.0 — 2026-02-19
+// v4.1 — 2026-02-20
+//   ★ v4.1: FIX: Dashboard scroll — overflow: auto on main when in dashboard view
 //   ★ v4.0: Dashboard Home as default view after login
 //     - NEW: activeView state ('dashboard' | 'project')
 //     - NEW: DashboardHome component replaces auto-start step 1
@@ -110,7 +111,6 @@ const ApiWarningBanner = ({ onDismiss, onOpenSettings, language }: { onDismiss: 
     </div>
   );
 };
-
 /* ═══ MAIN APP COMPONENT ═══ */
 
 const App = () => {
@@ -198,7 +198,6 @@ const App = () => {
   const handleCreateProjectAndClose = async () => { try { await pm.handleCreateProject(); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(e.message); } };
   const handleDeleteProjectWrapped = async (projectId: string) => {
     await pm.handleDeleteProject(projectId);
-    // If no projects left, or the deleted project was the current one, go to dashboard
     if (pm.currentProjectId === projectId || pm.userProjects.length <= 1) {
       setActiveView('dashboard');
       setIsProjectListOpen(false);
@@ -256,7 +255,6 @@ const App = () => {
       </>
     );
   }
-
   /* ═══ AUTHENTICATED VIEW ═══ */
   return (
     <>
@@ -338,14 +336,15 @@ const App = () => {
           />
 
           {/* ═══ MAIN CONTENT ═══ */}
+          {/* ★ v4.1 FIX: overflow is 'auto' for dashboard (scrollable), 'hidden' for project (ProjectDisplay handles its own scroll) */}
           <main style={{
-            flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            flex: 1, display: 'flex', flexDirection: 'column',
+            overflow: activeView === 'dashboard' ? 'auto' : 'hidden',
             marginLeft: sidebarCollapsed ? 64 : 280, marginRight: 0,
             transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
 
             {/* ★ v4.0: Conditional rendering — Dashboard or Project */}
-            {/* Safety: if no project loaded but in project view, redirect to dashboard */}
             {activeView === 'dashboard' ? (
               /* ═══ DASHBOARD HOME VIEW ═══ */
               <DashboardHome
