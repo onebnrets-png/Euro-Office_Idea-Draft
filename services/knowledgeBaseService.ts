@@ -1,7 +1,7 @@
 // services/knowledgeBaseService.ts
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // Knowledge Base Service — document upload, text extraction, search
-// v1.0 — 2026-02-19
+// v1.1 — 2026-02-20
 //
 // FEATURES:
 //   - Upload documents (PDF, DOCX, XLSX, PPTX, JPG, PNG)
@@ -10,17 +10,15 @@
 //   - Search knowledge base by keyword matching
 //   - Max 10MB per file, max 50 docs per organization
 //   - Prepared for future vector/RAG upgrade (Approach B)
-// ═══════════════════════════════════════════════════════════════
+//
+// CHANGES v1.1:
+//   - FIX: Use shared supabase singleton from supabaseClient.ts
+//     instead of local createClient() which crashed with empty key
+// ═══════════════════════════════════════════════════════════════════
 
-import { createClient } from '@supabase/supabase-js';
-import { storageService } from './storageService.ts';
+import { supabase } from './supabaseClient';
 
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ─── Types ───────────────────────────────────────────────────
+// ——— Types ———————————————————————————————————————
 
 export interface KBDocument {
   id: string;
@@ -35,7 +33,7 @@ export interface KBDocument {
   updated_at: string;
 }
 
-// ─── Constants ───────────────────────────────────────────────
+// ——— Constants ———————————————————————————————————
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_DOCS_PER_ORG = 50;
@@ -50,7 +48,7 @@ const ALLOWED_TYPES = [
 ];
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'pptx', 'jpg', 'jpeg', 'png'];
 
-// ─── Text Extraction (client-side) ──────────────────────────
+// ——— Text Extraction (client-side) ——————————————
 
 async function extractTextFromFile(file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -124,7 +122,7 @@ async function extractTextFromFile(file: File): Promise<string> {
   return `[${ext.toUpperCase()}: ${file.name}]`;
 }
 
-// ─── Service ─────────────────────────────────────────────────
+// ——— Service ————————————————————————————————————
 
 export const knowledgeBaseService = {
 
@@ -263,40 +261,33 @@ export const knowledgeBaseService = {
 
       for (const doc of data) {
         if (!doc.extracted_text) continue;
-
-        // Split text into paragraphs/chunks (~500 chars each)
-        const chunks = doc.extracted_text.match(/.{1,500}(?:\s|$)/g) || [];
-
+        // Split into paragraphs/chunks (~500 chars each)
+        const chunks = doc.extracted_text.match(/.{1,500}/gs) || [];
         for (const chunk of chunks) {
-          const chunkLower = chunk.toLowerCase();
+          const lowerChunk = chunk.toLowerCase();
           let score = 0;
           for (const word of queryWords) {
-            if (chunkLower.includes(word)) score++;
+            if (lowerChunk.includes(word)) score++;
           }
           if (score > 0) {
-            scoredChunks.push({
-              text: chunk.trim(),
-              score,
-              source: doc.file_name,
-            });
+            scoredChunks.push({ text: chunk.trim(), score, source: doc.file_name });
           }
         }
       }
 
-      // Sort by relevance and return top chunks
+      // Sort by relevance score descending, take top N
       scoredChunks.sort((a, b) => b.score - a.score);
-      return scoredChunks
-        .slice(0, maxChunks)
-        .map(c => `[Source: ${c.source}]\n${c.text}`);
-
+      return scoredChunks.slice(0, maxChunks).map(c => `[${c.source}]: ${c.text}`);
     } catch (e) {
-      console.error('[KnowledgeBase] Search failed:', e);
+      console.error('[KnowledgeBase] Search error:', e);
       return [];
     }
   },
 
-  // Get all text from knowledge base for AI context (used for small KBs)
+  // Get ALL knowledge text for AI prompt (truncated to maxLength)
   async getAllKnowledgeText(orgId: string, maxLength: number = 8000): Promise<string> {
+    if (!orgId) return '';
+
     try {
       const { data, error } = await supabase
         .from('knowledge_base')
@@ -309,12 +300,17 @@ export const knowledgeBaseService = {
       let combined = '';
       for (const doc of data) {
         if (!doc.extracted_text) continue;
-        const addition = `\n--- [${doc.file_name}] ---\n${doc.extracted_text}\n`;
-        if ((combined + addition).length > maxLength) break;
-        combined += addition;
+        const docText = `\n--- ${doc.file_name} ---\n${doc.extracted_text}\n`;
+        if (combined.length + docText.length > maxLength) {
+          // Add as much as we can
+          combined += docText.substring(0, maxLength - combined.length);
+          break;
+        }
+        combined += docText;
       }
-      return combined;
-    } catch {
+      return combined.trim();
+    } catch (e) {
+      console.error('[KnowledgeBase] getAllKnowledgeText error:', e);
       return '';
     }
   },
