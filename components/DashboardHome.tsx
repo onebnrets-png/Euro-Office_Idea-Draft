@@ -1,13 +1,14 @@
 // components/DashboardHome.tsx
 // ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
-// v4.4 — 2026-02-20
+// v4.5 — 2026-02-20
 //
-// CHANGES v4.4:
-//   - NEW: ProgressRing (design system) shown in ProjectChartsCard
-//   - NEW: calculateCompleteness function for accurate project progress
+// CHANGES v4.5:
+//   - NEW: ProjectChartsCard auto-loads project data on click/hover
+//          (no more "Open project" button in the middle)
+//   - NEW: Left pane shows only ACRONYM (not full title)
+//   - NEW: ProgressRing (design system) shown in chart row
 //   - KEEP: Cards resizable (◂ ▸), empty grid slots as drop targets
-//   - KEEP: Project Charts card always full-width, horizontal chart scroll
 //   - KEEP: AI Chatbot, KB search, drag-and-drop reorder
 // ═══════════════════════════════════════════════════════════════════
 
@@ -191,7 +192,7 @@ const calculateCompleteness = (projectData: any): number => {
   return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
 };
 
-// ——— Simple progress helper (for project list) ————————
+// ——— Simple progress helper (for project list card) ————
 
 function getProjectProgress(projectData: any): number {
   if (!projectData) return 0;
@@ -208,7 +209,7 @@ function getProjectProgress(projectData: any): number {
   return Math.round((filled / total) * 100);
 }
 
-// ——— Local ProgressRing (used in project list only) ————
+// ——— Local ProgressRing (project list card only) ————
 
 const ProgressRing: React.FC<{ percent: number; size?: number; strokeWidth?: number; color: string; bgColor: string }> = ({
   percent, size = 64, strokeWidth = 6, color, bgColor
@@ -330,7 +331,7 @@ const DashboardCard: React.FC<CardProps> = ({
   );
 };
 
-// ——— Drop Zone — invisible placeholder for empty grid slots ———
+// ——— Drop Zone ———
 
 const DropZone: React.FC<{
   index: number; isDark: boolean; colors: any;
@@ -338,30 +339,23 @@ const DropZone: React.FC<{
   onDropAtEnd: (e: React.DragEvent) => void;
 }> = ({ index, isDark, colors: c, draggingId, onDropAtEnd }) => {
   const [isOver, setIsOver] = useState(false);
-
   if (!draggingId) return null;
-
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsOver(true); }}
       onDragLeave={() => setIsOver(false)}
       onDrop={(e) => { e.preventDefault(); setIsOver(false); onDropAtEnd(e); }}
       style={{
-        gridColumn: 'span 1',
-        minHeight: 80,
-        borderRadius: radii.xl,
+        gridColumn: 'span 1', minHeight: 80, borderRadius: radii.xl,
         border: `2px dashed ${isOver ? c.primary[400] : c.border.light}`,
         background: isOver ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.2s ease',
-        color: c.text.muted, fontSize: typography.fontSize.xs,
+        transition: 'all 0.2s ease', color: c.text.muted, fontSize: typography.fontSize.xs,
       }}
-    >
-      {isOver ? '↓' : ''}
-    </div>
+    >{isOver ? '↓' : ''}</div>
   );
 };
-// ——— Project Charts Card — horizontal layout WITH ProgressRing ———
+// ——— Project Charts Card — AUTO-LOAD on click/hover ———————
 
 const ProjectChartsCard: React.FC<{
   language: 'en' | 'si'; isDark: boolean; colors: any;
@@ -369,35 +363,94 @@ const ProjectChartsCard: React.FC<{
   currentProjectId: string | null;
   onOpenProject: (projectId: string) => void;
 }> = ({ language, isDark, colors: c, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [loadedData, setLoadedData] = useState<Record<string, any>>({});
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeId = selectedProjectId || currentProjectId || (projectsMeta.length > 0 ? projectsMeta[0]?.id : null);
+  // Seed the cache with the currently loaded project
+  useEffect(() => {
+    if (currentProjectId && projectData) {
+      setLoadedData(prev => ({ ...prev, [currentProjectId]: projectData }));
+      if (!activeProjectId) setActiveProjectId(currentProjectId);
+    }
+  }, [currentProjectId, projectData]);
+
+  // ★ Load project data from Supabase (async)
+  const loadProjectData = useCallback(async (projectId: string) => {
+    // Already cached?
+    if (loadedData[projectId]) {
+      setActiveProjectId(projectId);
+      return;
+    }
+    // Currently loaded project?
+    if (projectId === currentProjectId && projectData) {
+      setLoadedData(prev => ({ ...prev, [projectId]: projectData }));
+      setActiveProjectId(projectId);
+      return;
+    }
+    // Fetch from DB
+    setLoadingId(projectId);
+    setActiveProjectId(projectId);
+    try {
+      const data = await storageService.loadProject(language, projectId);
+      if (data) {
+        setLoadedData(prev => ({ ...prev, [projectId]: data }));
+      }
+    } catch (err) {
+      console.warn('ProjectChartsCard: Failed to load project', projectId, err);
+    } finally {
+      setLoadingId(null);
+    }
+  }, [loadedData, currentProjectId, projectData, language]);
+
+  // Click = immediate load
+  const handleClick = useCallback((projectId: string) => {
+    loadProjectData(projectId);
+  }, [loadProjectData]);
+
+  // Hover = load after 300ms delay
+  const handleMouseEnter = useCallback((projectId: string) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      loadProjectData(projectId);
+    }, 300);
+  }, [loadProjectData]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
+
+  // Cleanup timer
+  useEffect(() => {
+    return () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); };
+  }, []);
+
+  // Derive charts + completeness from cached data
+  const activeData = activeProjectId ? loadedData[activeProjectId] : null;
 
   const chartsData: ExtractedChartData[] | null = useMemo(() => {
-    if (!activeId || !projectData || activeId !== currentProjectId) return null;
-    try { return extractStructuralData(projectData); } catch { return null; }
-  }, [activeId, currentProjectId, projectData]);
+    if (!activeData) return null;
+    try { return extractStructuralData(activeData); } catch { return null; }
+  }, [activeData]);
 
-  // ★ v4.4: Calculate completeness for the loaded project
   const completeness = useMemo(() => {
-    if (!activeId || !projectData || activeId !== currentProjectId) return 0;
-    return calculateCompleteness(projectData);
-  }, [activeId, currentProjectId, projectData]);
+    if (!activeData) return 0;
+    return calculateCompleteness(activeData);
+  }, [activeData]);
 
-  const handleProjectClick = useCallback((projectId: string) => {
-    setSelectedProjectId(prev => prev === projectId ? null : projectId);
-  }, []);
-  const handleMouseEnter = useCallback((projectId: string) => { setHoveredProjectId(projectId); }, []);
-  const handleMouseLeave = useCallback(() => { setHoveredProjectId(null); }, []);
+  const isLoading = loadingId === activeProjectId;
 
   return (
     <div style={{ display: 'flex', gap: spacing.md, minHeight: 220 }}>
-      {/* ── Left pane: project list with mini progress rings ── */}
+      {/* ── Left pane: ACRONYM ONLY ── */}
       <div style={{
-        width: 160, minWidth: 140, flexShrink: 0,
+        width: 120, minWidth: 100, flexShrink: 0,
         borderRight: `1px solid ${c.border.light}`,
-        overflowY: 'auto', paddingRight: spacing.sm,
+        overflowY: 'auto', paddingRight: spacing.xs,
       }}>
         <div style={{ fontSize: '10px', color: c.text.muted, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
           {language === 'si' ? 'Projekti' : 'Projects'} ({projectsMeta.length})
@@ -408,85 +461,93 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
         {projectsMeta.map(p => {
-          const isSelected = p.id === selectedProjectId;
-          const isHovered = p.id === hoveredProjectId;
           const isCurrent = p.id === currentProjectId;
-          const isActive = isSelected || (!selectedProjectId && isCurrent);
-          // ★ v4.4: Mini completeness for the loaded project
-          const miniCompleteness = isCurrent && projectData ? calculateCompleteness(projectData) : 0;
+          const isActive = p.id === activeProjectId;
+          const isThisLoading = p.id === loadingId;
+          const acronym = p.acronym || p.title?.substring(0, 6) || '—';
+
           return (
             <div key={p.id}
               onMouseEnter={() => handleMouseEnter(p.id)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => handleProjectClick(p.id)}
+              onClick={() => handleClick(p.id)}
               style={{
-                padding: `4px ${spacing.xs}`, borderRadius: radii.sm, cursor: 'pointer',
-                background: isActive ? (isDark ? c.primary[900] + '60' : c.primary[100]) : isHovered ? (isDark ? c.primary[900] + '25' : c.primary[50]) : 'transparent',
-                borderLeft: isActive ? `3px solid ${c.primary[500]}` : isHovered ? `3px solid ${c.primary[300]}` : '3px solid transparent',
-                marginBottom: 2, transition: 'background 0.15s ease, border-left 0.15s ease',
+                padding: `6px ${spacing.xs}`, borderRadius: radii.sm, cursor: 'pointer',
+                background: isActive ? (isDark ? c.primary[900] + '60' : c.primary[100]) : 'transparent',
+                borderLeft: isActive ? `3px solid ${c.primary[500]}` : '3px solid transparent',
+                marginBottom: 3, transition: 'background 0.15s ease, border-left 0.15s ease',
                 display: 'flex', alignItems: 'center', gap: spacing.xs,
               }}>
-              {/* ★ v4.4: Mini ProgressRing per project */}
-              {isCurrent ? (
-                <DesignProgressRing value={miniCompleteness} size={24} strokeWidth={3} showLabel={true} labelSize="0.45rem" />
+              {/* Mini ProgressRing if data is cached */}
+              {loadedData[p.id] ? (
+                <DesignProgressRing value={calculateCompleteness(loadedData[p.id])} size={22} strokeWidth={3} showLabel={true} labelSize="0.4rem" />
               ) : (
                 <div style={{
-                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
                   background: isDark ? '#334155' : c.primary[50],
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '10px', color: c.text.muted, fontWeight: 700,
+                  fontSize: '9px', color: c.text.muted, fontWeight: 700,
                 }}>
-                  {(p.acronym || '?')[0]}
+                  {isThisLoading ? '…' : acronym[0]}
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '12px', fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.semibold, color: isActive ? c.primary[600] : c.text.heading, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {p.acronym || p.title?.substring(0, 10) || '—'}
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.semibold,
+                  color: isActive ? c.primary[600] : c.text.heading,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {acronym}
                 </div>
-                <div style={{ fontSize: '9px', color: c.text.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
-                </div>
-                {isCurrent && <div style={{ fontSize: '8px', color: c.success[600], fontWeight: typography.fontWeight.semibold }}>● {language === 'si' ? 'naložen' : 'loaded'}</div>}
+                {isCurrent && <div style={{ fontSize: '7px', color: c.success[600], fontWeight: typography.fontWeight.semibold }}>● {language === 'si' ? 'naložen' : 'loaded'}</div>}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* ── Right pane: ProgressRing + charts (horizontal scroll) ── */}
+      {/* ── Right pane: ProgressRing + charts ── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs }}>
-        {activeId && (() => {
-          const meta = projectsMeta.find(p => p.id === (hoveredProjectId || activeId));
+        {/* Header: active project info */}
+        {activeProjectId && (() => {
+          const meta = projectsMeta.find(p => p.id === activeProjectId);
           if (!meta) return null;
           return (
             <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs }}>
               {meta.acronym && <span style={{ fontSize: '11px', background: isDark ? c.primary[900] : c.primary[100], color: c.primary[700], padding: '2px 8px', borderRadius: radii.full, fontWeight: typography.fontWeight.bold }}>{meta.acronym}</span>}
               <span style={{ fontSize: typography.fontSize.xs, color: c.text.heading, fontWeight: typography.fontWeight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.title || meta.name || ''}</span>
+              {activeProjectId !== currentProjectId && (
+                <button onClick={(e) => { e.stopPropagation(); onOpenProject(activeProjectId); }}
+                  style={{ background: 'none', border: `1px solid ${c.border.light}`, borderRadius: radii.md, padding: '2px 8px', fontSize: '10px', cursor: 'pointer', color: c.primary[600], fontWeight: typography.fontWeight.semibold, marginLeft: 'auto', flexShrink: 0 }}>
+                  {language === 'si' ? 'Odpri' : 'Open'}
+                </button>
+              )}
             </div>
           );
         })()}
 
-        {!activeId && (
+        {/* No project selected */}
+        {!activeProjectId && (
           <div style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const, padding: spacing.xl, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {language === 'si' ? 'Izberite projekt za prikaz grafik' : 'Select a project to view charts'}
           </div>
         )}
 
-        {activeId && activeId !== currentProjectId && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
-            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
-              {language === 'si' ? 'Odprite projekt za prikaz grafik.' : 'Open this project to view its charts.'}
+        {/* Loading indicator */}
+        {activeProjectId && isLoading && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
+            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>
+              {language === 'si' ? 'Nalagam podatke...' : 'Loading data...'}
+              <span style={{ animation: 'pulse 1.5s infinite' }}> ●</span>
             </div>
-            <button onClick={(e) => { e.stopPropagation(); onOpenProject(activeId); }}
-              style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs, cursor: 'pointer', fontWeight: typography.fontWeight.semibold }}>
-              {language === 'si' ? 'Odpri projekt' : 'Open project'}
-            </button>
           </div>
         )}
 
-        {activeId && activeId === currentProjectId && (
+        {/* Charts row (data loaded) */}
+        {activeProjectId && !isLoading && activeData && (
           <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', display: 'flex', flexDirection: 'row' as const, gap: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start' }}>
-            {/* ★ v4.4: ProgressRing as FIRST element in the chart row */}
+            {/* ProgressRing as first element */}
             <div style={{
               flexShrink: 0, width: CHART_WIDTH,
               display: 'flex', flexDirection: 'column' as const,
@@ -502,9 +563,7 @@ const ProjectChartsCard: React.FC<{
                 <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>
                   {language === 'si' ? 'Zapolnjenost' : 'Completeness'}
                 </div>
-                <div style={{ fontSize: '10px', color: c.text.muted }}>
-                  {completeness}%
-                </div>
+                <div style={{ fontSize: '10px', color: c.text.muted }}>{completeness}%</div>
               </div>
             </div>
 
@@ -518,12 +577,20 @@ const ProjectChartsCard: React.FC<{
             {(!chartsData || chartsData.length === 0) && (
               <div style={{
                 flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: typography.fontSize.xs, color: c.text.muted, padding: spacing.lg,
-                fontStyle: 'italic',
+                fontSize: typography.fontSize.xs, color: c.text.muted, padding: spacing.lg, fontStyle: 'italic',
               }}>
-                {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
+                {language === 'si' ? 'Ni podatkov za grafike.' : 'No chart data available.'}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Data not loaded and not loading */}
+        {activeProjectId && !isLoading && !activeData && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontStyle: 'italic' }}>
+              {language === 'si' ? 'Podatki niso na voljo.' : 'Data not available.'}
+            </div>
           </div>
         )}
       </div>
@@ -649,13 +716,11 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     window.scrollTo(0, 0);
   }, []);
 
-  // Card order
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => {
     try { const s = localStorage.getItem('euro-office-card-order'); if (s) { const p = JSON.parse(s); return [...new Set([...p.filter((x: string) => DEFAULT_CARD_ORDER.includes(x as CardId)), ...DEFAULT_CARD_ORDER])] as CardId[]; } } catch {}
     return DEFAULT_CARD_ORDER;
   });
 
-  // Card sizes (colSpan per card)
   const [cardSizes, setCardSizes] = useState<Record<string, number>>(() => {
     try { const s = localStorage.getItem('euro-office-card-sizes'); if (s) return JSON.parse(s); } catch {}
     return {};
@@ -702,7 +767,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
   const orgName = activeOrg?.name || (language === 'si' ? 'Osebni prostor' : 'Personal workspace');
   const t = TEXT[language] || TEXT.en;
 
-  // Visible cards (filter admin for non-admins)
   const visibleCards = cardOrder.filter(id => !(id === 'admin' && !isAdmin));
 
   return (
@@ -837,7 +901,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
           );
         })}
 
-        {/* Drop zone at the end of the grid */}
         <DropZone index={visibleCards.length} isDark={isDark} colors={c} draggingId={draggingId} onDropAtEnd={handleDropAtEnd} />
       </div>
     </div>
