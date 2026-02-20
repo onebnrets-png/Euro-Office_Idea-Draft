@@ -1,16 +1,18 @@
 // components/DashboardHome.tsx
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
-// v3.0 — 2026-02-19
+// v4.0 — 2026-02-20
 //
-// CHANGES v3.0:
+// CHANGES v4.0:
 //   - FIX: Admin card tabs use correct AdminPanel tab keys (errors, not errorLog)
-//   - NEW: Activity card uses ChartRenderer + extractStructuralData (same as DashboardPanel)
+//   - NEW: Activity card → Project Charts Card with hover/click project selection
+//     Shows SAME charts as DashboardPanel (radar, donut, stacked-bar, comparison-bar)
 //   - NEW: AI Chatbot with conversation history (up to 20 convos, localStorage)
 //   - NEW: AI Chatbot searches Knowledge Base + Organization Rules before external AI
 //   - NEW: Chat session management (new/switch/delete conversations)
 //   - Reverted card titles to original names
-// ═══════════════════════════════════════════════════════════════
+//   - Knowledge Base uses shared supabase client (not local createClient)
+// ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from '../design/theme.ts';
@@ -23,7 +25,7 @@ import { generateContent } from '../services/aiProvider.ts';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
 import ChartRenderer from './ChartRenderer.tsx';
 
-// ─── Types ───────────────────────────────────────────────────
+// ——— Types ———————————————————————————————————————
 
 interface DashboardHomeProps {
   language: 'en' | 'si';
@@ -61,7 +63,7 @@ const DEFAULT_CARD_ORDER: CardId[] = ['projects', 'chatbot', 'statistics', 'admi
 const CHAT_STORAGE_KEY = 'euro-office-chat-conversations';
 const MAX_CONVERSATIONS = 20;
 
-// ─── Helpers ─────────────────────────────────────────────────
+// ——— Helpers —————————————————————————————————————
 
 function getProjectProgress(projectData: any): number {
   if (!projectData) return 0;
@@ -77,8 +79,7 @@ function getProjectProgress(projectData: any): number {
   if (projectData.impacts?.some((o: any) => o.title?.trim())) filled++;
   return Math.round((filled / total) * 100);
 }
-
-// ─── Progress Ring SVG ──────────────────────────────────────
+// ——— Progress Ring SVG ——————————————————————————
 
 const ProgressRing: React.FC<{ percent: number; size?: number; strokeWidth?: number; color: string; bgColor: string }> = ({
   percent, size = 64, strokeWidth = 6, color, bgColor
@@ -96,7 +97,7 @@ const ProgressRing: React.FC<{ percent: number; size?: number; strokeWidth?: num
   );
 };
 
-// ─── Card Wrapper Component ─────────────────────────────────
+// ——— Card Wrapper Component ————————————————————
 
 interface CardProps {
   id: CardId; title: string; icon: string; children: React.ReactNode;
@@ -130,7 +131,173 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
   );
 };
 
-// ─── AI Chatbot with Conversations + Knowledge Base ─────────
+// ——— Project Charts Card (replaces old Recent Activity) ———————
+
+const ProjectChartsCard: React.FC<{
+  language: 'en' | 'si';
+  isDark: boolean;
+  colors: any;
+  projectsMeta: any[];
+  projectData: any;
+  currentProjectId: string | null;
+  onOpenProject: (projectId: string) => void;
+}> = ({ language, isDark, colors: c, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const activeId = selectedProjectId || hoveredProjectId || (projectsMeta.length > 0 ? projectsMeta[0].id : null);
+
+  const chartsData = useMemo(() => {
+    if (!activeId || !projectData) return null;
+    if (activeId === currentProjectId && projectData) {
+      try {
+        return extractStructuralData(projectData);
+      } catch { return null; }
+    }
+    return null;
+  }, [activeId, currentProjectId, projectData]);
+
+  const activeMeta = projectsMeta.find(p => p.id === activeId);
+
+  return (
+    <div style={{ display: 'flex', gap: spacing.md, height: '100%', minHeight: 280 }}>
+      {/* LEFT: Project list */}
+      <div style={{
+        width: 200, minWidth: 180, flexShrink: 0,
+        borderRight: `1px solid ${c.border.light}`,
+        overflowY: 'auto', paddingRight: spacing.sm,
+      }}>
+        <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+          {language === 'si' ? 'Projekti' : 'Projects'} ({projectsMeta.length})
+        </div>
+        {projectsMeta.length === 0 && (
+          <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontStyle: 'italic' }}>
+            {language === 'si' ? 'Ni projektov' : 'No projects'}
+          </div>
+        )}
+        {projectsMeta.map(p => {
+          const isActive = p.id === activeId;
+          return (
+            <div
+              key={p.id}
+              onMouseEnter={() => setHoveredProjectId(p.id)}
+              onMouseLeave={() => setHoveredProjectId(null)}
+              onClick={() => setSelectedProjectId(prev => prev === p.id ? null : p.id)}
+              style={{
+                padding: `${spacing.xs} ${spacing.sm}`,
+                borderRadius: radii.md,
+                cursor: 'pointer',
+                background: isActive ? (isDark ? c.primary[900] + '40' : c.primary[50]) : 'transparent',
+                borderLeft: isActive ? `3px solid ${c.primary[500]}` : '3px solid transparent',
+                marginBottom: 2,
+                transition: `all ${animation.duration.fast} ${animation.easing.default}`,
+              }}
+            >
+              <div style={{
+                fontSize: typography.fontSize.xs,
+                fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.medium,
+                color: isActive ? c.primary[600] : c.text.body,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
+              </div>
+              {p.acronym && (
+                <div style={{ fontSize: '10px', color: c.text.muted }}>{p.acronym}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* RIGHT: Charts for selected/hovered project */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
+        {activeMeta && (
+          <div style={{ marginBottom: spacing.xs }}>
+            <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>
+              {activeMeta.title || activeMeta.name || 'Project'}
+            </div>
+            {activeMeta.acronym && (
+              <span style={{
+                fontSize: '10px', background: isDark ? c.primary[900] : c.primary[100], color: c.primary[700],
+                padding: '1px 6px', borderRadius: radii.full, fontWeight: typography.fontWeight.semibold,
+              }}>
+                {activeMeta.acronym}
+              </span>
+            )}
+          </div>
+        )}
+
+        {!activeId && (
+          <div style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const, padding: spacing.xl }}>
+            {language === 'si' ? 'Izberite projekt za prikaz grafik' : 'Select a project to view charts'}
+          </div>
+        )}
+
+        {activeId && !chartsData && activeId !== currentProjectId && (
+          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
+            <div style={{ marginBottom: spacing.sm }}>
+              {language === 'si'
+                ? 'Grafike so prikazane za trenutno naložen projekt. Odprite ta projekt za prikaz.'
+                : 'Charts are shown for the currently loaded project. Open this project to view its charts.'}
+            </div>
+            <button
+              onClick={() => onOpenProject(activeId)}
+              style={{
+                background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
+                padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
+                cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+              }}
+            >
+              {language === 'si' ? 'Odpri projekt' : 'Open project'}
+            </button>
+          </div>
+        )}
+
+        {activeId && chartsData && chartsData.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: spacing.sm,
+          }}>
+            {chartsData.map((chart: any, idx: number) => (
+              <div key={idx} style={{
+                background: isDark ? c.surface.sidebar : c.surface.main,
+                borderRadius: radii.lg,
+                border: `1px solid ${c.border.light}`,
+                padding: spacing.sm,
+                minHeight: 160,
+              }}>
+                <div style={{
+                  fontSize: '10px', fontWeight: typography.fontWeight.semibold,
+                  color: c.text.muted, marginBottom: spacing.xs,
+                  textTransform: 'uppercase' as const, letterSpacing: '0.05em',
+                }}>
+                  {chart.title || chart.type}
+                </div>
+                <div style={{ height: 140 }}>
+                  <ChartRenderer data={chart} compact={true} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeId && chartsData && chartsData.length === 0 && (
+          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
+            {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
+          </div>
+        )}
+
+        {activeId && activeId === currentProjectId && !chartsData && (
+          <div style={{ color: c.text.muted, fontSize: typography.fontSize.xs, textAlign: 'center' as const, padding: spacing.lg }}>
+            {language === 'si' ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.' : 'No chart data. Fill in project sections first.'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+// ——— AI Chatbot with Conversations + Knowledge Base ———————————
 
 const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null }> = ({ language, isDark, colors: c, activeOrg }) => {
   const [conversations, setConversations] = useState<ChatConversation[]>(() => {
@@ -206,374 +373,515 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
     setIsGenerating(true);
 
     try {
-      const provider = storageService.getAIProvider();
-      let hasKey = false;
-      if (provider === 'gemini') hasKey = !!(storageService.getApiKey());
-      else if (provider === 'openai') hasKey = !!(storageService.getOpenAIKey());
-      else if (provider === 'openrouter') hasKey = !!(storageService.getOpenRouterKey());
-
-      if (!hasKey) {
-        const errMsg: ChatMessage = { role: 'assistant', content: language === 'si' ? '⚠️ API ključ ni nastavljen.' : '⚠️ No API key configured.', timestamp: Date.now() };
-        updateConvoMessages(convoId, [...currentMessages, errMsg]);
-        setIsGenerating(false);
-        return;
-      }
-
-      // ★ KNOWLEDGE BASE + RULES SEARCH
+      // Search Knowledge Base + Org Rules
       let kbContext = '';
-      let rulesContext = '';
-      const orgId = activeOrg?.id || storageService.getActiveOrgId();
+      let orgRules = '';
 
-      if (orgId) {
-        // Search knowledge base
-        const kbResults = await knowledgeBaseService.searchKnowledgeBase(orgId, trimmed, 3);
-        if (kbResults.length > 0) {
-          kbContext = `\n\n=== KNOWLEDGE BASE (organization documents) ===\n${kbResults.join('\n\n')}\n=== END KNOWLEDGE BASE ===\n`;
+      if (activeOrg?.id) {
+        try {
+          const kbResults = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5);
+          if (kbResults.length > 0) {
+            kbContext = '\n\n--- KNOWLEDGE BASE (internal documents) ---\n' + kbResults.join('\n\n');
+          }
+        } catch (e) {
+          console.warn('[Chatbot] KB search failed:', e);
         }
 
-        // Get organization rules
         try {
-          const orgInstructions = await organizationService.getActiveOrgInstructions();
-          if (orgInstructions) {
-            const rulesText = typeof orgInstructions === 'string' ? orgInstructions : JSON.stringify(orgInstructions);
-            if (rulesText.length > 10) {
-              rulesContext = `\n\n=== ORGANIZATION RULES ===\n${rulesText.substring(0, 3000)}\n=== END RULES ===\n`;
-            }
+          const instructions = await organizationService.getActiveOrgInstructions?.(activeOrg.id);
+          if (instructions) {
+            orgRules = '\n\n--- ORGANIZATION RULES ---\n' + instructions;
           }
         } catch {}
       }
 
-      const systemPrompt = language === 'si'
-        ? `Si Euro-Office AI asistent, specializiran za EU projekt management in intervencijsko logiko. VEDNO najprej preveri priloženo BAZO ZNANJA in PRAVILA organizacije. Če najdeš relevantne informacije tam, jih uporabi kot primarni vir. Šele če v bazi znanja ni odgovora, uporabi svoje splošno znanje. Vedno navedi vir, če je iz baze znanja. Odgovarjaš v slovenščini.`
-        : `You are the Euro-Office AI assistant, specialized in EU project management and intervention logic. ALWAYS check the attached KNOWLEDGE BASE and ORGANIZATION RULES first. If you find relevant information there, use it as the primary source. Only if the knowledge base doesn't contain the answer, use your general knowledge. Always cite the source if from the knowledge base. Be friendly, professional, and concise.`;
-
-      const conversationHistory = currentMessages.slice(-10).map(m =>
+      // Build prompt
+      const historyContext = currentMessages.slice(-10).map(m =>
         `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
       ).join('\n');
 
-      const fullPrompt = `${systemPrompt}${kbContext}${rulesContext}\n\n${conversationHistory}\n\nAssistant:`;
+      const fullPrompt = `You are EURO-OFFICE AI Assistant, helping with EU project management (intervention logic).
+Language: ${language === 'si' ? 'Slovenian' : 'English'}
+${kbContext}
+${orgRules}
+
+Conversation history:
+${historyContext}
+
+User: ${trimmed}
+
+Instructions:
+- FIRST check the KNOWLEDGE BASE context above for relevant information
+- THEN check ORGANIZATION RULES for any specific guidelines
+- Answer in ${language === 'si' ? 'Slovenian' : 'English'}
+- Be helpful, precise, and professional
+- If the knowledge base has relevant info, cite the source document name Assistant:`;
 
       const result = await generateContent({ prompt: fullPrompt });
+      const aiResponse = result?.text || (language === 'si' ? 'Napaka pri generiranju odgovora.' : 'Error generating response.');
 
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: result.text || (language === 'si' ? 'Ni bilo mogoče generirati odgovora.' : 'Could not generate a response.'),
-        timestamp: Date.now(),
-      };
+      const assistantMsg: ChatMessage = { role: 'assistant', content: aiResponse, timestamp: Date.now() };
       updateConvoMessages(convoId, [...currentMessages, assistantMsg]);
-    } catch (err: any) {
-      const errMsg: ChatMessage = { role: 'assistant', content: `❌ ${err.message || 'Error'}`, timestamp: Date.now() };
-      updateConvoMessages(convoId, [...currentMessages, errMsg]);
+    } catch (e: any) {
+      const errorMsg: ChatMessage = {
+        role: 'assistant',
+        content: language === 'si'
+          ? `Napaka: ${e.message || 'Neznana napaka'}. Preverite AI nastavitve.`
+          : `Error: ${e.message || 'Unknown error'}. Check AI settings.`,
+        timestamp: Date.now()
+      };
+      updateConvoMessages(convoId, [...currentMessages, errorMsg]);
     } finally {
       setIsGenerating(false);
       inputRef.current?.focus();
     }
-  }, [input, isGenerating, messages, language, activeConvoId, activeOrg, updateConvoMessages]);
+  }, [input, isGenerating, activeConvoId, messages, activeOrg, language, updateConvoMessages]);
 
+  // ——— Chatbot Render ———
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 320, maxHeight: 480 }}>
-      {/* Conversation header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm, flexShrink: 0 }}>
-        <button onClick={() => setShowHistory(!showHistory)} style={{
-          padding: `2px ${spacing.sm}`, borderRadius: radii.md, border: `1px solid ${c.border.light}`,
-          background: showHistory ? (isDark ? c.primary[900] : c.primary[50]) : 'transparent',
-          color: c.text.body, cursor: 'pointer', fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.sans,
-        }}>
-          {language === 'si' ? `📋 ${conversations.length}` : `📋 ${conversations.length}`}
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', minHeight: 300 }}>
+      {/* Top bar: New chat + History toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, flexShrink: 0 }}>
         <button onClick={createNewConvo} style={{
-          padding: `2px ${spacing.sm}`, borderRadius: radii.md, border: `1px solid ${c.border.light}`,
-          background: 'transparent', color: c.primary[500], cursor: 'pointer', fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.sans,
+          background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
+          padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs,
+          cursor: 'pointer', fontWeight: typography.fontWeight.semibold, display: 'flex', alignItems: 'center', gap: '4px',
         }}>
-          + {language === 'si' ? 'Nov' : 'New'}
+          + {language === 'si' ? 'Nov pogovor' : 'New chat'}
         </button>
-        {activeConvo && (
-          <span style={{ fontSize: typography.fontSize.xs, color: c.text.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {activeConvo.title}
-          </span>
-        )}
+        <button onClick={() => setShowHistory(!showHistory)} style={{
+          background: showHistory ? c.primary[100] : 'transparent', color: c.text.body,
+          border: `1px solid ${c.border.light}`, borderRadius: radii.md,
+          padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs, cursor: 'pointer',
+        }}>
+          {language === 'si' ? `Zgodovina (${conversations.length})` : `History (${conversations.length})`}
+        </button>
         {conversations.length >= MAX_CONVERSATIONS && (
-          <span style={{ fontSize: '10px', color: c.warning[500] }}>⚠️ {MAX_CONVERSATIONS} max</span>
+          <span style={{ fontSize: '10px', color: c.warning[600] }}>
+            {language === 'si' ? 'Maks. dosežen!' : 'Max reached!'}
+          </span>
         )}
       </div>
 
-      {/* History panel */}
+      {/* History panel (collapsible) */}
       {showHistory && (
-        <div style={{ maxHeight: 150, overflowY: 'auto', borderRadius: radii.md, border: `1px solid ${c.border.light}`, marginBottom: spacing.sm, flexShrink: 0 }}>
-          {conversations.length === 0 ? (
-            <p style={{ padding: spacing.sm, fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center', margin: 0 }}>
+        <div style={{
+          maxHeight: 150, overflowY: 'auto', marginBottom: spacing.sm,
+          border: `1px solid ${c.border.light}`, borderRadius: radii.md,
+          background: isDark ? c.surface.sidebar : c.surface.main,
+        }}>
+          {conversations.length === 0 && (
+            <div style={{ padding: spacing.sm, fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
               {language === 'si' ? 'Ni pogovorov' : 'No conversations'}
-            </p>
-          ) : conversations.map(convo => (
-            <div key={convo.id} style={{
-              display: 'flex', alignItems: 'center', gap: spacing.xs, padding: `4px ${spacing.sm}`,
-              background: convo.id === activeConvoId ? (isDark ? c.primary[900] : c.primary[50]) : 'transparent',
-              borderBottom: `1px solid ${c.border.light}`, cursor: 'pointer',
-            }} onClick={() => { setActiveConvoId(convo.id); setShowHistory(false); }}>
-              <span style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {convo.title}
-              </span>
-              <span style={{ fontSize: '10px', color: c.text.muted, flexShrink: 0 }}>
-                {convo.messages.length} msg
-              </span>
-              <button onClick={(e) => { e.stopPropagation(); deleteConvo(convo.id); }} style={{
-                background: 'none', border: 'none', color: c.error[400], cursor: 'pointer', padding: '2px', fontSize: '12px', flexShrink: 0,
-              }}>✕</button>
+            </div>
+          )}
+          {conversations.map(conv => (
+            <div key={conv.id} style={{
+              display: 'flex', alignItems: 'center', gap: spacing.xs,
+              padding: `${spacing.xs} ${spacing.sm}`,
+              background: conv.id === activeConvoId ? (isDark ? c.primary[900] + '30' : c.primary[50]) : 'transparent',
+              cursor: 'pointer', borderBottom: `1px solid ${c.border.light}`,
+            }}>
+              <div
+                onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }}
+                style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {conv.title}
+              </div>
+              <div style={{ fontSize: '9px', color: c.text.muted, flexShrink: 0 }}>
+                {new Date(conv.updatedAt).toLocaleDateString()}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }}
+                style={{ background: 'none', border: 'none', color: c.error[500], cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1 }}
+                title={language === 'si' ? 'Izbriši' : 'Delete'}
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: spacing.sm, paddingRight: spacing.xs, minHeight: 0 }} className="custom-scrollbar">
+      {/* Messages area */}
+      <div style={{
+        flex: 1, overflowY: 'auto', minHeight: 0,
+        display: 'flex', flexDirection: 'column' as const, gap: spacing.xs,
+        marginBottom: spacing.sm,
+      }}>
         {messages.length === 0 && (
-          <div style={{ textAlign: 'center', padding: spacing.xl, color: c.text.muted }}>
-            <span style={{ fontSize: '32px', display: 'block', marginBottom: spacing.sm }}>🤖</span>
-            <p style={{ fontSize: typography.fontSize.sm, margin: 0 }}>
-              {language === 'si' ? 'Pozdravljeni! Vprašajte me karkoli — najprej preverim vašo bazo znanja.' : 'Hello! Ask me anything — I check your knowledge base first.'}
-            </p>
+          <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.xl }}>
+            {language === 'si'
+              ? 'Pozdravljen! Sem EURO-OFFICE AI pomočnik. Vprašajte me karkoli o EU projektih.'
+              : 'Hello! I\'m the EURO-OFFICE AI Assistant. Ask me anything about EU projects.'}
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-            <div style={{
-              maxWidth: '85%', padding: `${spacing.sm} ${spacing.md}`,
-              borderRadius: msg.role === 'user' ? `${radii.lg} ${radii.lg} ${radii.sm} ${radii.lg}` : `${radii.lg} ${radii.lg} ${radii.lg} ${radii.sm}`,
-              background: msg.role === 'user' ? (isDark ? c.primary[800] : c.primary[50]) : (isDark ? c.surface.sidebar : c.surface.background),
-              border: `1px solid ${msg.role === 'user' ? (isDark ? c.primary[700] : c.primary[200]) : c.border.light}`,
-              color: c.text.body, fontSize: typography.fontSize.sm, lineHeight: '1.5', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const,
-            }}>{msg.content}</div>
+        {messages.map((msg, idx) => (
+          <div key={idx} style={{
+            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '85%',
+            background: msg.role === 'user' ? c.primary[500] : (isDark ? c.surface.sidebar : c.surface.main),
+            color: msg.role === 'user' ? '#fff' : c.text.body,
+            borderRadius: radii.lg,
+            padding: `${spacing.xs} ${spacing.sm}`,
+            fontSize: typography.fontSize.xs,
+            border: msg.role === 'assistant' ? `1px solid ${c.border.light}` : 'none',
+            whiteSpace: 'pre-wrap' as const,
+            wordBreak: 'break-word' as const,
+          }}>
+            {msg.content}
           </div>
         ))}
         {isGenerating && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <div style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: `${radii.lg} ${radii.lg} ${radii.lg} ${radii.sm}`, background: isDark ? c.surface.sidebar : c.surface.background, border: `1px solid ${c.border.light}`, color: c.text.muted, fontSize: typography.fontSize.sm }}>
-              <span style={{ animation: 'pulse 1.5s infinite' }}>●</span><span style={{ animation: 'pulse 1.5s infinite 0.3s' }}> ●</span><span style={{ animation: 'pulse 1.5s infinite 0.6s' }}> ●</span>
-            </div>
+          <div style={{
+            alignSelf: 'flex-start', maxWidth: '85%',
+            background: isDark ? c.surface.sidebar : c.surface.main,
+            borderRadius: radii.lg, padding: `${spacing.xs} ${spacing.sm}`,
+            fontSize: typography.fontSize.xs, color: c.text.muted,
+            border: `1px solid ${c.border.light}`,
+          }}>
+            {language === 'si' ? 'Generiram...' : 'Generating...'}
+            <span style={{ animation: 'pulse 1.5s infinite' }}> ●</span>
           </div>
         )}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
-      <div style={{ display: 'flex', gap: spacing.sm, paddingTop: spacing.md, borderTop: `1px solid ${c.border.light}`, marginTop: spacing.sm, flexShrink: 0 }}>
-        <input ref={inputRef} type="text" value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-          placeholder={language === 'si' ? 'Vprašajte karkoli...' : 'Ask anything...'}
+      {/* Input area */}
+      <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0 }}>
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'}
           disabled={isGenerating}
-          style={{ flex: 1, padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: `1px solid ${c.border.medium}`, background: isDark ? c.surface.background : '#FFFFFF', color: c.text.heading, fontSize: typography.fontSize.sm, fontFamily: typography.fontFamily.sans, outline: 'none' }}
+          style={{
+            flex: 1, padding: `${spacing.xs} ${spacing.sm}`,
+            borderRadius: radii.md, border: `1px solid ${c.border.light}`,
+            background: isDark ? c.surface.sidebar : c.surface.main,
+            color: c.text.body, fontSize: typography.fontSize.xs,
+            outline: 'none',
+          }}
         />
-        <button onClick={handleSend} disabled={!input.trim() || isGenerating}
-          style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: 'none', background: c.primary[500], color: '#FFFFFF', cursor: !input.trim() || isGenerating ? 'not-allowed' : 'pointer', opacity: !input.trim() || isGenerating ? 0.5 : 1, display: 'flex', alignItems: 'center', fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+        <button
+          onClick={handleSend}
+          disabled={isGenerating || !input.trim()}
+          style={{
+            background: c.primary[500], color: '#fff', border: 'none',
+            borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`,
+            fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer',
+            opacity: isGenerating || !input.trim() ? 0.5 : 1,
+            fontWeight: typography.fontWeight.semibold,
+          }}
+        >
+          {isGenerating ? '...' : '➤'}
         </button>
       </div>
     </div>
   );
 };
-
-// ═══════════════════════════════════════════════════════════════
-// MAIN DASHBOARD COMPONENT
-// ═══════════════════════════════════════════════════════════════
+// ——— Main DashboardHome Component ————————————————
 
 const DashboardHome: React.FC<DashboardHomeProps> = ({
   language, projectsMeta, currentProjectId, projectData, activeOrg, userOrgs,
   isAdmin, onOpenProject, onCreateProject, onOpenAdmin, onOpenSettings, onSwitchOrg,
 }) => {
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
-  useEffect(() => { const unsub = onThemeChange((m) => setIsDark(m === 'dark')); return unsub; }, []);
   const c = isDark ? darkColors : lightColors;
-  const isSuperAdmin = storageService.isSuperAdmin();
-  const t = TEXT[language] || TEXT['en'];
 
-  // Charts from DashboardPanel's extractStructuralData
-  const structuralCharts = useMemo(() => extractStructuralData(projectData), [projectData]);
+  useEffect(() => {
+    const unsub = onThemeChange((mode) => setIsDark(mode === 'dark'));
+    return unsub;
+  }, []);
 
+  // Card order + drag-and-drop
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => {
-    try { const s = localStorage.getItem('euro-office-dashboard-layout'); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) return p; } } catch {} return DEFAULT_CARD_ORDER;
+    try {
+      const saved = localStorage.getItem('euro-office-card-order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure all default cards are present
+        const allCards = [...new Set([...parsed.filter((c: string) => DEFAULT_CARD_ORDER.includes(c as CardId)), ...DEFAULT_CARD_ORDER])];
+        return allCards as CardId[];
+      }
+    } catch {}
+    return DEFAULT_CARD_ORDER;
   });
   const [draggingId, setDraggingId] = useState<CardId | null>(null);
-  useEffect(() => { try { localStorage.setItem('euro-office-dashboard-layout', JSON.stringify(cardOrder)); } catch {} }, [cardOrder]);
 
-  const dragHandlers = {
-    onDragStart: (e: React.DragEvent, id: CardId) => { setDraggingId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); },
-    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
-    onDrop: (e: React.DragEvent, targetId: CardId) => { e.preventDefault(); const sourceId = e.dataTransfer.getData('text/plain') as CardId; if (sourceId === targetId) return; setCardOrder(prev => { const n = [...prev]; const si = n.indexOf(sourceId); const ti = n.indexOf(targetId); if (si === -1 || ti === -1) return prev; n.splice(si, 1); n.splice(ti, 0, sourceId); return n; }); },
-    onDragEnd: () => { setDraggingId(null); },
-  };
+  useEffect(() => {
+    try { localStorage.setItem('euro-office-card-order', JSON.stringify(cardOrder)); } catch {}
+  }, [cardOrder]);
 
-  const visibleCards = cardOrder.filter(id => { if (id === 'admin' && !isAdmin && !isSuperAdmin) return false; return true; });
+  const dragHandlers = useMemo(() => ({
+    onDragStart: (e: React.DragEvent, id: CardId) => {
+      setDraggingId(id);
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    },
+    onDrop: (e: React.DragEvent, targetId: CardId) => {
+      e.preventDefault();
+      if (!draggingId || draggingId === targetId) return;
+      setCardOrder(prev => {
+        const newOrder = [...prev];
+        const fromIdx = newOrder.indexOf(draggingId);
+        const toIdx = newOrder.indexOf(targetId);
+        if (fromIdx === -1 || toIdx === -1) return prev;
+        newOrder.splice(fromIdx, 1);
+        newOrder.splice(toIdx, 0, draggingId);
+        return newOrder;
+      });
+      setDraggingId(null);
+    },
+    onDragEnd: () => setDraggingId(null),
+  }), [draggingId]);
 
-  const renderCard = (id: CardId) => {
-    const commonProps = { isDark, colors: c, dragHandlers, draggingId };
-
-    switch (id) {
-      case 'projects':
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'Moji projekti' : 'My Projects'} icon="📁" {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
-              {projectsMeta.length === 0 ? (
-                <p style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center', padding: spacing.lg }}>
-                  {language === 'si' ? 'Še nimate projektov. Ustvarite prvega!' : 'No projects yet. Create your first one!'}
-                </p>
-              ) : projectsMeta.slice(0, 5).map((proj: any) => (
-                <button key={proj.id} onClick={() => onOpenProject(proj.id)} style={{ display: 'flex', alignItems: 'center', gap: spacing.md, padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: `1px solid ${proj.id === currentProjectId ? c.primary[300] : c.border.light}`, background: proj.id === currentProjectId ? (isDark ? `${c.primary[500]}15` : c.primary[50]) : 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: typography.fontFamily.sans, transition: `all ${animation.duration.fast}` }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: c.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{proj.title || t.projects.untitled}</p>
-                    <p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted }}>{new Date(proj.updatedAt || proj.createdAt).toLocaleDateString(language === 'si' ? 'sl-SI' : 'en-GB')}</p>
-                  </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.text.muted} strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
-                </button>
-              ))}
-              <button onClick={onCreateProject} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: `1px dashed ${c.border.medium}`, background: 'transparent', color: c.primary[500], cursor: 'pointer', width: '100%', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, fontFamily: typography.fontFamily.sans }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                {language === 'si' ? 'Nov projekt' : 'New Project'}
-              </button>
-            </div>
-          </DashboardCard>
-        );
-
-      case 'chatbot':
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'AI Asistent' : 'AI Assistant'} icon="🤖" wide {...commonProps}>
-            <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} />
-          </DashboardCard>
-        );
-
-      case 'statistics': {
-        const progress = getProjectProgress(projectData);
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'Hitra statistika' : 'Quick Statistics'} icon="📊" {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.lg }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <ProgressRing percent={progress} size={72} strokeWidth={7} color={c.primary[500]} bgColor={isDark ? c.border.light : '#E2E8F0'} />
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: c.text.heading }}>{progress}%</div>
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: c.text.heading }}>{projectsMeta.length} {language === 'si' ? 'projektov' : 'projects'}</p>
-                  <p style={{ margin: `2px 0 0`, fontSize: typography.fontSize.xs, color: c.text.muted }}>{activeOrg?.name || '—'} · {storageService.getAIProvider()?.toUpperCase() || '—'}</p>
-                </div>
-              </div>
-            </div>
-          </DashboardCard>
-        );
-      }
-
-      case 'admin':
-        return (
-          <DashboardCard key={id} id={id} title={isSuperAdmin ? 'Super Admin' : 'Admin'} icon={isSuperAdmin ? '👑' : '🛡️'} {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
-              {[
-                { label: language === 'si' ? 'Uporabniki' : 'Users', tab: 'users', icon: '👥' },
-                { label: language === 'si' ? 'Dnevnik napak' : 'Error Log', tab: 'errors', icon: '📋' },
-                { label: language === 'si' ? 'Pravila' : 'Instructions', tab: 'instructions', icon: '📝' },
-                { label: language === 'si' ? 'Baza znanja' : 'Knowledge Base', tab: 'knowledge', icon: '📚' },
-                { label: language === 'si' ? 'AI nastavitve' : 'AI Settings', tab: 'ai', icon: '⚙️' },
-              ].map((item) => (
-                <button key={item.tab} onClick={() => onOpenAdmin(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: `1px solid ${c.border.light}`, background: 'transparent', color: c.text.body, cursor: 'pointer', width: '100%', textAlign: 'left', fontSize: typography.fontSize.sm, fontFamily: typography.fontFamily.sans, transition: `all ${animation.duration.fast}` }}>
-                  <span>{item.icon}</span><span style={{ flex: 1 }}>{item.label}</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.text.muted} strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
-                </button>
-              ))}
-            </div>
-          </DashboardCard>
-        );
-
-      case 'organization':
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'Organizacija' : 'Organization'} icon="🏢" {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-              <div>
-                <p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{language === 'si' ? 'Aktivna organizacija' : 'Active Organization'}</p>
-                <p style={{ margin: `${spacing.xs} 0 0`, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>{activeOrg?.name || '—'}</p>
-              </div>
-              <div style={{ display: 'flex', gap: spacing.lg }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Organizacije' : 'Organizations'}</p>
-                  <p style={{ margin: `2px 0 0`, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: c.primary[500] }}>{userOrgs.length}</p>
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Vloga' : 'Role'}</p>
-                  <p style={{ margin: `2px 0 0`, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: isSuperAdmin ? '#D97706' : c.primary[500] }}>{isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : 'User'}</p>
-                </div>
-              </div>
-            </div>
-          </DashboardCard>
-        );
-
-      case 'aiSettings':
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'AI nastavitve' : 'AI Settings'} icon="⚡" {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <div style={{ width: 10, height: 10, borderRadius: radii.full, background: (storageService.getApiKey() || storageService.getOpenAIKey() || storageService.getOpenRouterKey()) ? c.success[500] : c.error[500] }} />
-                <span style={{ fontSize: typography.fontSize.sm, color: c.text.body }}>{(storageService.getApiKey() || storageService.getOpenAIKey() || storageService.getOpenRouterKey()) ? (language === 'si' ? 'API ključ aktiven' : 'API key active') : (language === 'si' ? 'API ključ manjka' : 'API key missing')}</span>
-              </div>
-              <div>
-                <p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted }}>Provider</p>
-                <p style={{ margin: `2px 0 0`, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading }}>{storageService.getAIProvider() === 'gemini' ? 'Google Gemini' : storageService.getAIProvider() === 'openai' ? 'OpenAI' : 'OpenRouter'}</p>
-              </div>
-              {storageService.getCustomModel() && (<div><p style={{ margin: 0, fontSize: typography.fontSize.xs, color: c.text.muted }}>Model</p><p style={{ margin: `2px 0 0`, fontSize: typography.fontSize.sm, color: c.text.heading, fontFamily: typography.fontFamily.mono }}>{storageService.getCustomModel()}</p></div>)}
-              <button onClick={onOpenSettings} style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: radii.lg, border: `1px solid ${c.primary[300]}`, background: 'transparent', color: c.primary[500], cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, fontFamily: typography.fontFamily.sans }}>{language === 'si' ? 'Spremeni nastavitve' : 'Change Settings'}</button>
-            </div>
-          </DashboardCard>
-        );
-
-      case 'activity':
-        return (
-          <DashboardCard key={id} id={id} title={language === 'si' ? 'Nedavna aktivnost' : 'Recent Activity'} icon="🕐" wide {...commonProps}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-              {/* Charts from extractStructuralData — same as DashboardPanel */}
-              {structuralCharts.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-                  {structuralCharts.map(chart => (
-                    <ChartRenderer key={chart.id} data={chart} height={180} showTitle={true} showSource={false} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: spacing.lg, color: c.text.muted }}>
-                  <p style={{ margin: 0, fontSize: typography.fontSize.sm }}>
-                    {language === 'si' ? 'Dodajte vsebino v projekt za prikaz grafov.' : 'Add content to your project to see charts.'}
-                  </p>
-                </div>
-              )}
-
-              {/* Project list */}
-              {projectsMeta.length > 0 && (
-                <div style={{ borderTop: `1px solid ${c.border.light}`, paddingTop: spacing.md }}>
-                  <p style={{ margin: `0 0 ${spacing.sm}`, fontSize: typography.fontSize.xs, color: c.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: typography.fontWeight.semibold }}>
-                    {language === 'si' ? 'Projekti' : 'Projects'}
-                  </p>
-                  {projectsMeta.slice(0, 5).map((proj: any, i: number) => (
-                    <div key={proj.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `3px 0` }}>
-                      <button onClick={() => onOpenProject(proj.id)} style={{ fontSize: typography.fontSize.xs, color: c.primary[500], background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: typography.fontFamily.sans, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%', textAlign: 'left' }}>
-                        {proj.title || t.projects?.untitled || 'Untitled'}
-                      </button>
-                      <span style={{ fontSize: '10px', color: c.text.muted }}>{new Date(proj.updatedAt || proj.createdAt).toLocaleDateString(language === 'si' ? 'sl-SI' : 'en-GB')}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DashboardCard>
-        );
-
-      default:
-        return null;
-    }
-  };
+  // Stats
+  const totalProjects = projectsMeta.length;
+  const currentProgress = getProjectProgress(projectData);
+  const orgName = activeOrg?.name || (language === 'si' ? 'Osebni prostor' : 'Personal workspace');
+  // ——— RENDER ———
+  const t = TEXT[language] || TEXT.en;
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: spacing.xl, background: c.surface.background }} className="custom-scrollbar">
-      <div style={{ marginBottom: spacing.xl }}>
-        <h1 style={{ margin: 0, fontSize: typography.fontSize['3xl'], fontWeight: typography.fontWeight.bold, color: c.text.heading }}>{language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}</h1>
-        <p style={{ margin: `${spacing.xs} 0 0`, fontSize: typography.fontSize.sm, color: c.text.muted }}>
-          {language === 'si' ? `Dobrodošli nazaj! Imate ${projectsMeta.length} projekt${projectsMeta.length === 1 ? '' : projectsMeta.length < 5 ? 'e' : 'ov'}.` : `Welcome back! You have ${projectsMeta.length} project${projectsMeta.length !== 1 ? 's' : ''}.`}
+    <div style={{
+      padding: spacing.xl,
+      maxWidth: 1400, margin: '0 auto',
+      display: 'flex', flexDirection: 'column' as const, gap: spacing.lg,
+    }}>
+      {/* Header */}
+      <div style={{ marginBottom: spacing.sm }}>
+        <h1 style={{
+          margin: 0, fontSize: typography.fontSize['2xl'],
+          fontWeight: typography.fontWeight.bold, color: c.text.heading,
+        }}>
+          {language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}
+        </h1>
+        <p style={{ margin: `${spacing.xs} 0 0`, color: c.text.muted, fontSize: typography.fontSize.sm }}>
+          {orgName}
+          {totalProjects > 0 && ` · ${totalProjects} ${language === 'si' ? 'projektov' : 'projects'}`}
         </p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: spacing.lg, alignItems: 'start' }}>
-        {visibleCards.map(id => renderCard(id))}
+
+      {/* Cards Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+        gap: spacing.lg,
+        alignItems: 'start',
+      }}>
+        {cardOrder.map(cardId => {
+          // Hide admin card for non-admins
+          if (cardId === 'admin' && !isAdmin) return null;
+
+          const cardConfig: Record<CardId, { title: string; icon: string; wide?: boolean }> = {
+            projects: { title: language === 'si' ? 'Moji projekti' : 'My Projects', icon: '📁' },
+            chatbot: { title: language === 'si' ? 'AI Pomočnik' : 'AI Chatbot', icon: '🤖' },
+            statistics: { title: language === 'si' ? 'Hitra statistika' : 'Quick Statistics', icon: '📊' },
+            admin: { title: 'Super Admin', icon: '🛡️' },
+            organization: { title: language === 'si' ? 'Organizacija' : 'Organization', icon: '🏢' },
+            aiSettings: { title: language === 'si' ? 'AI Nastavitve' : 'AI Settings', icon: '⚙️' },
+            activity: { title: language === 'si' ? 'Projektne grafike' : 'Project Charts', icon: '📈', wide: true },
+          };
+
+          const config = cardConfig[cardId];
+          if (!config) return null;
+
+          return (
+            <DashboardCard
+              key={cardId}
+              id={cardId}
+              title={config.title}
+              icon={config.icon}
+              isDark={isDark}
+              colors={c}
+              wide={config.wide}
+              dragHandlers={dragHandlers}
+              draggingId={draggingId}
+            >
+              {/* ═══ PROJECTS CARD ═══ */}
+              {cardId === 'projects' && (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
+                  <button
+                    onClick={onCreateProject}
+                    style={{
+                      background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
+                      padding: `${spacing.sm} ${spacing.md}`, fontSize: typography.fontSize.sm,
+                      cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+                    }}
+                  >
+                    + {language === 'si' ? 'Nov projekt' : 'New Project'}
+                  </button>
+                  {projectsMeta.length === 0 && (
+                    <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.md }}>
+                      {language === 'si' ? 'Še nimate projektov. Ustvarite prvega!' : 'No projects yet. Create your first one!'}
+                    </div>
+                  )}
+                  {projectsMeta.map(p => {
+                    const progress = getProjectProgress(p.id === currentProjectId ? projectData : null);
+                    return (
+                      <div key={p.id} onClick={() => onOpenProject(p.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: spacing.sm,
+                          padding: spacing.sm, borderRadius: radii.md,
+                          border: `1px solid ${p.id === currentProjectId ? c.primary[400] : c.border.light}`,
+                          cursor: 'pointer', background: p.id === currentProjectId ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent',
+                          transition: `all ${animation.duration.fast} ${animation.easing.default}`,
+                        }}
+                      >
+                        <ProgressRing percent={progress} size={40} strokeWidth={4} color={c.primary[500]} bgColor={c.border.light} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: c.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
+                          </div>
+                          {p.acronym && <div style={{ fontSize: '10px', color: c.text.muted }}>{p.acronym}</div>}
+                        </div>
+                        <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, flexShrink: 0 }}>{progress}%</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ═══ AI CHATBOT CARD ═══ */}
+              {cardId === 'chatbot' && (
+                <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} />
+              )}
+
+              {/* ═══ STATISTICS CARD ═══ */}
+              {cardId === 'statistics' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md }}>
+                  <div style={{ textAlign: 'center' as const }}>
+                    <ProgressRing percent={currentProgress} size={80} strokeWidth={8} color={c.primary[500]} bgColor={c.border.light} />
+                    <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, marginTop: spacing.xs }}>
+                      {language === 'si' ? 'Trenutni projekt' : 'Current Project'}
+                    </div>
+                    <div style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: c.text.heading }}>
+                      {currentProgress}%
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm, justifyContent: 'center' }}>
+                    <div style={{ padding: spacing.sm, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main, border: `1px solid ${c.border.light}` }}>
+                      <div style={{ fontSize: '20px', fontWeight: typography.fontWeight.bold, color: c.primary[600] }}>{totalProjects}</div>
+                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Skupaj projektov' : 'Total Projects'}</div>
+                    </div>
+                    <div style={{ padding: spacing.sm, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main, border: `1px solid ${c.border.light}` }}>
+                      <div style={{ fontSize: '20px', fontWeight: typography.fontWeight.bold, color: c.success[600] }}>{userOrgs.length}</div>
+                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>{language === 'si' ? 'Organizacije' : 'Organizations'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ═══ ADMIN CARD ═══ */}
+              {cardId === 'admin' && isAdmin && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.xs }}>
+                  {[
+                    { label: language === 'si' ? 'Uporabniki' : 'Users', tab: 'users', icon: '👥' },
+                    { label: language === 'si' ? 'Navodila' : 'Instructions', tab: 'instructions', icon: '📝' },
+                    { label: language === 'si' ? 'AI nastavitve' : 'AI Settings', tab: 'ai', icon: '🤖' },
+                    { label: language === 'si' ? 'Dnevnik napak' : 'Error Log', tab: 'errors', icon: '🐛' },
+                    { label: language === 'si' ? 'Revizijska sled' : 'Audit Trail', tab: 'audit', icon: '📋' },
+                    { label: language === 'si' ? 'Profil' : 'Profile', tab: 'profile', icon: '👤' },
+                    { label: language === 'si' ? 'Baza znanja' : 'Knowledge Base', tab: 'knowledge', icon: '📚' },
+                  ].map(item => (
+                    <button key={item.tab} onClick={() => onOpenAdmin(item.tab)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: spacing.xs,
+                        padding: spacing.sm, borderRadius: radii.md,
+                        border: `1px solid ${c.border.light}`, background: 'transparent',
+                        cursor: 'pointer', color: c.text.body, fontSize: typography.fontSize.xs,
+                        transition: `all ${animation.duration.fast} ${animation.easing.default}`,
+                        textAlign: 'left' as const,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900] + '30' : c.primary[50]; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span>{item.icon}</span> {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ═══ ORGANIZATION CARD ═══ */}
+              {cardId === 'organization' && (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
+                  <div style={{
+                    padding: spacing.sm, borderRadius: radii.md,
+                    background: isDark ? c.primary[900] + '20' : c.primary[50],
+                    border: `1px solid ${c.primary[200]}`,
+                  }}>
+                    <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: c.primary[700] }}>
+                      {language === 'si' ? 'Trenutna organizacija' : 'Current Organization'}
+                    </div>
+                    <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: c.text.heading, marginTop: 2 }}>
+                      {orgName}
+                    </div>
+                  </div>
+                  {userOrgs.length > 1 && (
+                    <>
+                      <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontWeight: typography.fontWeight.semibold }}>
+                        {language === 'si' ? 'Preklopi organizacijo:' : 'Switch organization:'}
+                      </div>
+                      {userOrgs.filter(o => o.id !== activeOrg?.id).map(org => (
+                        <button key={org.id} onClick={() => onSwitchOrg(org.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: spacing.sm,
+                            padding: spacing.sm, borderRadius: radii.md,
+                            border: `1px solid ${c.border.light}`, background: 'transparent',
+                            cursor: 'pointer', color: c.text.body, fontSize: typography.fontSize.xs,
+                            textAlign: 'left' as const, width: '100%',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.surface.sidebar : c.surface.main; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          🏢 {org.name}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ═══ AI SETTINGS CARD ═══ */}
+              {cardId === 'aiSettings' && (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm, alignItems: 'center', textAlign: 'center' as const }}>
+                  <div style={{ fontSize: '32px' }}>⚙️</div>
+                  <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>
+                    {language === 'si' ? 'Konfigurirajte AI ponudnika, modele in API ključe' : 'Configure AI provider, models and API keys'}
+                  </div>
+                  <button onClick={onOpenSettings}
+                    style={{
+                      background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
+                      padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
+                      cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+                    }}
+                  >
+                    {language === 'si' ? 'Odpri nastavitve' : 'Open Settings'}
+                  </button>
+                </div>
+              )}
+
+              {/* ═══ PROJECT CHARTS CARD (was: Recent Activity) ═══ */}
+              {cardId === 'activity' && (
+                <ProjectChartsCard
+                  language={language}
+                  isDark={isDark}
+                  colors={c}
+                  projectsMeta={projectsMeta}
+                  projectData={projectData}
+                  currentProjectId={currentProjectId}
+                  onOpenProject={onOpenProject}
+                />
+              )}
+            </DashboardCard>
+          );
+        })}
       </div>
     </div>
   );
