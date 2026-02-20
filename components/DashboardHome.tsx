@@ -1,17 +1,14 @@
 // components/DashboardHome.tsx
 // ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
-// v4.0 — 2026-02-20
+// v4.2 — 2026-02-20
 //
-// CHANGES v4.0:
-//   - FIX: Admin card tabs use correct AdminPanel tab keys (errors, not errorLog)
-//   - NEW: Activity card → Project Charts Card with hover/click project selection
-//     Shows SAME charts as DashboardPanel (radar, donut, stacked-bar, comparison-bar)
-//   - NEW: AI Chatbot with conversation history (up to 20 convos, localStorage)
-//   - NEW: AI Chatbot searches Knowledge Base + Organization Rules before external AI
-//   - NEW: Chat session management (new/switch/delete conversations)
-//   - Reverted card titles to original names
-//   - Knowledge Base uses shared supabase client (not local createClient)
+// CHANGES v4.2:
+//   - FIX: Project Charts card = full-width (span 2), LEFT = acronym list,
+//     RIGHT = horizontal scrollable row of charts (same size as DashboardPanel: 260×160)
+//   - FIX: Scroll-to-top on mount
+//   - FIX: Stable 2-column grid for all cards
+//   - NOTE: NO Ajax — pure React + HTML5 drag-and-drop
 // ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -23,6 +20,7 @@ import { knowledgeBaseService } from '../services/knowledgeBaseService.ts';
 import { TEXT } from '../locales.ts';
 import { generateContent } from '../services/aiProvider.ts';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
+import type { ExtractedChartData } from '../services/DataExtractionService.ts';
 import ChartRenderer from './ChartRenderer.tsx';
 
 // ——— Types ———————————————————————————————————————
@@ -63,6 +61,10 @@ const DEFAULT_CARD_ORDER: CardId[] = ['projects', 'chatbot', 'statistics', 'admi
 const CHAT_STORAGE_KEY = 'euro-office-chat-conversations';
 const MAX_CONVERSATIONS = 20;
 
+// Chart size constants — SAME as DashboardPanel (width=260, height=160)
+const CHART_WIDTH = 260;
+const CHART_HEIGHT = 160;
+
 // ——— Helpers —————————————————————————————————————
 
 function getProjectProgress(projectData: any): number {
@@ -79,6 +81,7 @@ function getProjectProgress(projectData: any): number {
   if (projectData.impacts?.some((o: any) => o.title?.trim())) filled++;
   return Math.round((filled / total) * 100);
 }
+
 // ——— Progress Ring SVG ——————————————————————————
 
 const ProgressRing: React.FC<{ percent: number; size?: number; strokeWidth?: number; color: string; bgColor: string }> = ({
@@ -116,7 +119,7 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
         boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden',
         opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)',
         transition: `all ${animation.duration.fast} ${animation.easing.default}`,
-        gridColumn: wide ? 'span 2' : 'span 1',
+        gridColumn: wide ? '1 / -1' : 'span 1',
         display: 'flex', flexDirection: 'column' as const, cursor: 'grab', minHeight: 0,
       }}>
       <div style={{ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${c.border.light}`, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0 }}>
@@ -127,6 +130,214 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
         </div>
       </div>
       <div style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0 }}>{children}</div>
+    </div>
+  );
+};
+
+// ——— Project Charts Card — HORIZONTAL layout ———————
+
+const ProjectChartsCard: React.FC<{
+  language: 'en' | 'si';
+  isDark: boolean;
+  colors: any;
+  projectsMeta: any[];
+  projectData: any;
+  currentProjectId: string | null;
+  onOpenProject: (projectId: string) => void;
+}> = ({ language, isDark, colors: c, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
+
+  const activeId = selectedProjectId || currentProjectId || (projectsMeta.length > 0 ? projectsMeta[0]?.id : null);
+
+  const chartsData: ExtractedChartData[] | null = useMemo(() => {
+    if (!activeId || !projectData || activeId !== currentProjectId) return null;
+    try {
+      return extractStructuralData(projectData);
+    } catch {
+      return null;
+    }
+  }, [activeId, currentProjectId, projectData]);
+
+  const handleProjectClick = useCallback((projectId: string) => {
+    setSelectedProjectId(prev => prev === projectId ? null : projectId);
+  }, []);
+
+  const handleMouseEnter = useCallback((projectId: string) => {
+    setHoveredProjectId(projectId);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredProjectId(null);
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', gap: spacing.md, minHeight: 220 }}>
+      {/* LEFT: Acronym list — narrow column */}
+      <div style={{
+        width: 140, minWidth: 120, flexShrink: 0,
+        borderRight: `1px solid ${c.border.light}`,
+        overflowY: 'auto', paddingRight: spacing.sm,
+      }}>
+        <div style={{ fontSize: '10px', color: c.text.muted, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+          {language === 'si' ? 'Projekti' : 'Projects'} ({projectsMeta.length})
+        </div>
+        {projectsMeta.length === 0 && (
+          <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontStyle: 'italic' }}>
+            {language === 'si' ? 'Ni projektov' : 'No projects'}
+          </div>
+        )}
+        {projectsMeta.map(p => {
+          const isSelected = p.id === selectedProjectId;
+          const isHovered = p.id === hoveredProjectId;
+          const isCurrent = p.id === currentProjectId;
+          const isActive = isSelected || (!selectedProjectId && isCurrent);
+          return (
+            <div
+              key={p.id}
+              onMouseEnter={() => handleMouseEnter(p.id)}
+              onMouseLeave={handleMouseLeave}
+              onClick={() => handleProjectClick(p.id)}
+              style={{
+                padding: `4px ${spacing.xs}`,
+                borderRadius: radii.sm,
+                cursor: 'pointer',
+                background: isActive
+                  ? (isDark ? c.primary[900] + '60' : c.primary[100])
+                  : isHovered
+                    ? (isDark ? c.primary[900] + '25' : c.primary[50])
+                    : 'transparent',
+                borderLeft: isActive
+                  ? `3px solid ${c.primary[500]}`
+                  : isHovered
+                    ? `3px solid ${c.primary[300]}`
+                    : '3px solid transparent',
+                marginBottom: 2,
+                transition: 'background 0.15s ease, border-left 0.15s ease',
+              }}
+            >
+              {/* Acronym — bold, primary line */}
+              <div style={{
+                fontSize: '12px',
+                fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.semibold,
+                color: isActive ? c.primary[600] : c.text.heading,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {p.acronym || p.title?.substring(0, 10) || '—'}
+              </div>
+              {/* Title — small, secondary line */}
+              <div style={{
+                fontSize: '9px', color: c.text.muted,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}
+              </div>
+              {isCurrent && (
+                <div style={{ fontSize: '8px', color: c.success[600], fontWeight: typography.fontWeight.semibold }}>
+                  ● {language === 'si' ? 'naložen' : 'loaded'}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* RIGHT: Charts — HORIZONTAL scroll, same size as DashboardPanel */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs }}>
+        {/* Project name header */}
+        {activeId && (() => {
+          const meta = projectsMeta.find(p => p.id === (hoveredProjectId || activeId));
+          if (!meta) return null;
+          return (
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs }}>
+              {meta.acronym && (
+                <span style={{
+                  fontSize: '11px', background: isDark ? c.primary[900] : c.primary[100], color: c.primary[700],
+                  padding: '2px 8px', borderRadius: radii.full, fontWeight: typography.fontWeight.bold,
+                }}>
+                  {meta.acronym}
+                </span>
+              )}
+              <span style={{ fontSize: typography.fontSize.xs, color: c.text.heading, fontWeight: typography.fontWeight.semibold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {meta.title || meta.name || ''}
+              </span>
+            </div>
+          );
+        })()}
+
+        {/* No project selected */}
+        {!activeId && (
+          <div style={{ color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const, padding: spacing.xl, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {language === 'si' ? 'Izberite projekt za prikaz grafik' : 'Select a project to view charts'}
+          </div>
+        )}
+
+        {/* Project not loaded — offer to open */}
+        {activeId && activeId !== currentProjectId && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
+            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
+              {language === 'si'
+                ? 'Odprite projekt za prikaz grafik.'
+                : 'Open this project to view its charts.'}
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenProject(activeId); }}
+              style={{
+                background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
+                padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs,
+                cursor: 'pointer', fontWeight: typography.fontWeight.semibold,
+              }}
+            >
+              {language === 'si' ? 'Odpri projekt' : 'Open project'}
+            </button>
+          </div>
+        )}
+
+        {/* ★ v4.2: HORIZONTAL chart row — scrollable, same size as DashboardPanel */}
+        {activeId && activeId === currentProjectId && chartsData && chartsData.length > 0 && (
+          <div style={{
+            flex: 1,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            display: 'flex',
+            flexDirection: 'row' as const,
+            gap: spacing.sm,
+            paddingBottom: spacing.xs,
+            alignItems: 'flex-start',
+          }}>
+            {chartsData.map((chart: ExtractedChartData, idx: number) => (
+              <div key={`chart-${idx}-${chart.chartType}`} style={{
+                flexShrink: 0,
+                width: CHART_WIDTH,
+              }}>
+                <ChartRenderer
+                  data={chart}
+                  width={CHART_WIDTH}
+                  height={CHART_HEIGHT}
+                  showTitle={true}
+                  showSource={false}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* No chart data */}
+        {activeId && activeId === currentProjectId && (!chartsData || chartsData.length === 0) && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
+            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>
+              {language === 'si'
+                ? 'Ni podatkov za grafike. Izpolnite projektne sekcije.'
+                : 'No chart data. Fill in project sections first.'}
+            </div>
+            <div style={{ fontSize: '10px', color: c.text.muted, fontStyle: 'italic', textAlign: 'center' as const }}>
+              {language === 'si'
+                ? 'Grafike se prikažejo ko izpolnite vsaj 2 sekciji.'
+                : 'Charts appear when at least 2 sections have content.'}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
