@@ -545,7 +545,6 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
   const activeConvo = conversations.find(c => c.id === activeConvoId) || null;
   const messages = activeConvo?.messages || [];
 
-  // Save to localStorage
   useEffect(() => {
     try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversations)); } catch {}
   }, [conversations]);
@@ -557,9 +556,7 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
     const newConvo: ChatConversation = { id, title: language === 'si' ? 'Nov pogovor' : 'New conversation', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
     setConversations(prev => {
       let updated = [newConvo, ...prev];
-      if (updated.length > MAX_CONVERSATIONS) {
-        updated = updated.slice(0, MAX_CONVERSATIONS);
-      }
+      if (updated.length > MAX_CONVERSATIONS) updated = updated.slice(0, MAX_CONVERSATIONS);
       return updated;
     });
     setActiveConvoId(id);
@@ -568,9 +565,7 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
 
   const deleteConvo = useCallback((id: string) => {
     setConversations(prev => prev.filter(c => c.id !== id));
-    if (activeConvoId === id) {
-      setActiveConvoId(null);
-    }
+    if (activeConvoId === id) setActiveConvoId(null);
   }, [activeConvoId]);
 
   const updateConvoMessages = useCallback((convoId: string, newMessages: ChatMessage[]) => {
@@ -585,7 +580,6 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
     const trimmed = input.trim();
     if (!trimmed || isGenerating) return;
 
-    // Ensure we have an active conversation
     let convoId = activeConvoId;
     if (!convoId) {
       convoId = `chat-${Date.now()}`;
@@ -605,29 +599,21 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
     setIsGenerating(true);
 
     try {
-      // Search Knowledge Base + Org Rules
       let kbContext = '';
       let orgRules = '';
 
       if (activeOrg?.id) {
         try {
           const kbResults = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5);
-          if (kbResults.length > 0) {
-            kbContext = '\n\n--- KNOWLEDGE BASE (internal documents) ---\n' + kbResults.join('\n\n');
-          }
-        } catch (e) {
-          console.warn('[Chatbot] KB search failed:', e);
-        }
+          if (kbResults.length > 0) kbContext = '\n\n--- KNOWLEDGE BASE (internal documents) ---\n' + kbResults.join('\n\n');
+        } catch (e) { console.warn('[Chatbot] KB search failed:', e); }
 
         try {
           const instructions = await organizationService.getActiveOrgInstructions?.(activeOrg.id);
-          if (instructions) {
-            orgRules = '\n\n--- ORGANIZATION RULES ---\n' + instructions;
-          }
+          if (instructions) orgRules = '\n\n--- ORGANIZATION RULES ---\n' + instructions;
         } catch {}
       }
 
-      // Build prompt
       const historyContext = currentMessages.slice(-10).map(m =>
         `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
       ).join('\n');
@@ -647,11 +633,11 @@ Instructions:
 - THEN check ORGANIZATION RULES for any specific guidelines
 - Answer in ${language === 'si' ? 'Slovenian' : 'English'}
 - Be helpful, precise, and professional
-- If the knowledge base has relevant info, cite the source document name Assistant:`;
+- If the knowledge base has relevant info, cite the source document name
+Assistant:`;
 
       const result = await generateContent({ prompt: fullPrompt });
       const aiResponse = result?.text || (language === 'si' ? 'Napaka pri generiranju odgovora.' : 'Error generating response.');
-
       const assistantMsg: ChatMessage = { role: 'assistant', content: aiResponse, timestamp: Date.now() };
       updateConvoMessages(convoId, [...currentMessages, assistantMsg]);
     } catch (e: any) {
@@ -669,10 +655,8 @@ Instructions:
     }
   }, [input, isGenerating, activeConvoId, messages, activeOrg, language, updateConvoMessages]);
 
-  // ——— Chatbot Render ———
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', minHeight: 300 }}>
-      {/* Top bar: New chat + History toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, flexShrink: 0 }}>
         <button onClick={createNewConvo} style={{
           background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md,
@@ -695,7 +679,6 @@ Instructions:
         )}
       </div>
 
-      {/* History panel (collapsible) */}
       {showHistory && (
         <div style={{
           maxHeight: 150, overflowY: 'auto', marginBottom: spacing.sm,
@@ -714,32 +697,24 @@ Instructions:
               background: conv.id === activeConvoId ? (isDark ? c.primary[900] + '30' : c.primary[50]) : 'transparent',
               cursor: 'pointer', borderBottom: `1px solid ${c.border.light}`,
             }}>
-              <div
-                onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }}
-                style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              >
+              <div onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }}
+                style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {conv.title}
               </div>
               <div style={{ fontSize: '9px', color: c.text.muted, flexShrink: 0 }}>
                 {new Date(conv.updatedAt).toLocaleDateString()}
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }}
+              <button onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }}
                 style={{ background: 'none', border: 'none', color: c.error[500], cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1 }}
-                title={language === 'si' ? 'Izbriši' : 'Delete'}
-              >
-                ×
-              </button>
+                title={language === 'si' ? 'Izbriši' : 'Delete'}>×</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Messages area */}
       <div style={{
         flex: 1, overflowY: 'auto', minHeight: 0,
-        display: 'flex', flexDirection: 'column' as const, gap: spacing.xs,
-        marginBottom: spacing.sm,
+        display: 'flex', flexDirection: 'column' as const, gap: spacing.xs, marginBottom: spacing.sm,
       }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.xl }}>
@@ -758,8 +733,7 @@ Instructions:
             padding: `${spacing.xs} ${spacing.sm}`,
             fontSize: typography.fontSize.xs,
             border: msg.role === 'assistant' ? `1px solid ${c.border.light}` : 'none',
-            whiteSpace: 'pre-wrap' as const,
-            wordBreak: 'break-word' as const,
+            whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const,
           }}>
             {msg.content}
           </div>
@@ -779,11 +753,8 @@ Instructions:
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input area */}
       <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0 }}>
-        <input
-          ref={inputRef}
-          value={input}
+        <input ref={inputRef} value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'}
@@ -792,27 +763,23 @@ Instructions:
             flex: 1, padding: `${spacing.xs} ${spacing.sm}`,
             borderRadius: radii.md, border: `1px solid ${c.border.light}`,
             background: isDark ? c.surface.sidebar : c.surface.main,
-            color: c.text.body, fontSize: typography.fontSize.xs,
-            outline: 'none',
+            color: c.text.body, fontSize: typography.fontSize.xs, outline: 'none',
           }}
         />
-        <button
-          onClick={handleSend}
-          disabled={isGenerating || !input.trim()}
+        <button onClick={handleSend} disabled={isGenerating || !input.trim()}
           style={{
             background: c.primary[500], color: '#fff', border: 'none',
             borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`,
             fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer',
-            opacity: isGenerating || !input.trim() ? 0.5 : 1,
-            fontWeight: typography.fontWeight.semibold,
-          }}
-        >
+            opacity: isGenerating || !input.trim() ? 0.5 : 1, fontWeight: typography.fontWeight.semibold,
+          }}>
           {isGenerating ? '...' : '➤'}
         </button>
       </div>
     </div>
   );
 };
+
 // ——— Main DashboardHome Component ————————————————
 
 const DashboardHome: React.FC<DashboardHomeProps> = ({
