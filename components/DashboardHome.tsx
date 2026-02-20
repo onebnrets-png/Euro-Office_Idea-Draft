@@ -234,7 +234,7 @@ const DropZone: React.FC<{ index: number; isDark: boolean; colors: any; dragging
   return (<div onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsOver(true); }} onDragLeave={() => setIsOver(false)} onDrop={(e) => { e.preventDefault(); setIsOver(false); onDropAtEnd(e); }} style={{ gridColumn: 'span 1', minHeight: 80, borderRadius: radii.xl, border: `2px dashed ${isOver ? c.primary[400] : c.border.light}`, background: isOver ? (isDark ? c.primary[900]+'20' : c.primary[50]) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease', color: c.text.muted, fontSize: typography.fontSize.xs }}>{isOver ? '↓' : ''}</div>);
 };
 
-// ——— Project Charts Card — v6.1 — resizable + auto-load + acronyms ————————
+// ——— Project Charts Card — v6.2 — acronyms preloaded + auto-load first ————————
 
 const ProjectChartsCard: React.FC<{
   language: 'en' | 'si'; isDark: boolean; colors: any; colSpan: number;
@@ -245,8 +245,41 @@ const ProjectChartsCard: React.FC<{
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [loadedData, setLoadedData] = useState<Record<string, any>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [acronyms, setAcronyms] = useState<Record<string, string>>({});
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoLoadedRef = useRef(false);
+  const acronymsLoadedRef = useRef(false);
+
+  // ★ v6.2: Preload ALL acronyms on mount (lightweight query, no full data)
+  useEffect(() => {
+    if (acronymsLoadedRef.current || projectsMeta.length === 0) return;
+    acronymsLoadedRef.current = true;
+
+    const projectIds = projectsMeta.map(p => p.id);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('project_data')
+          .select('project_id, data->projectIdea->projectAcronym')
+          .in('project_id', projectIds)
+          .eq('language', language);
+
+        if (!error && data) {
+          const map: Record<string, string> = {};
+          data.forEach((row: any) => {
+            const acr = row.projectAcronym;
+            if (acr && typeof acr === 'string' && acr.trim()) {
+              map[row.project_id] = acr.trim();
+            }
+          });
+          setAcronyms(map);
+        }
+      } catch (err) {
+        console.warn('ProjectChartsCard: Failed to preload acronyms', err);
+      }
+    })();
+  }, [projectsMeta, language]);
 
   // Cache current project data
   useEffect(() => {
@@ -274,31 +307,25 @@ const ProjectChartsCard: React.FC<{
     }
   }, [loadedData, currentProjectId, projectData, language]);
 
-  // ★ v6.1: Auto-load first project on mount so dashboard isn't empty
+  // ★ v6.1: Auto-load first project on mount
   useEffect(() => {
     if (autoLoadedRef.current) return;
     if (projectsMeta.length === 0) return;
-
-    // If we already have an active project with data, skip
     if (activeProjectId && loadedData[activeProjectId]) {
       autoLoadedRef.current = true;
       return;
     }
 
-    // Pick the current project first, otherwise first in list
     const targetId = currentProjectId || projectsMeta[0]?.id;
     if (!targetId) return;
-
     autoLoadedRef.current = true;
 
-    // If current project already has data passed via props
     if (targetId === currentProjectId && projectData) {
       setLoadedData(prev => ({ ...prev, [targetId]: projectData }));
       setActiveProjectId(targetId);
       return;
     }
 
-    // Load data for the first project
     (async () => {
       setLoadingId(targetId);
       setActiveProjectId(targetId);
@@ -335,22 +362,13 @@ const ProjectChartsCard: React.FC<{
   const chartH = colSpan >= 2 ? CHART_HEIGHT : Math.min(130, CHART_HEIGHT);
   const isNarrow = colSpan < 2;
 
-  // ★ v6.1: Get acronym from loaded data or meta, NEVER truncated title
+  // ★ v6.2: Get acronym — preloaded first, then loaded data, then fallback
   const getAcronym = (p: any): string => {
-    // 1. Check loaded project data for real acronym
+    if (acronyms[p.id]) return acronyms[p.id];
     const pData = loadedData[p.id];
-    if (pData?.projectIdea?.projectAcronym && pData.projectIdea.projectAcronym.trim()) {
-      return pData.projectIdea.projectAcronym.trim();
-    }
-    // 2. Check meta.acronym (if parent component passes it)
-    if (p.acronym && p.acronym.trim()) {
-      return p.acronym.trim();
-    }
-    // 3. Fallback: first word or first 8 chars of title
-    const title = p.title || p.name || '—';
-    const firstWord = title.split(/[\s\-:]+/)[0];
-    if (firstWord.length <= 10) return firstWord;
-    return title.substring(0, 8) + '…';
+    if (pData?.projectIdea?.projectAcronym?.trim()) return pData.projectIdea.projectAcronym.trim();
+    if (p.acronym?.trim()) return p.acronym.trim();
+    return '…';
   };
 
   return (
@@ -437,7 +455,6 @@ const ProjectChartsCard: React.FC<{
 
       {/* Right: charts area */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs }}>
-        {/* Active project header */}
         {activeProjectId && (() => {
           const meta = projectsMeta.find(p => p.id === activeProjectId);
           if (!meta) return null;
@@ -480,7 +497,6 @@ const ProjectChartsCard: React.FC<{
           );
         })()}
 
-        {/* Empty state */}
         {!activeProjectId && (
           <div style={{
             color: c.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center' as const,
@@ -490,7 +506,6 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {/* Loading */}
         {activeProjectId && isLoading && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted }}>
@@ -500,7 +515,6 @@ const ProjectChartsCard: React.FC<{
           </div>
         )}
 
-        {/* Charts */}
         {activeProjectId && !isLoading && activeData && (
           <div style={{
             flex: 1, overflowX: 'auto', overflowY: 'hidden',
@@ -508,7 +522,6 @@ const ProjectChartsCard: React.FC<{
             flexWrap: isNarrow ? 'wrap' as const : 'nowrap' as const,
             gap: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start',
           }}>
-            {/* Completeness ring */}
             <div style={{
               flexShrink: 0, width: chartW,
               display: 'flex', flexDirection: 'column' as const,
@@ -517,50 +530,7 @@ const ProjectChartsCard: React.FC<{
               borderRadius: radii.lg, border: `1px solid ${c.border.light}`, minHeight: chartH,
             }}>
               <DesignProgressRing
-                value={completeness} size={isNarrow ? 60 : 80} strokeWidth={6}
-                showLabel={true} labelSize={isNarrow ? '0.65rem' : '0.8rem'}
-              />
-              <div style={{ textAlign: 'center' as const }}>
-                <div style={{
-                  fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold,
-                  color: c.text.heading,
-                }}>
-                  {language === 'si' ? 'Zapolnjenost' : 'Completeness'}
-                </div>
-                <div style={{ fontSize: '10px', color: c.text.muted }}>{completeness}%</div>
-              </div>
-            </div>
-
-            {/* Extracted charts */}
-            {chartsData && chartsData.length > 0 && chartsData.map((chart: ExtractedChartData, idx: number) => (
-              <div key={`c-${idx}-${chart.chartType}`} style={{ flexShrink: 0, width: chartW }}>
-                <ChartRenderer data={chart} width={chartW} height={chartH} showTitle={true} showSource={false} />
-              </div>
-            ))}
-
-            {(!chartsData || chartsData.length === 0) && (
-              <div style={{
-                flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: typography.fontSize.xs, color: c.text.muted, padding: spacing.lg, fontStyle: 'italic',
-              }}>
-                {language === 'si' ? 'Ni podatkov za grafike.' : 'No chart data.'}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* No data */}
-        {activeProjectId && !isLoading && !activeData && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontSize: typography.fontSize.xs, color: c.text.muted, fontStyle: 'italic' }}>
-              {language === 'si' ? 'Podatki niso na voljo.' : 'Data not available.'}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+                value={
 
 // ═══════════════════════════════════════════════════════════
 // EMAIL MODAL — v6.0 — Fullscreen overlay with Gmail/Outlook/Mailto
