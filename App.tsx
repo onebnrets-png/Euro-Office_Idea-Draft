@@ -501,7 +501,7 @@ const App = () => {
             </div>
 
             {/* ★ v4.2: Content area below toolbar — scrollable */}
-            <div style={{ flex: 1, overflow: activeView === 'dashboard' ? 'auto' : 'hidden', minHeight: 0 }}>
+            <div id="main-content-area" style={{ flex: 1, overflow: activeView === 'dashboard' ? 'auto' : 'hidden', minHeight: 0 }}>
               {activeView === 'dashboard' ? (
                 /* ═══ DASHBOARD HOME VIEW ═══ */
                 <DashboardHome
