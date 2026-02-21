@@ -274,7 +274,10 @@ const App = () => {
   const STEPS = getSteps(language);
   const completedStepsStatus = useMemo(() => STEPS.map((step) => isStepCompleted(pm.projectData, step.key)), [pm.projectData, language, STEPS]);
   const currentProjectMeta = pm.userProjects.find((p: any) => p.id === pm.currentProjectId);
-  const displayTitle = currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled;
+  const hasActiveProject = !!pm.currentProjectId;
+  const displayTitle = hasActiveProject
+  ? (currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled)
+  : (language === 'si' ? 'Ni izbranega projekta' : 'No Project Selected');
 
   /* ═══ HANDLERS ═══ */
   const handleSettingsClose = async () => { setIsSettingsOpen(false); setIsAdminPanelOpen(false); setAdminPanelInitialTab(undefined); await auth.checkApiKey(); auth.loadCustomLogo(); };
