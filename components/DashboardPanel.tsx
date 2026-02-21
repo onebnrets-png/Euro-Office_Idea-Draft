@@ -370,21 +370,24 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-          {/* Project meta */}
+         {/* Project meta — ★ v2.4: Acronym as primary title */}
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
               {t ? 'Projekt' : 'Project'}
             </p>
-            <p style={{ fontSize: '14px', fontWeight: 700, color: isDark ? '#e0e0f0' : theme.colors.text.heading, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {pi?.projectTitle || '—'}
+            <p style={{ fontSize: '15px', fontWeight: 800, color: isDark ? '#e0e0f0' : theme.colors.text.heading, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              {pi?.projectAcronym?.trim() || pi?.projectTitle || '—'}
             </p>
+            {pi?.projectAcronym?.trim() && pi?.projectTitle?.trim() && (
+              <p style={{ fontSize: '11px', fontWeight: 500, color: isDark ? '#a0a0b8' : theme.colors.text.muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pi.projectTitle.trim()}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 12, fontSize: '11px', color: isDark ? '#8080a0' : theme.colors.text.muted, marginTop: 4 }}>
-              {pi?.projectAcronym && <span>{pi.projectAcronym}</span>}
               {pi?.durationMonths && <span>{pi.durationMonths} {t ? 'mes.' : 'mo.'}</span>}
               {pi?.startDate && <span>{pi.startDate}</span>}
             </div>
           </div>
-
           {/* Stats grid — draggable */}
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>
