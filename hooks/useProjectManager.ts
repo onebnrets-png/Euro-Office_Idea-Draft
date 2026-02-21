@@ -2,11 +2,15 @@
 // ═══════════════════════════════════════════════════════════════
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
+//
+// v1.1 — 2026-02-21 — FIX: IMPORT SOURCE
+//   - CHANGED: detectProjectLanguage imported from utils.ts instead of
+//     geminiService.ts (was never re-exported from geminiService)
+//   - All previous logic preserved.
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { storageService } from '../services/storageService.ts';
-import { detectProjectLanguage } from '../services/geminiService.ts';
 import { generateDocx } from '../services/docxGenerator.ts';
 import {
   set,
@@ -14,6 +18,7 @@ import {
   downloadBlob,
   recalculateProjectSchedule,
   safeMerge,
+  detectProjectLanguage,
 } from '../utils.ts';
 import html2canvas from 'html2canvas';
 
