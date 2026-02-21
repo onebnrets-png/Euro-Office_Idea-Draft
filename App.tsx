@@ -1,21 +1,19 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v4.5 — 2026-02-21
+// v4.9 — 2026-02-21
+//   ★ v4.9: Responsive breakpoints — mobile/tablet/desktop layout adaptation
+//           DashboardPanel hidden on mobile/tablet, marginLeft responsive
+//           Toolbar padding adaptive
+//   ★ v4.8: displayTitle prioritizes projectAcronym over projectTitle
+//   ★ v4.7: FIX: displayTitle based on currentProjectId
+//   ★ v4.6: FIX: hasActiveProject based on currentProjectId, not activeView
 //   ★ v4.5: Import Project button added to Dashboard toolbar (RIGHT section)
 //           FIX: Center section was corrupted with dashboard buttons — now clean
 //   ★ v4.4: FIX: Removed duplicate hasActiveProject declaration
 //   ★ v4.3: FIX: "No Project Selected" when no project chosen after login
-//     - Sidebar steps are disabled when no project is loaded
-//     - displayTitle shows "No Project Selected" / "Ni izbranega projekta"
-//     - hasActiveProject prop passed to Sidebar
 //   ★ v4.1: FIX: Dashboard scroll — overflow: auto on main when in dashboard view
 //   ★ v4.0: Dashboard Home as default view after login
-//     - NEW: activeView state ('dashboard' | 'project')
-//     - NEW: DashboardHome component replaces auto-start step 1
-//     - NEW: Sidebar receives activeView + onOpenDashboard props
-//     - Dashboard is the landing page after login
-//     - ProjectDisplay shown only when user opens a project
 //   ★ v3.0: Multi-Tenant Organization integration
 //   v2.4 — 2026-02-18: StepNavigationBar moved to ProjectDisplay
 //   v2.3 — 2026-02-18: WelcomeScreen removed
@@ -136,6 +134,22 @@ const App = () => {
   const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   const colors = isDark ? darkColors : lightColors;
+
+  // ★ v4.9: Responsive breakpoints
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth < 1024);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+      setIsTablet(w >= 768 && w < 1024);
+      setIsDesktop(w >= 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const unsub = onThemeChange((mode) => setIsDark(mode === 'dark'));
@@ -363,15 +377,16 @@ const App = () => {
           <main style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
-            marginLeft: sidebarCollapsed ? 64 : 280, marginRight: 0,
+            marginLeft: isDesktop ? (sidebarCollapsed ? 64 : 280) : 0,
+            marginRight: 0,
             transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
 
-            {/* ★ v4.5: TOOLBAR — ALWAYS VISIBLE, content adapts to activeView */}
+            {/* ★ v4.9: TOOLBAR — ALWAYS VISIBLE, content adapts to activeView */}
             <div style={{
               background: colors.surface.card, borderBottom: `1px solid ${colors.border.light}`,
-              padding: `${spacing.sm} ${spacing.lg}`, display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between', gap: spacing.sm, flexShrink: 0,
+              padding: `${spacing.sm} ${isMobile ? spacing.sm : spacing.lg}`, display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', gap: isMobile ? '2px' : spacing.sm, flexShrink: 0,
               minHeight: 48,
             }}>
 
@@ -396,11 +411,11 @@ const App = () => {
               {/* ═══ CENTER: Title — adapts to view ═══ */}
               <div style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${spacing.md}`,
+                gap: '10px', minWidth: 0, overflow: 'hidden', padding: `0 ${isMobile ? spacing.xs : spacing.md}`,
               }}>
                 {activeView === 'dashboard' ? (
                   <span style={{
-                    fontSize: '14px', fontWeight: 600, color: colors.text.heading,
+                    fontSize: isMobile ? '12px' : '14px', fontWeight: 600, color: colors.text.heading,
                     whiteSpace: 'nowrap', letterSpacing: '0.02em',
                   }}>
                     {language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}
@@ -418,13 +433,17 @@ const App = () => {
                         }}>
                           {pm.projectData.projectIdea.projectAcronym.trim()}
                         </span>
-                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: colors.border.medium, flexShrink: 0 }} />
-                        <span style={{
-                          fontSize: '13px', fontWeight: 600, color: colors.text.heading,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
-                        }} title={pm.projectData.projectIdea.projectTitle || ''}>
-                          {pm.projectData.projectIdea.projectTitle?.trim() || ''}
-                        </span>
+                        {!isMobile && (
+                          <>
+                            <span style={{ width: 4, height: 4, borderRadius: '50%', background: colors.border.medium, flexShrink: 0 }} />
+                            <span style={{
+                              fontSize: '13px', fontWeight: 600, color: colors.text.heading,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+                            }} title={pm.projectData.projectIdea.projectTitle || ''}>
+                              {pm.projectData.projectIdea.projectTitle?.trim() || ''}
+                            </span>
+                          </>
+                        )}
                       </>
                     ) : pm.projectData?.projectIdea?.projectTitle?.trim() ? (
                       <span style={{
@@ -453,7 +472,6 @@ const App = () => {
                       title={language === 'si' ? 'Nov projekt' : 'New Project'} variant="success"
                       icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>}
                     />
-                    {/* ★ v4.5: Import project — available from Dashboard */}
                     <label style={{
                       padding: spacing.sm, borderRadius: radii.lg, display: 'flex', alignItems: 'center',
                       justifyContent: 'center', cursor: 'pointer', transition: `all ${animation.duration.fast}`,
@@ -462,11 +480,13 @@ const App = () => {
                       <ICONS.IMPORT style={{ width: 20, height: 20 }} />
                       <input type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
                     </label>
-                    <ToolbarSeparator colors={colors} />
-                    <ToolbarButton colors={colors} onClick={() => setIsProjectListOpen(true)}
-                      title={language === 'si' ? 'Moji projekti' : 'My Projects'} variant="primary"
-                      icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>}
-                    />
+                    {!isMobile && <ToolbarSeparator colors={colors} />}
+                    {!isMobile && (
+                      <ToolbarButton colors={colors} onClick={() => setIsProjectListOpen(true)}
+                        title={language === 'si' ? 'Moji projekti' : 'My Projects'} variant="primary"
+                        icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>}
+                      />
+                    )}
                     <ToolbarSeparator colors={colors} />
                     <ToolbarButton colors={colors} onClick={() => { setAdminPanelInitialTab('ai'); setIsSettingsOpen(true); }}
                       title={language === 'si' ? 'Nastavitve' : 'Settings'} variant="default"
@@ -491,17 +511,21 @@ const App = () => {
                       <ICONS.IMPORT style={{ width: 20, height: 20 }} />
                       <input ref={pm.importInputRef} type="file" accept=".json" onChange={handleImportProject} style={{ display: 'none' }} />
                     </label>
-                    <ToolbarSeparator colors={colors} />
-                    <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx}
-                      icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
-                    />
-                    <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary}
-                      disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'}
-                      icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
-                    />
-                    <ToolbarButton colors={colors} onClick={handlePrint} title={t.print}
-                      icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
-                    />
+                    {!isMobile && (
+                      <>
+                        <ToolbarSeparator colors={colors} />
+                        <ToolbarButton colors={colors} onClick={handleExportDocx} title={t.exportDocx}
+                          icon={<ICONS.DOCX style={{ width: 20, height: 20 }} />}
+                        />
+                        <ToolbarButton colors={colors} onClick={generation.handleExportSummary} title={t.exportSummary}
+                          disabled={auth.showAiWarning} variant={auth.showAiWarning ? 'warning' : 'default'}
+                          icon={<ICONS.SUMMARY style={{ width: 20, height: 20 }} />}
+                        />
+                        <ToolbarButton colors={colors} onClick={handlePrint} title={t.print}
+                          icon={<ICONS.PRINT style={{ width: 20, height: 20 }} />}
+                        />
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -545,8 +569,8 @@ const App = () => {
             </div>
           </main>
 
-          {/* ═══ DASHBOARD PANEL (right side) — only in project view ═══ */}
-          {activeView === 'project' && (
+          {/* ═══ DASHBOARD PANEL (right side) — only in project view on desktop ═══ */}
+          {activeView === 'project' && isDesktop && (
             <DashboardPanel
               projectData={pm.projectData}
               language={language}
