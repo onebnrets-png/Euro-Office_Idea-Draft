@@ -206,7 +206,7 @@ const App = () => {
   const hasActiveProject = !!pm.currentProjectId;
 
   const displayTitle = pm.currentProjectId
-    ? (currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled)
+    ? (pm.projectData.projectIdea?.projectAcronym?.trim() || currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled)
     : (language === 'si' ? 'Ni izbranega projekta' : 'No Project Selected');
 
   /* ═══ HANDLERS ═══ */
