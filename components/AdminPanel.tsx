@@ -1359,8 +1359,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>
                     {t.knowledge.subtitle}
                   </p>
-                </div>
-                <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+               </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
                     {kbDocuments.length}{isUserSuperAdmin ? '' : ` / ${knowledgeBaseService.MAX_DOCS_PER_ORG}`} {t.knowledge.docCount}
                     {isUserSuperAdmin && ' (∞)'}
                   </span>
@@ -1372,7 +1373,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </span>
                 </div>
               </div>
-
               {/* Info banner */}
               <div style={{
                 padding: '12px 16px', borderRadius: radii.lg, marginBottom: '16px',
