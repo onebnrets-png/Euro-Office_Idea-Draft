@@ -25,3 +25,7 @@ npm-debug.log*
 
 # Temp files
 vite_output.tmp
+ 
+# Local notes and backups 
+navodila/ 
+*.txt 
