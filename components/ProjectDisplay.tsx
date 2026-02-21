@@ -627,14 +627,14 @@ const renderProjectManagement = (props) => {
                 <div className="mb-3 border-b border-slate-200 pb-2">
                     <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/50">
-                    <Organigram 
-                        structure={projectManagement?.structure} 
-                        activities={projectData.activities}
-                        language={language}
-                        id="organigram-interactive"
-                    />
-                </div>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <Organigram 
+        structure={projectManagement?.structure} 
+        activities={projectData.activities}
+        language={language}
+        id="organigram-interactive"
+    />
+</div>
             </div>
         </div>
     );
