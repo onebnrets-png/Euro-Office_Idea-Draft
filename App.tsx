@@ -623,7 +623,6 @@ const App = () => {
                   onAddItem={pm.handleAddItem}
                   onRemoveItem={pm.handleRemoveItem}
                   isLoading={generation.isLoading}
-                  error={generation.error}
                   missingApiKey={auth.showAiWarning}
                   completedStepsStatus={completedStepsStatus}
                   onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
