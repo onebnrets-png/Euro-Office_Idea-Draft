@@ -699,7 +699,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     let lastError = '';
 
     for (const file of Array.from(files)) {
-      const result = await knowledgeBaseService.uploadDocument(orgId, file);
+      const result = await knowledgeBaseService.uploadDocument(orgId, file, isUserSuperAdmin);
       if (result.success) {
         successCount++;
       } else {
