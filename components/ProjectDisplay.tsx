@@ -1,5 +1,11 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v5.1 — 2026-02-21 — FIX: YELLOW BACKGROUND BLEED-THROUGH ON CHARTS
+//   - ADDED: chart-container-white class on Gantt, PERT and Organigram
+//     wrapper divs to override --step-card-bg CSS variable
+//   - Requires index.css v5.1 rule for .chart-container-white
+//   - All previous v5.0 changes preserved.
+//
 // v5.0 — 2026-02-17 — DESIGN SYSTEM CARD LAYOUT + MICRO ANIMATIONS:
 //   - FieldHeader: accent color bar, animate-fadeIn
 //   - SectionHeader: accent color bottom border + indicator bar, section-appear
@@ -623,18 +629,19 @@ const renderProjectManagement = (props) => {
                 />
             </div>
 
+            {/* ★ v5.1: chart-container-white prevents yellow bleed-through from --step-card-bg */}
             <div id="organigram">
                 <div className="mb-3 border-b border-slate-200 pb-2">
                     <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <Organigram 
-        structure={projectManagement?.structure} 
-        activities={projectData.activities}
-        language={language}
-        id="organigram-interactive"
-    />
-</div>
+                <div className="chart-container-white overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <Organigram 
+                        structure={projectManagement?.structure} 
+                        activities={projectData.activities}
+                        language={language}
+                        id="organigram-interactive"
+                    />
+                </div>
             </div>
         </div>
     );
@@ -892,18 +899,21 @@ const renderActivities = (props) => {
                 ))}
             </div>
 
+            {/* ★ v5.1: chart-container-white prevents yellow bleed-through from --step-card-bg */}
             <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
-            <div className="bg-white rounded-xl">
-        <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
-    </div>
-</div>
+                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
+                <div className="chart-container-white bg-white rounded-xl">
+                    <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
+                </div>
+            </div>
+
+            {/* ★ v5.1: chart-container-white prevents yellow bleed-through from --step-card-bg */}
             <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
-            <div className="bg-white rounded-xl">
-        <PERTChart activities={activities} language={language} />
-    </div>
-</div>
+                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
+                <div className="chart-container-white bg-white rounded-xl">
+                    <PERTChart activities={activities} language={language} />
+                </div>
+            </div>
 
             {renderRisks(props)}
         </>
