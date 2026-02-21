@@ -1,11 +1,9 @@
-// components/Organigram.tsx v1.2
+// components/Organigram.tsx v1.3
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v1.3 — FIX: bg-slate-50 → bg-white to prevent yellow bleed-through
+//         from Activities step --step-card-bg CSS variable.
 // v1.2 — FEAT: Responsive layout — removes min-w-[800px] on mobile,
-//         stacks strategic layer vertically on narrow screens.
-// v1.1 — FEAT: Added CTRL+Scroll zoom, drag-to-pan, pinch-to-zoom,
-//         double-click reset, ZoomBadge.
-// v1.0 — Initial implementation with hierarchical org chart layout.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect } from 'react';
