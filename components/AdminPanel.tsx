@@ -1,7 +1,13 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v3.0 — 2026-02-19
+// v4.0 — 2026-02-21
+//
+//   ★ v4.0: Knowledge Base tab
+//     - New tab: Knowledge Base (Admin+) — upload, view, delete documents
+//     - Documents serve as mandatory AI context (same weight as Instructions)
+//     - Drag & drop upload, file type/size/page validation
+//     - Bilingual UI (EN/SI)
 //
 //   ★ v3.0: Delete capabilities + Error Log
 //     - Users tab: Delete button (SuperAdmin: any user; Org Owner: org users)
@@ -42,6 +48,8 @@ import {
 import { errorLogService, type ErrorLogEntry } from '../services/errorLogService.ts';
 // ★ v3.0: Organization service for org-level delete
 import { organizationService } from '../services/organizationService.ts';
+// ★ v4.0: Knowledge Base service
+import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -52,8 +60,8 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-// ★ v3.0: Added 'errors' tab
-type TabId = 'users' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors';
+// ★ v4.0: Added 'knowledge' tab
+type TabId = 'users' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
 
 // ─── Helpers: QR Code + Collapsible ─────────────────────────
 
@@ -102,6 +110,7 @@ const ADMIN_TEXT = {
       profile: 'Profile & Security',
       audit: 'Audit Log',
       errors: 'Error Log',
+      knowledge: 'Knowledge Base',
     },
     users: {
       title: 'User Management',
@@ -127,7 +136,6 @@ const ADMIN_TEXT = {
       totalSuperAdmins: 'Super Admins',
       protected: 'Protected',
       never: 'Never',
-      // ★ v3.0: Delete texts
       deleteUser: 'Delete User',
       deleteConfirm: 'Are you sure you want to PERMANENTLY delete user',
       deleteConfirmSuffix: '? All their projects and data will be removed. This cannot be undone.',
@@ -168,7 +176,6 @@ const ADMIN_TEXT = {
         org_delete: 'Organization Deleted',
       },
     },
-    // ★ v3.0: Error log texts
     errors: {
       title: 'Error Log',
       subtitle: 'System errors captured from all users',
@@ -180,7 +187,6 @@ const ADMIN_TEXT = {
       copied: 'Logs copied to clipboard!',
       cleared: 'Logs cleared.',
     },
-    // ★ v3.0: Self-delete texts
     selfDelete: {
       title: 'Delete My Account',
       warning: 'This will permanently delete your account, all your projects, and remove you from all organizations. This action cannot be undone.',
@@ -189,6 +195,33 @@ const ADMIN_TEXT = {
       confirmMessage: 'Type DELETE to confirm permanent deletion of your account and all data:',
       success: 'Account deleted. You will be logged out.',
       failed: 'Failed to delete account:',
+    },
+    // ★ v4.0: Knowledge Base texts
+    knowledge: {
+      title: 'Knowledge Base',
+      subtitle: 'Upload documents that the AI must always consider when generating content',
+      upload: 'Upload Document',
+      uploading: 'Uploading...',
+      delete: 'Delete',
+      deleteConfirm: 'Are you sure you want to delete this document? This cannot be undone.',
+      deleteSuccess: 'Document deleted.',
+      deleteFailed: 'Failed to delete document:',
+      uploadSuccess: 'document(s) uploaded successfully.',
+      uploadFailed: 'Upload failed:',
+      noDocuments: 'No documents uploaded yet.',
+      docCount: 'documents',
+      maxDocs: 'Maximum',
+      maxSize: 'Max file size',
+      maxPages: 'Max pages per document',
+      dragDrop: 'Drag & drop files here or click to browse',
+      allowedTypes: 'Allowed: PDF, DOCX, XLSX, PPTX, JPG, PNG',
+      fileName: 'File Name',
+      fileType: 'Type',
+      fileSize: 'Size',
+      uploadedAt: 'Uploaded',
+      uploadedBy: 'By',
+      actions: 'Actions',
+      info: 'Documents uploaded here serve as a knowledge base. The AI will ALWAYS use them as context when generating project content — just like the rules in Instructions.',
     },
     whiteLabel: {
       logoTitle: 'Custom Logo',
@@ -210,6 +243,7 @@ const ADMIN_TEXT = {
       profile: 'Profil & Varnost',
       audit: 'Dnevnik',
       errors: 'Dnevnik napak',
+      knowledge: 'Baza znanja',
     },
     users: {
       title: 'Upravljanje uporabnikov',
@@ -224,7 +258,6 @@ const ADMIN_TEXT = {
       roleUpdated: 'Vloga uspešno posodobljena.', roleUpdateFailed: 'Napaka pri posodobitvi vloge:',
       noUsers: 'Ni najdenih uporabnikov.', totalUsers: 'Skupaj uporabnikov', totalAdmins: 'Adminov',
       totalSuperAdmins: 'Super Adminov', protected: 'Zaščiteno', never: 'Nikoli',
-      // ★ v3.0
       deleteUser: 'Izbriši uporabnika',
       deleteConfirm: 'Ali ste prepričani, da želite TRAJNO izbrisati uporabnika',
       deleteConfirmSuffix: '? Vsi njihovi projekti in podatki bodo odstranjeni. Tega ni mogoče razveljaviti.',
@@ -280,6 +313,33 @@ const ADMIN_TEXT = {
       confirmMessage: 'Vnesite DELETE za potrditev trajnega izbrisa vašega računa in vseh podatkov:',
       success: 'Račun izbrisan. Odjavljeni boste.',
       failed: 'Napaka pri brisanju računa:',
+    },
+    // ★ v4.0: Knowledge Base texts
+    knowledge: {
+      title: 'Baza znanja',
+      subtitle: 'Naložite dokumente, ki jih mora AI vedno upoštevati pri generiranju vsebin',
+      upload: 'Naloži dokument',
+      uploading: 'Nalaganje...',
+      delete: 'Izbriši',
+      deleteConfirm: 'Ali ste prepričani, da želite izbrisati ta dokument? Tega ni mogoče razveljaviti.',
+      deleteSuccess: 'Dokument izbrisan.',
+      deleteFailed: 'Napaka pri brisanju dokumenta:',
+      uploadSuccess: 'dokument(ov) uspešno naloženih.',
+      uploadFailed: 'Nalaganje ni uspelo:',
+      noDocuments: 'Še ni naloženih dokumentov.',
+      docCount: 'dokumentov',
+      maxDocs: 'Največ',
+      maxSize: 'Največja velikost',
+      maxPages: 'Največ strani',
+      dragDrop: 'Povlecite datoteke sem ali kliknite za brskanje',
+      allowedTypes: 'Dovoljeno: PDF, DOCX, XLSX, PPTX, JPG, PNG',
+      fileName: 'Ime datoteke',
+      fileType: 'Tip',
+      fileSize: 'Velikost',
+      uploadedAt: 'Naloženo',
+      uploadedBy: 'Avtor',
+      actions: 'Akcije',
+      info: 'Dokumenti naloženi tukaj služijo kot baza znanja. AI jih bo VEDNO uporabil kot kontekst pri generiranju projektnih vsebin — enako kot pravila v Navodilih.',
     },
     whiteLabel: {
       logoTitle: 'Logotip',
@@ -356,10 +416,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
-  // ★ v3.0: Added 'errors' tab for superadmin
+  // ★ v4.0: Added 'knowledge' tab for admin+
   const adminTabs: TabId[] = isUserSuperAdmin
-    ? ['users', 'instructions', 'ai', 'profile', 'audit', 'errors']
-    : ['users', 'instructions', 'ai', 'profile', 'audit'];
+    ? ['users', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
+    : ['users', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
   const regularTabs: TabId[] = ['ai', 'profile'];
   const availableTabs = isUserAdmin ? adminTabs : regularTabs;
   const defaultTab = initialTab && availableTabs.includes(initialTab as TabId) ? (initialTab as TabId) : (isUserAdmin ? 'users' : 'ai');
@@ -405,6 +465,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [selfDeleteInput, setSelfDeleteInput] = useState('');
   const [selfDeleteLoading, setSelfDeleteLoading] = useState(false);
 
+  // ★ v4.0: Knowledge Base state
+  const [kbDocuments, setKbDocuments] = useState<KBDocument[]>([]);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbUploading, setKbUploading] = useState(false);
+  const [kbDragOver, setKbDragOver] = useState(false);
+
   useEffect(() => { if (isOpen) { if (isUserAdmin) { admin.fetchUsers(); admin.fetchGlobalInstructions(); } loadSettingsData(); } }, [isOpen, isUserAdmin]);
   useEffect(() => { if (activeTab === 'audit' && isOpen && isUserAdmin) { admin.fetchAdminLog(); } }, [activeTab, isOpen, isUserAdmin]);
 
@@ -415,6 +481,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       errorLogService.getErrorLogs(200).then(logs => { setErrorLogs(logs); setErrorLogsLoading(false); });
     }
   }, [activeTab, isOpen, isUserSuperAdmin]);
+
+  // ★ v4.0: Load knowledge base documents when tab opens
+  useEffect(() => {
+    if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
+      const orgId = storageService.getActiveOrgId();
+      if (orgId) {
+        setKbLoading(true);
+        knowledgeBaseService.getDocuments(orgId).then(docs => {
+          setKbDocuments(docs);
+          setKbLoading(false);
+        });
+      }
+    }
+  }, [activeTab, isOpen, isUserAdmin]);
 
   useEffect(() => {
     const defaults = buildDefaultInstructionsDisplay();
@@ -428,8 +508,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 4000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(timer); } }, [message]);
 
-  // ★ v3.0 FIX: loadSettingsData — no longer calls storageService.loadSettings()
-  // which could wipe cached keys on RLS error. Instead relies on ensureSettingsLoaded.
   const loadSettingsData = async () => {
     setSettingsLoading(true);
     try {
@@ -469,7 +547,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     });
   }, [admin, t]);
 
-  // ★ v3.0: Handle delete user (SuperAdmin level)
   const handleDeleteUser = useCallback((user: AdminUser) => {
     setConfirmModal({
       isOpen: true,
@@ -484,7 +561,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     });
   }, [admin, t]);
 
-  // ★ v3.0: Handle remove user from org (Org Owner/Admin level)
   const handleRemoveOrgUser = useCallback((user: AdminUser) => {
     const activeOrgId = storageService.getActiveOrgId();
     if (!activeOrgId) return;
@@ -501,7 +577,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     });
   }, [admin, t]);
 
-  // ★ v3.0: Handle self-delete
   const handleSelfDelete = useCallback(async () => {
     if (selfDeleteInput !== 'DELETE') return;
     setSelfDeleteLoading(true);
@@ -608,6 +683,69 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     setMessage(language === 'si' ? `Razdelek ponastavljen.` : `Section reset to default.`); setIsError(false);
   };
 
+  // ★ v4.0: Knowledge Base handlers
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const handleKBUpload = useCallback(async (files: FileList | File[]) => {
+    const orgId = storageService.getActiveOrgId();
+    if (!orgId) { setToast({ message: language === 'si' ? 'Ni aktivne organizacije.' : 'No active organization.', type: 'error' }); return; }
+
+    setKbUploading(true);
+    let successCount = 0;
+    let lastError = '';
+
+    for (const file of Array.from(files)) {
+      const result = await knowledgeBaseService.uploadDocument(orgId, file);
+      if (result.success) {
+        successCount++;
+      } else {
+        lastError = result.message;
+      }
+    }
+
+    // Refresh document list
+    const docs = await knowledgeBaseService.getDocuments(orgId);
+    setKbDocuments(docs);
+    setKbUploading(false);
+
+    if (successCount > 0) {
+      setToast({ message: `${successCount} ${t.knowledge.uploadSuccess}`, type: 'success' });
+    }
+    if (lastError) {
+      setToast({ message: `${t.knowledge.uploadFailed} ${lastError}`, type: 'error' });
+    }
+  }, [t, language]);
+
+  const handleKBDelete = useCallback((doc: KBDocument) => {
+    setConfirmModal({
+      isOpen: true,
+      title: t.knowledge.delete,
+      message: `${t.knowledge.deleteConfirm}\n\n📄 ${doc.file_name}`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        const result = await knowledgeBaseService.deleteDocument(doc.id, doc.storage_path);
+        if (result.success) {
+          setKbDocuments(prev => prev.filter(d => d.id !== doc.id));
+          setToast({ message: t.knowledge.deleteSuccess, type: 'success' });
+        } else {
+          setToast({ message: `${t.knowledge.deleteFailed} ${result.message}`, type: 'error' });
+        }
+      }
+    });
+  }, [t]);
+
+  const handleKBDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setKbDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleKBUpload(e.dataTransfer.files);
+    }
+  }, [handleKBUpload]);
+
   const handleSave = () => { if (activeTab === 'ai') handleAISave(); else if (activeTab === 'profile') handlePasswordChange(); else if (activeTab === 'instructions') handleSaveGlobalInstructions(); };
 
   if (!isOpen) return null;
@@ -616,7 +754,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '👥', instructions: '📋', ai: '🤖', profile: '👤', audit: '📜', errors: '🐛' };
+  const TAB_ICONS: Record<TabId, string> = { users: '👥', instructions: '📋', ai: '🤖', profile: '👤', audit: '📜', errors: '🐛', knowledge: '📚' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
   const appInstructionsSubTabs = [ { id: 'global', label: 'Global Rules' }, { id: 'chapters', label: 'Chapters' }, { id: 'fields', label: 'Field Rules' }, { id: 'translation', label: 'Translation' }, { id: 'summary', label: 'Summary' } ];
@@ -653,12 +791,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const superadminBadgeBg = isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7';
   const superadminBadgeBorder = isDark ? 'rgba(251,191,36,0.35)' : '#FDE68A';
   const superadminBadgeText = isDark ? '#FDE68A' : '#92400E';
-  // ★ v3.0: Danger zone styles
   const dangerBg = isDark ? 'rgba(239,68,68,0.08)' : '#FEF2F2';
   const dangerBorder = isDark ? 'rgba(239,68,68,0.2)' : '#FECACA';
   const dangerBtnBg = isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2';
   const dangerBtnBorder = isDark ? 'rgba(239,68,68,0.3)' : '#FECACA';
   const dangerBtnText = isDark ? '#FCA5A5' : '#DC2626';
+
   // ═══════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════
@@ -732,7 +870,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             }}>
               <div style={{ background: colors.surface.card, borderRadius: radii['2xl'], padding: '24px', maxWidth: '440px', width: '90%', boxShadow: shadows['2xl'] }}>
                 <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 12px' }}>{confirmModal.title}</h3>
-                <p style={{ color: colors.text.body, fontSize: typography.fontSize.sm, margin: '0 0 20px', lineHeight: '1.5' }}>{confirmModal.message}</p>
+                <p style={{ color: colors.text.body, fontSize: typography.fontSize.sm, margin: '0 0 20px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>{confirmModal.message}</p>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                   <button onClick={() => setConfirmModal(null)}
                     style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
@@ -746,7 +884,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               </div>
             </div>
           )}
-
           {/* ═══ USERS TAB ═══ */}
           {activeTab === 'users' && isUserAdmin && (
             <div>
@@ -812,7 +949,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           <td style={{ padding: '10px 12px', color: colors.text.muted }}>{user.lastSignIn ? formatDate(user.lastSignIn) : t.users.never}</td>
                           <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                              {/* Role change button */}
                               {user.role === 'superadmin' ? (
                                 <span style={{ padding: '4px 10px', borderRadius: radii.lg, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}>
                                   🔒 {t.users.protected}
@@ -829,8 +965,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                                   {user.role === 'admin' ? t.users.makeUser : t.users.makeAdmin}
                                 </button>
                               )}
-
-                              {/* ★ v3.0: Delete button — SuperAdmin can delete any non-superadmin */}
                               {isUserSuperAdmin && user.role !== 'superadmin' && (
                                 <button onClick={() => handleDeleteUser(user)}
                                   title={t.users.deleteUser}
@@ -845,8 +979,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                                   🗑️ {language === 'si' ? 'Izbriši' : 'Delete'}
                                 </button>
                               )}
-
-                              {/* ★ v3.0: Org admin/owner can remove user from their org */}
                               {!isUserSuperAdmin && isUserAdmin && user.role !== 'superadmin' && user.role !== 'admin' && (
                                 <button onClick={() => handleRemoveOrgUser(user)}
                                   title={t.users.removeFromOrg}
@@ -872,10 +1004,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             </div>
           )}
 
-          {/* ═══ INSTRUCTIONS TAB — same as v2.4, unchanged ═══ */}
+          {/* ═══ INSTRUCTIONS TAB ═══ */}
           {activeTab === 'instructions' && isUserAdmin && (
             <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
-              {/* Sidebar */}
               <div style={{ width: '200px', flexShrink: 0, borderRight: `1px solid ${colors.border.light}`, paddingRight: '16px' }}>
                 {instructionSections.map((section) => (
                   <button key={section}
@@ -892,7 +1023,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </button>
                 ))}
               </div>
-              {/* Editor */}
               <div style={{ flex: 1 }}>
                 <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
                   {t.instructions.sections[activeInstructionSection as keyof typeof t.instructions.sections] || activeInstructionSection}
@@ -917,14 +1047,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             </div>
           )}
 
-          {/* ═══ AI TAB — same as v2.4, unchanged ═══ */}
+          {/* ═══ AI TAB ═══ */}
           {activeTab === 'ai' && (
             <div>
               <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>
                 🤖 {language === 'si' ? 'AI Ponudnik' : 'AI Provider'}
               </h3>
-
-              {/* Provider cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                 {(['gemini', 'openai', 'openrouter'] as AIProviderType[]).map((provider) => {
                   const isActive = aiProvider === provider;
@@ -943,8 +1071,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   );
                 })}
               </div>
-
-              {/* API Key input */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'} API Key</label>
                 <input type="password"
@@ -953,8 +1079,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   placeholder={`Enter ${aiProvider} API key...`}
                   style={inputStyle} />
               </div>
-
-              {/* Model selection */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{language === 'si' ? 'Model' : 'Model'}</label>
                 <select value={modelName} onChange={(e) => setModelName(e.target.value)}
@@ -962,8 +1086,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
               </div>
-
-              {/* Save + message */}
               {message && (
                 <div style={{ padding: '10px 14px', borderRadius: radii.lg, marginBottom: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm }}>
                   {isError ? '❌' : '✅'} {message}
@@ -982,8 +1104,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>
                 👤 {language === 'si' ? 'Profil & Varnost' : 'Profile & Security'}
               </h3>
-
-              {/* Change password */}
               <div style={{ marginBottom: '24px' }}>
                 <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
                   🔑 {language === 'si' ? 'Spremeni geslo' : 'Change Password'}
@@ -1004,8 +1124,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </div>
                 )}
               </div>
-
-              {/* 2FA / MFA section */}
               <div style={{ marginBottom: '24px' }}>
                 <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
                   🔐 {language === 'si' ? 'Dvofaktorska avtentikacija (2FA)' : 'Two-Factor Authentication (2FA)'}
@@ -1049,8 +1167,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </button>
                 )}
               </div>
-
-              {/* Logo upload — superadmin only */}
               {isUserSuperAdmin ? (
                 <div style={{ marginBottom: '24px' }}>
                   <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
@@ -1076,8 +1192,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <p style={{ color: secondaryInfoText, fontSize: typography.fontSize.xs, margin: 0, opacity: 0.85 }}>{t.whiteLabel.logoNotice}</p>
                 </div>
               )}
-
-              {/* ★ v3.0: DANGER ZONE — Delete my account */}
               <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
                 <h4 style={{ color: dangerBtnText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
                   ⚠️ {t.selfDelete.title}
@@ -1156,7 +1270,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             </div>
           )}
 
-          {/* ═══ ★ v3.0: ERROR LOG TAB ═══ */}
+          {/* ═══ ERROR LOG TAB ═══ */}
           {activeTab === 'errors' && isUserSuperAdmin && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1189,7 +1303,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </button>
                 </div>
               </div>
-
               {errorLogsLoading ? <SkeletonTable rows={5} cols={5} /> : errorLogs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted }}>
                   ✅ {t.errors.noErrors}
@@ -1228,6 +1341,159 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ ★ v4.0: KNOWLEDGE BASE TAB ═══ */}
+          {activeTab === 'knowledge' && isUserAdmin && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>
+                    📚 {t.knowledge.title}
+                  </h3>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>
+                    {t.knowledge.subtitle}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                    {kbDocuments.length} / {knowledgeBaseService.MAX_DOCS_PER_ORG} {t.knowledge.docCount}
+                  </span>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, color: secondaryInfoText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                    {t.knowledge.maxSize}: {knowledgeBaseService.MAX_FILE_SIZE / 1024 / 1024} MB
+                  </span>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                    {t.knowledge.maxPages}: {knowledgeBaseService.MAX_PAGES_PER_DOC}
+                  </span>
+                </div>
+              </div>
+
+              {/* Info banner */}
+              <div style={{
+                padding: '12px 16px', borderRadius: radii.lg, marginBottom: '16px',
+                background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`,
+                color: secondaryInfoText, fontSize: typography.fontSize.sm,
+                display: 'flex', alignItems: 'center', gap: '8px',
+              }}>
+                💡 {t.knowledge.info}
+              </div>
+
+              {/* Drag & Drop upload zone */}
+              <div
+                onDrop={handleKBDrop}
+                onDragOver={(e) => { e.preventDefault(); setKbDragOver(true); }}
+                onDragLeave={() => setKbDragOver(false)}
+                style={{
+                  border: `2px dashed ${kbDragOver ? colors.primary[400] : colors.border.light}`,
+                  borderRadius: radii.xl,
+                  padding: '24px',
+                  textAlign: 'center' as const,
+                  marginBottom: '20px',
+                  background: kbDragOver ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent',
+                  transition: `all ${animation.duration.fast}`,
+                  cursor: 'pointer',
+                }}
+                onClick={() => document.getElementById('kb-file-input')?.click()}
+              >
+                <input
+                  id="kb-file-input"
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleKBUpload(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                {kbUploading ? (
+                  <div style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
+                    ⏳ {t.knowledge.uploading}
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>📄</div>
+                    <div style={{ color: colors.text.body, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>
+                      {t.knowledge.dragDrop}
+                    </div>
+                    <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, marginTop: '4px' }}>
+                      {t.knowledge.allowedTypes}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Document table */}
+              {kbLoading ? <SkeletonTable rows={3} cols={5} /> : kbDocuments.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted, fontSize: typography.fontSize.sm }}>
+                  📂 {t.knowledge.noDocuments}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${colors.border.light}` }}>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.knowledge.fileName}</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.knowledge.fileType}</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.knowledge.fileSize}</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.knowledge.uploadedAt}</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.knowledge.actions}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kbDocuments.map((doc) => {
+                        const typeIcons: Record<string, string> = { pdf: '📕', docx: '📘', xlsx: '📗', pptx: '📙', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' };
+                        const icon = typeIcons[doc.file_type] || '📄';
+                        const hasText = doc.extracted_text && doc.extracted_text.length > 50 && !doc.extracted_text.startsWith('[');
+                        return (
+                          <tr key={doc.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
+                            <td style={{ padding: '10px 12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '18px' }}>{icon}</span>
+                                <div>
+                                  <div style={{ color: colors.text.body, fontWeight: typography.fontWeight.medium }}>
+                                    {doc.file_name}
+                                  </div>
+                                  <div style={{ fontSize: typography.fontSize.xs, color: hasText ? (isDark ? '#6EE7B7' : lightColors.success[600]) : (isDark ? '#FDE68A' : lightColors.warning[600]) }}>
+                                    {hasText
+                                      ? (language === 'si' ? '✓ Besedilo ekstrahirano' : '✓ Text extracted')
+                                      : (language === 'si' ? '⚠ Brez besedila' : '⚠ No text')}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span style={{ padding: '2px 8px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, textTransform: 'uppercase' as const }}>
+                                {doc.file_type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatFileSize(doc.file_size)}</td>
+                            <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(doc.uploaded_at, true)}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                              <button onClick={() => handleKBDelete(doc)}
+                                style={{
+                                  background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`,
+                                  borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer',
+                                  color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium,
+                                  transition: `all ${animation.duration.fast}`,
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.25)' : '#FEE2E2'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = dangerBtnBg; }}>
+                                🗑️ {t.knowledge.delete}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
