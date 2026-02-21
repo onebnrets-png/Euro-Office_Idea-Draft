@@ -2,25 +2,6 @@
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
 // v4.0 — 2026-02-21
-//
-//   ★ v4.0: Knowledge Base tab
-//     - New tab: Knowledge Base (Admin+) — upload, view, delete documents
-//     - Documents serve as mandatory AI context (same weight as Instructions)
-//     - Drag & drop upload, file type/size/page validation
-//     - Bilingual UI (EN/SI)
-//
-//   ★ v3.0: Delete capabilities + Error Log
-//     - Users tab: Delete button (SuperAdmin: any user; Org Owner: org users)
-//     - Profile tab: "Delete my account" button (self-delete for all users)
-//     - New tab: Error Log (SuperAdmin only) — view, copy, clear errors
-//     - Localized delete confirmation dialogs (EN/SI)
-//     - API key fix: loadSettingsData no longer wipes cached keys on error
-//
-//   ★ v2.4: Superadmin support
-//   ★ v2.3: OpenAI provider support
-//   ★ v2.2: Full dark-mode audit
-//   ★ v2.1: EN-only Instructions display
-//   v2.0: Merges AdminPanel + SettingsModal
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -32,8 +13,6 @@ import { SkeletonTable, SkeletonText } from '../design/components/Skeleton.tsx';
 import { colors as lightColors, darkColors, shadows, radii, animation, typography, spacing } from '../design/theme.ts';
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { TEXT } from '../locales.ts';
-
-// ─── Settings imports ─────────────────────────────────────────
 import { storageService } from '../services/storageService.ts';
 import { validateProviderKey, OPENROUTER_MODELS, GEMINI_MODELS, OPENAI_MODELS, type AIProviderType } from '../services/aiProvider.ts';
 import {
@@ -43,15 +22,9 @@ import {
   TEMPORAL_INTEGRITY_RULE, CHAPTER_LABELS, FIELD_RULE_LABELS, CHAPTERS,
   GLOBAL_RULES, FIELD_RULES, SUMMARY_RULES, TRANSLATION_RULES,
 } from '../services/Instructions.ts';
-
-// ★ v3.0: Error log service
 import { errorLogService, type ErrorLogEntry } from '../services/errorLogService.ts';
-// ★ v3.0: Organization service for org-level delete
 import { organizationService } from '../services/organizationService.ts';
-// ★ v4.0: Knowledge Base service
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
-
-// ─── Types ───────────────────────────────────────────────────
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -60,10 +33,7 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-// ★ v4.0: Added 'knowledge' tab
 type TabId = 'users' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
-
-// ─── Helpers: QR Code + Collapsible ─────────────────────────
 
 const QRCodeImage = ({ value, size = 200, colors: c }: { value: string; size?: number; colors?: typeof lightColors }) => {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
@@ -93,8 +63,6 @@ const CollapsibleSection = ({ title, defaultOpen = false, children, colors: c }:
   );
 };
 
-// ─── Localized texts ─────────────────────────────────────────
-
 const ADMIN_TEXT = {
   en: {
     title: 'Admin / Settings',
@@ -104,58 +72,35 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users',
-      instructions: 'Instructions',
-      ai: 'AI Provider',
-      profile: 'Profile & Security',
-      audit: 'Audit Log',
-      errors: 'Error Log',
-      knowledge: 'Knowledge Base',
+      users: 'Users', instructions: 'Instructions', ai: 'AI Provider',
+      profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base',
     },
     users: {
-      title: 'User Management',
-      subtitle: 'View and manage all registered users',
-      email: 'Email',
-      displayName: 'Name',
-      role: 'Role',
-      registered: 'Registered',
-      lastLogin: 'Last Login',
-      actions: 'Actions',
-      changeRole: 'Change Role',
-      makeAdmin: 'Make Admin',
-      makeUser: 'Make User',
+      title: 'User Management', subtitle: 'View and manage all registered users',
+      email: 'Email', displayName: 'Name', role: 'Role', registered: 'Registered',
+      lastLogin: 'Last Login', actions: 'Actions', changeRole: 'Change Role',
+      makeAdmin: 'Make Admin', makeUser: 'Make User',
       confirmRoleChange: 'Are you sure you want to change the role of',
       confirmToAdmin: 'to Admin? They will have full access to all settings and user management.',
       confirmToUser: 'to User? They will lose access to the Admin Panel and Instructions editor.',
       selfProtection: 'You cannot remove your own admin role.',
-      roleUpdated: 'Role updated successfully.',
-      roleUpdateFailed: 'Failed to update role:',
-      noUsers: 'No users found.',
-      totalUsers: 'Total users',
-      totalAdmins: 'Admins',
-      totalSuperAdmins: 'Super Admins',
-      protected: 'Protected',
-      never: 'Never',
+      roleUpdated: 'Role updated successfully.', roleUpdateFailed: 'Failed to update role:',
+      noUsers: 'No users found.', totalUsers: 'Total users', totalAdmins: 'Admins',
+      totalSuperAdmins: 'Super Admins', protected: 'Protected', never: 'Never',
       deleteUser: 'Delete User',
       deleteConfirm: 'Are you sure you want to PERMANENTLY delete user',
       deleteConfirmSuffix: '? All their projects and data will be removed. This cannot be undone.',
-      deleteSuccess: 'User deleted successfully.',
-      deleteFailed: 'Failed to delete user:',
+      deleteSuccess: 'User deleted successfully.', deleteFailed: 'Failed to delete user:',
       removeFromOrg: 'Remove from Org',
       removeFromOrgConfirm: 'Remove user from this organization? Their projects in this org will be deleted.',
     },
     instructions: {
-      title: 'AI Instructions',
-      subtitle: 'Edit the global AI instructions that apply to all users',
-      save: 'Save Instructions',
-      reset: 'Reset to Default',
-      saved: 'Instructions saved successfully.',
-      saveFailed: 'Failed to save instructions:',
+      title: 'AI Instructions', subtitle: 'Edit the global AI instructions that apply to all users',
+      save: 'Save Instructions', reset: 'Reset to Default',
+      saved: 'Instructions saved successfully.', saveFailed: 'Failed to save instructions:',
       resetConfirm: 'Are you sure you want to reset all instructions to their default values? This cannot be undone.',
-      resetDone: 'Instructions reset to default.',
-      resetFailed: 'Failed to reset instructions:',
-      lastUpdated: 'Last updated',
-      by: 'by',
+      resetDone: 'Instructions reset to default.', resetFailed: 'Failed to reset instructions:',
+      lastUpdated: 'Last updated', by: 'by',
       usingDefaults: 'Currently using default instructions (no custom overrides).',
       sections: {
         global: 'Global Rules', language: 'Language Rules', academic: 'Academic Writing',
@@ -165,8 +110,7 @@ const ADMIN_TEXT = {
       },
     },
     log: {
-      title: 'Audit Log',
-      subtitle: 'Track all administrative actions',
+      title: 'Audit Log', subtitle: 'Track all administrative actions',
       admin: 'Admin', action: 'Action', target: 'Target', details: 'Details', date: 'Date',
       noEntries: 'No log entries found.',
       actions: {
@@ -177,51 +121,33 @@ const ADMIN_TEXT = {
       },
     },
     errors: {
-      title: 'Error Log',
-      subtitle: 'System errors captured from all users',
+      title: 'Error Log', subtitle: 'System errors captured from all users',
       date: 'Date', user: 'User', component: 'Component', error: 'Error', code: 'Code',
-      noErrors: 'No errors in system!',
-      copyForDev: 'Copy for developer',
-      clearAll: 'Clear all',
-      clearConfirm: 'Clear all error logs?',
-      copied: 'Logs copied to clipboard!',
-      cleared: 'Logs cleared.',
+      noErrors: 'No errors in system!', copyForDev: 'Copy for developer',
+      clearAll: 'Clear all', clearConfirm: 'Clear all error logs?',
+      copied: 'Logs copied to clipboard!', cleared: 'Logs cleared.',
     },
     selfDelete: {
       title: 'Delete My Account',
       warning: 'This will permanently delete your account, all your projects, and remove you from all organizations. This action cannot be undone.',
-      button: 'Delete My Account',
-      confirmTitle: 'Confirm Account Deletion',
+      button: 'Delete My Account', confirmTitle: 'Confirm Account Deletion',
       confirmMessage: 'Type DELETE to confirm permanent deletion of your account and all data:',
-      success: 'Account deleted. You will be logged out.',
-      failed: 'Failed to delete account:',
+      success: 'Account deleted. You will be logged out.', failed: 'Failed to delete account:',
     },
-    // ★ v4.0: Knowledge Base texts
     knowledge: {
       title: 'Knowledge Base',
       subtitle: 'Upload documents that the AI must always consider when generating content',
-      upload: 'Upload Document',
-      uploading: 'Uploading...',
-      delete: 'Delete',
+      upload: 'Upload Document', uploading: 'Uploading...', delete: 'Delete',
       deleteConfirm: 'Are you sure you want to delete this document? This cannot be undone.',
-      deleteSuccess: 'Document deleted.',
-      deleteFailed: 'Failed to delete document:',
-      uploadSuccess: 'document(s) uploaded successfully.',
-      uploadFailed: 'Upload failed:',
-      noDocuments: 'No documents uploaded yet.',
-      docCount: 'documents',
-      maxDocs: 'Maximum',
-      maxSize: 'Max file size',
-      maxPages: 'Max pages per document',
+      deleteSuccess: 'Document deleted.', deleteFailed: 'Failed to delete document:',
+      uploadSuccess: 'document(s) uploaded successfully.', uploadFailed: 'Upload failed:',
+      noDocuments: 'No documents uploaded yet.', docCount: 'documents',
+      maxDocs: 'Maximum', maxSize: 'Max file size', maxPages: 'Max pages per document',
       dragDrop: 'Drag & drop files here or click to browse',
       allowedTypes: 'Allowed: PDF, DOCX, XLSX, PPTX, JPG, PNG',
-      fileName: 'File Name',
-      fileType: 'Type',
-      fileSize: 'Size',
-      uploadedAt: 'Uploaded',
-      uploadedBy: 'By',
-      actions: 'Actions',
-      info: 'Documents uploaded here serve as a knowledge base. The AI will ALWAYS use them as context when generating project content — just like the rules in Instructions.',
+      fileName: 'File Name', fileType: 'Type', fileSize: 'Size',
+      uploadedAt: 'Uploaded', uploadedBy: 'By', actions: 'Actions',
+      info: 'Documents uploaded here serve as a knowledge base. The AI will ALWAYS use them as context when generating project content \u2014 just like the rules in Instructions.',
     },
     whiteLabel: {
       logoTitle: 'Custom Logo',
@@ -235,56 +161,47 @@ const ADMIN_TEXT = {
     titleSuperAdmin: 'Super Admin / Nastavitve',
     subtitle: 'Upravljanje uporabnikov, AI nastavitev, pravil in pregled dnevnika',
     subtitleRegular: 'Nastavi AI ponudnika, profil in varnost',
-    subtitleSuperAdmin: 'Polni nadzor sistema — uporabniki, AI, pravila, blagovna znamka & dnevnik',
+    subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
-      users: 'Uporabniki',
-      instructions: 'Pravila',
-      ai: 'AI Ponudnik',
-      profile: 'Profil & Varnost',
-      audit: 'Dnevnik',
-      errors: 'Dnevnik napak',
-      knowledge: 'Baza znanja',
+      users: 'Uporabniki', instructions: 'Pravila', ai: 'AI Ponudnik',
+      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
     },
     users: {
-      title: 'Upravljanje uporabnikov',
-      subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
-      email: 'E-pošta', displayName: 'Ime', role: 'Vloga', registered: 'Registriran',
+      title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
+      email: 'E-po\u0161ta', displayName: 'Ime', role: 'Vloga', registered: 'Registriran',
       lastLogin: 'Zadnja prijava', actions: 'Akcije', changeRole: 'Spremeni vlogo',
       makeAdmin: 'Nastavi kot Admin', makeUser: 'Nastavi kot Uporabnik',
-      confirmRoleChange: 'Ali ste prepričani, da želite spremeniti vlogo uporabnika',
+      confirmRoleChange: 'Ali ste prepri\u010Dani, da \u017Eelite spremeniti vlogo uporabnika',
       confirmToAdmin: 'v Admin? Imel bo poln dostop do vseh nastavitev in upravljanja uporabnikov.',
       confirmToUser: 'v Uporabnik? Izgubil bo dostop do Admin Panela in urejevalnika pravil.',
       selfProtection: 'Ne morete odstraniti lastne admin vloge.',
-      roleUpdated: 'Vloga uspešno posodobljena.', roleUpdateFailed: 'Napaka pri posodobitvi vloge:',
+      roleUpdated: 'Vloga uspe\u0161no posodobljena.', roleUpdateFailed: 'Napaka pri posodobitvi vloge:',
       noUsers: 'Ni najdenih uporabnikov.', totalUsers: 'Skupaj uporabnikov', totalAdmins: 'Adminov',
-      totalSuperAdmins: 'Super Adminov', protected: 'Zaščiteno', never: 'Nikoli',
-      deleteUser: 'Izbriši uporabnika',
-      deleteConfirm: 'Ali ste prepričani, da želite TRAJNO izbrisati uporabnika',
-      deleteConfirmSuffix: '? Vsi njihovi projekti in podatki bodo odstranjeni. Tega ni mogoče razveljaviti.',
-      deleteSuccess: 'Uporabnik uspešno izbrisan.',
-      deleteFailed: 'Napaka pri brisanju uporabnika:',
+      totalSuperAdmins: 'Super Adminov', protected: 'Za\u0161\u010Diteno', never: 'Nikoli',
+      deleteUser: 'Izbri\u0161i uporabnika',
+      deleteConfirm: 'Ali ste prepri\u010Dani, da \u017Eelite TRAJNO izbrisati uporabnika',
+      deleteConfirmSuffix: '? Vsi njihovi projekti in podatki bodo odstranjeni. Tega ni mogo\u010De razveljaviti.',
+      deleteSuccess: 'Uporabnik uspe\u0161no izbrisan.', deleteFailed: 'Napaka pri brisanju uporabnika:',
       removeFromOrg: 'Odstrani iz org.',
       removeFromOrgConfirm: 'Odstrani uporabnika iz te organizacije? Njegovi projekti v tej org bodo izbrisani.',
     },
     instructions: {
-      title: 'AI Pravila',
-      subtitle: 'Urejanje globalnih AI pravil, ki veljajo za vse uporabnike',
+      title: 'AI Pravila', subtitle: 'Urejanje globalnih AI pravil, ki veljajo za vse uporabnike',
       save: 'Shrani pravila', reset: 'Ponastavi na privzeto',
-      saved: 'Pravila uspešno shranjena.', saveFailed: 'Napaka pri shranjevanju pravil:',
-      resetConfirm: 'Ali ste prepričani, da želite ponastaviti vsa pravila na privzete vrednosti? Tega ni mogoče razveljaviti.',
+      saved: 'Pravila uspe\u0161no shranjena.', saveFailed: 'Napaka pri shranjevanju pravil:',
+      resetConfirm: 'Ali ste prepri\u010Dani, da \u017Eelite ponastaviti vsa pravila na privzete vrednosti? Tega ni mogo\u010De razveljaviti.',
       resetDone: 'Pravila ponastavljena na privzeto.', resetFailed: 'Napaka pri ponastavitvi pravil:',
       lastUpdated: 'Zadnja posodobitev', by: 'avtor',
       usingDefaults: 'Trenutno se uporabljajo privzeta pravila (brez prilagoditev).',
       sections: {
         global: 'Globalna pravila', language: 'Jezikovna pravila', academic: 'Akademsko pisanje',
-        humanization: 'Humanizacija', projectTitle: 'Naslov projekta', mode: 'Pravila načina',
+        humanization: 'Humanizacija', projectTitle: 'Naslov projekta', mode: 'Pravila na\u010Dina',
         qualityGates: 'Kontrola kakovosti', sectionTask: 'Naloge sklopov', fieldRules: 'Pravila polj',
-        translation: 'Prevod', summary: 'Povzetek', chapter: 'Mapiranje poglavij', temporal: 'Časovna celovitost',
+        translation: 'Prevod', summary: 'Povzetek', chapter: 'Mapiranje poglavij', temporal: '\u010Casovna celovitost',
       },
     },
     log: {
-      title: 'Dnevnik sprememb',
-      subtitle: 'Sledenje vsem administrativnim akcijam',
+      title: 'Dnevnik sprememb', subtitle: 'Sledenje vsem administrativnim akcijam',
       admin: 'Admin', action: 'Akcija', target: 'Cilj', details: 'Podrobnosti', date: 'Datum',
       noEntries: 'Ni vnosov v dnevniku.',
       actions: {
@@ -295,72 +212,50 @@ const ADMIN_TEXT = {
       },
     },
     errors: {
-      title: 'Dnevnik napak',
-      subtitle: 'Sistemske napake vseh uporabnikov',
+      title: 'Dnevnik napak', subtitle: 'Sistemske napake vseh uporabnikov',
       date: 'Datum', user: 'Uporabnik', component: 'Komponenta', error: 'Napaka', code: 'Koda',
-      noErrors: 'Ni napak v sistemu!',
-      copyForDev: 'Kopiraj za razvijalca',
-      clearAll: 'Počisti vse',
-      clearConfirm: 'Izbriši vse error loge?',
-      copied: 'Logi kopirani v odložišče!',
-      cleared: 'Logi izbrisani.',
+      noErrors: 'Ni napak v sistemu!', copyForDev: 'Kopiraj za razvijalca',
+      clearAll: 'Po\u010Disti vse', clearConfirm: 'Izbri\u0161i vse error loge?',
+      copied: 'Logi kopirani v odlo\u017Ei\u0161\u010De!', cleared: 'Logi izbrisani.',
     },
     selfDelete: {
-      title: 'Izbriši moj račun',
-      warning: 'To bo trajno izbrisalo vaš račun, vse vaše projekte in vas odstranilo iz vseh organizacij. Tega dejanja ni mogoče razveljaviti.',
-      button: 'Izbriši moj račun',
-      confirmTitle: 'Potrdite izbris računa',
-      confirmMessage: 'Vnesite DELETE za potrditev trajnega izbrisa vašega računa in vseh podatkov:',
-      success: 'Račun izbrisan. Odjavljeni boste.',
-      failed: 'Napaka pri brisanju računa:',
+      title: 'Izbri\u0161i moj ra\u010Dun',
+      warning: 'To bo trajno izbrisalo va\u0161 ra\u010Dun, vse va\u0161e projekte in vas odstranilo iz vseh organizacij. Tega dejanja ni mogo\u010De razveljaviti.',
+      button: 'Izbri\u0161i moj ra\u010Dun', confirmTitle: 'Potrdite izbris ra\u010Duna',
+      confirmMessage: 'Vnesite DELETE za potrditev trajnega izbrisa va\u0161ega ra\u010Duna in vseh podatkov:',
+      success: 'Ra\u010Dun izbrisan. Odjavljeni boste.', failed: 'Napaka pri brisanju ra\u010Duna:',
     },
-    // ★ v4.0: Knowledge Base texts
     knowledge: {
       title: 'Baza znanja',
-      subtitle: 'Naložite dokumente, ki jih mora AI vedno upoštevati pri generiranju vsebin',
-      upload: 'Naloži dokument',
-      uploading: 'Nalaganje...',
-      delete: 'Izbriši',
-      deleteConfirm: 'Ali ste prepričani, da želite izbrisati ta dokument? Tega ni mogoče razveljaviti.',
-      deleteSuccess: 'Dokument izbrisan.',
-      deleteFailed: 'Napaka pri brisanju dokumenta:',
-      uploadSuccess: 'dokument(ov) uspešno naloženih.',
-      uploadFailed: 'Nalaganje ni uspelo:',
-      noDocuments: 'Še ni naloženih dokumentov.',
-      docCount: 'dokumentov',
-      maxDocs: 'Največ',
-      maxSize: 'Največja velikost',
-      maxPages: 'Največ strani',
+      subtitle: 'Nalo\u017Eite dokumente, ki jih mora AI vedno upo\u0161tevati pri generiranju vsebin',
+      upload: 'Nalo\u017Ei dokument', uploading: 'Nalaganje...', delete: 'Izbri\u0161i',
+      deleteConfirm: 'Ali ste prepri\u010Dani, da \u017Eelite izbrisati ta dokument? Tega ni mogo\u010De razveljaviti.',
+      deleteSuccess: 'Dokument izbrisan.', deleteFailed: 'Napaka pri brisanju dokumenta:',
+      uploadSuccess: 'dokument(ov) uspe\u0161no nalo\u017Eenih.', uploadFailed: 'Nalaganje ni uspelo:',
+      noDocuments: '\u0160e ni nalo\u017Eenih dokumentov.', docCount: 'dokumentov',
+      maxDocs: 'Najve\u010D', maxSize: 'Najve\u010Dja velikost', maxPages: 'Najve\u010D strani',
       dragDrop: 'Povlecite datoteke sem ali kliknite za brskanje',
       allowedTypes: 'Dovoljeno: PDF, DOCX, XLSX, PPTX, JPG, PNG',
-      fileName: 'Ime datoteke',
-      fileType: 'Tip',
-      fileSize: 'Velikost',
-      uploadedAt: 'Naloženo',
-      uploadedBy: 'Avtor',
-      actions: 'Akcije',
-      info: 'Dokumenti naloženi tukaj služijo kot baza znanja. AI jih bo VEDNO uporabil kot kontekst pri generiranju projektnih vsebin — enako kot pravila v Navodilih.',
+      fileName: 'Ime datoteke', fileType: 'Tip', fileSize: 'Velikost',
+      uploadedAt: 'Nalo\u017Eeno', uploadedBy: 'Avtor', actions: 'Akcije',
+      info: 'Dokumenti nalo\u017Eeni tukaj slu\u017Eijo kot baza znanja. AI jih bo VEDNO uporabil kot kontekst pri generiranju projektnih vsebin \u2014 enako kot pravila v Navodilih.',
     },
     whiteLabel: {
       logoTitle: 'Logotip',
-      logoNotice: 'Prilagoditev logotipa je na voljo samo v White-Label verziji. Kontaktirajte nas za več informacij.',
+      logoNotice: 'Prilagoditev logotipa je na voljo samo v White-Label verziji. Kontaktirajte nas za ve\u010D informacij.',
     },
     close: 'Zapri',
   },
 } as const;
 
-// ─── Helper: Format date ─────────────────────────────────────
-
 const formatDate = (dateStr: string | null, short = false): string => {
-  if (!dateStr) return '—';
+  if (!dateStr) return '\u2014';
   try {
     const d = new Date(dateStr);
     if (short) return d.toLocaleDateString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric' });
     return d.toLocaleString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch { return dateStr; }
 };
-
-// ─── Helper: User initials avatar ────────────────────────────
 
 const UserAvatar: React.FC<{ name: string; email: string; size?: number }> = ({ name, email, size = 36 }) => {
   const initials = (name || email || '?').split(/[\s@]+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('');
@@ -376,24 +271,22 @@ const UserAvatar: React.FC<{ name: string; email: string; size?: number }> = ({ 
   );
 };
 
-// ─── Build default instructions display — EN only ────────────
-
 const buildDefaultInstructionsDisplay = (): Record<string, string> => {
   const fmtGates = (gates: string[]): string => gates.map((g, i) => `  ${i + 1}. ${g}`).join('\n');
   return {
-    global: `═══ GLOBAL RULES ═══\nThese are the master rules that govern ALL AI content generation.\n\nARCHITECTURE PRINCIPLE:\n  Instructions.ts is the SINGLE SOURCE OF TRUTH for all AI rules.\n  geminiService.ts reads from here — it has ZERO own rules.\n\n${GLOBAL_RULES}`,
-    language: `═══ LANGUAGE DIRECTIVES ═══\n\n── English ──\n${LANGUAGE_DIRECTIVES.en}\n\n── Slovenščina ──\n${LANGUAGE_DIRECTIVES.si}\n\n── Language Mismatch Template ──\n${LANGUAGE_MISMATCH_TEMPLATE}\n\nNOTE: Language Directives are the ONLY section that retains both EN and SI.\nThis tells the AI which language to WRITE in.`,
-    academic: `═══ ACADEMIC RIGOR & CITATION RULES ═══\n\n${ACADEMIC_RIGOR_RULES.en}`,
-    humanization: `═══ HUMANIZATION RULES ═══\n\n${HUMANIZATION_RULES.en}`,
-    projectTitle: `═══ PROJECT TITLE RULES ═══\n\n${PROJECT_TITLE_RULES.en}`,
-    mode: `═══ MODE INSTRUCTIONS ═══\n\n${Object.entries(MODE_INSTRUCTIONS).map(([mode, langs]) => `── ${mode.toUpperCase()} ──\n\n${langs.en}`).join('\n\n════════════════════════════════════\n\n')}`,
-    qualityGates: `═══ QUALITY GATES ═══\n\n${Object.entries(QUALITY_GATES).map(([section, langs]) => `── ${section} ──\n\n${fmtGates(langs.en || [])}`).join('\n\n════════════════════════════════════\n\n')}`,
-    sectionTask: `═══ SECTION TASK INSTRUCTIONS ═══\n\n${Object.entries(SECTION_TASK_INSTRUCTIONS).map(([section, langs]) => `── ${section} ──\n\n${langs.en || '(empty)'}`).join('\n\n════════════════════════════════════\n\n')}`,
-    fieldRules: `═══ FIELD RULES ═══\n\n${Object.entries(FIELD_RULES).map(([key, val]) => { const label = (FIELD_RULE_LABELS as Record<string, string>)[key] || key; return `── ${label} ──\n${val.en || '(empty)'}`; }).join('\n\n')}`,
-    translation: `═══ TRANSLATION RULES ═══\n\n${TRANSLATION_RULES.en.map((r: string, i: number) => `  ${i + 1}. ${r}`).join('\n')}`,
-    summary: `═══ SUMMARY RULES ═══\n\n${SUMMARY_RULES.en}`,
-    chapter: `═══ CHAPTER RULES ═══\n\n${Object.entries(CHAPTERS).map(([key, val]) => { const label = (CHAPTER_LABELS as Record<string, string>)[key] || key; return `── ${label} ──\n${val}`; }).join('\n\n════════════════════════════════════\n\n')}`,
-    temporal: `═══ TEMPORAL INTEGRITY RULE ═══\n\n${TEMPORAL_INTEGRITY_RULE.en}`,
+    global: `\u2550\u2550\u2550 GLOBAL RULES \u2550\u2550\u2550\nThese are the master rules that govern ALL AI content generation.\n\nARCHITECTURE PRINCIPLE:\n  Instructions.ts is the SINGLE SOURCE OF TRUTH for all AI rules.\n  geminiService.ts reads from here \u2014 it has ZERO own rules.\n\n${GLOBAL_RULES}`,
+    language: `\u2550\u2550\u2550 LANGUAGE DIRECTIVES \u2550\u2550\u2550\n\n\u2500\u2500 English \u2500\u2500\n${LANGUAGE_DIRECTIVES.en}\n\n\u2500\u2500 Sloven\u0161\u010Dina \u2500\u2500\n${LANGUAGE_DIRECTIVES.si}\n\n\u2500\u2500 Language Mismatch Template \u2500\u2500\n${LANGUAGE_MISMATCH_TEMPLATE}`,
+    academic: `\u2550\u2550\u2550 ACADEMIC RIGOR & CITATION RULES \u2550\u2550\u2550\n\n${ACADEMIC_RIGOR_RULES.en}`,
+    humanization: `\u2550\u2550\u2550 HUMANIZATION RULES \u2550\u2550\u2550\n\n${HUMANIZATION_RULES.en}`,
+    projectTitle: `\u2550\u2550\u2550 PROJECT TITLE RULES \u2550\u2550\u2550\n\n${PROJECT_TITLE_RULES.en}`,
+    mode: `\u2550\u2550\u2550 MODE INSTRUCTIONS \u2550\u2550\u2550\n\n${Object.entries(MODE_INSTRUCTIONS).map(([mode, langs]) => `\u2500\u2500 ${mode.toUpperCase()} \u2500\u2500\n\n${langs.en}`).join('\n\n')}`,
+    qualityGates: `\u2550\u2550\u2550 QUALITY GATES \u2550\u2550\u2550\n\n${Object.entries(QUALITY_GATES).map(([section, langs]) => `\u2500\u2500 ${section} \u2500\u2500\n\n${fmtGates(langs.en || [])}`).join('\n\n')}`,
+    sectionTask: `\u2550\u2550\u2550 SECTION TASK INSTRUCTIONS \u2550\u2550\u2550\n\n${Object.entries(SECTION_TASK_INSTRUCTIONS).map(([section, langs]) => `\u2500\u2500 ${section} \u2500\u2500\n\n${langs.en || '(empty)'}`).join('\n\n')}`,
+    fieldRules: `\u2550\u2550\u2550 FIELD RULES \u2550\u2550\u2550\n\n${Object.entries(FIELD_RULES).map(([key, val]) => { const label = (FIELD_RULE_LABELS as Record<string, string>)[key] || key; return `\u2500\u2500 ${label} \u2500\u2500\n${val.en || '(empty)'}`; }).join('\n\n')}`,
+    translation: `\u2550\u2550\u2550 TRANSLATION RULES \u2550\u2550\u2550\n\n${TRANSLATION_RULES.en.map((r: string, i: number) => `  ${i + 1}. ${r}`).join('\n')}`,
+    summary: `\u2550\u2550\u2550 SUMMARY RULES \u2550\u2550\u2550\n\n${SUMMARY_RULES.en}`,
+    chapter: `\u2550\u2550\u2550 CHAPTER RULES \u2550\u2550\u2550\n\n${Object.entries(CHAPTERS).map(([key, val]) => { const label = (CHAPTER_LABELS as Record<string, string>)[key] || key; return `\u2500\u2500 ${label} \u2500\u2500\n${val}`; }).join('\n\n')}`,
+    temporal: `\u2550\u2550\u2550 TEMPORAL INTEGRITY RULE \u2550\u2550\u2550\n\n${TEMPORAL_INTEGRITY_RULE.en}`,
   };
 };
 
@@ -416,7 +309,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
-  // ★ v4.0: Added 'knowledge' tab for admin+
   const adminTabs: TabId[] = isUserSuperAdmin
     ? ['users', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
     : ['users', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
@@ -428,7 +320,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   useEffect(() => { if (isOpen) { admin.checkAdminStatus(); } }, [isOpen]);
   useEffect(() => { if (isOpen) { const tab = initialTab && availableTabs.includes(initialTab as TabId) ? (initialTab as TabId) : (isUserAdmin ? 'users' : 'ai'); setActiveTab(tab); } }, [isOpen, initialTab, isUserAdmin]);
 
-  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [editedInstructions, setEditedInstructions] = useState<Record<string, string>>({});
   const [activeInstructionSection, setActiveInstructionSection] = useState<string>('global');
@@ -457,15 +349,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  // ★ v3.0: Error log state
   const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>([]);
   const [errorLogsLoading, setErrorLogsLoading] = useState(false);
-
-  // ★ v3.0: Self-delete confirmation state
   const [selfDeleteInput, setSelfDeleteInput] = useState('');
   const [selfDeleteLoading, setSelfDeleteLoading] = useState(false);
 
-  // ★ v4.0: Knowledge Base state
   const [kbDocuments, setKbDocuments] = useState<KBDocument[]>([]);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbUploading, setKbUploading] = useState(false);
@@ -473,25 +361,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
   useEffect(() => { if (isOpen) { if (isUserAdmin) { admin.fetchUsers(); admin.fetchGlobalInstructions(); } loadSettingsData(); } }, [isOpen, isUserAdmin]);
   useEffect(() => { if (activeTab === 'audit' && isOpen && isUserAdmin) { admin.fetchAdminLog(); } }, [activeTab, isOpen, isUserAdmin]);
-
-  // ★ v3.0: Load error logs when tab opens
   useEffect(() => {
     if (activeTab === 'errors' && isOpen && isUserSuperAdmin) {
       setErrorLogsLoading(true);
       errorLogService.getErrorLogs(200).then(logs => { setErrorLogs(logs); setErrorLogsLoading(false); });
     }
   }, [activeTab, isOpen, isUserSuperAdmin]);
-
-  // ★ v4.0: Load knowledge base documents when tab opens
   useEffect(() => {
     if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
       const orgId = storageService.getActiveOrgId();
       if (orgId) {
         setKbLoading(true);
-        knowledgeBaseService.getDocuments(orgId).then(docs => {
-          setKbDocuments(docs);
-          setKbLoading(false);
-        });
+        knowledgeBaseService.getDocuments(orgId).then(docs => { setKbDocuments(docs); setKbLoading(false); });
       }
     }
   }, [activeTab, isOpen, isUserAdmin]);
@@ -536,44 +417,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     const confirmMsg = user.role === 'admin'
       ? `${t.users.confirmRoleChange} "${user.email}" ${t.users.confirmToUser}`
       : `${t.users.confirmRoleChange} "${user.email}" ${t.users.confirmToAdmin}`;
-    setConfirmModal({
-      isOpen: true, title: t.users.changeRole, message: confirmMsg,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        const result = await admin.updateUserRole(user.id, newRole);
-        if (result.success) { setToast({ message: t.users.roleUpdated, type: 'success' }); }
-        else { setToast({ message: `${t.users.roleUpdateFailed} ${result.message}`, type: 'error' }); }
-      }
+    setConfirmModal({ isOpen: true, title: t.users.changeRole, message: confirmMsg,
+      onConfirm: async () => { setConfirmModal(null); const result = await admin.updateUserRole(user.id, newRole); if (result.success) { setToast({ message: t.users.roleUpdated, type: 'success' }); } else { setToast({ message: `${t.users.roleUpdateFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
 
   const handleDeleteUser = useCallback((user: AdminUser) => {
-    setConfirmModal({
-      isOpen: true,
-      title: t.users.deleteUser,
-      message: `${t.users.deleteConfirm} "${user.email}"${t.users.deleteConfirmSuffix}`,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        const result = await admin.deleteUser(user.id);
-        if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); }
-        else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); }
-      }
+    setConfirmModal({ isOpen: true, title: t.users.deleteUser, message: `${t.users.deleteConfirm} "${user.email}"${t.users.deleteConfirmSuffix}`,
+      onConfirm: async () => { setConfirmModal(null); const result = await admin.deleteUser(user.id); if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); } else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
 
   const handleRemoveOrgUser = useCallback((user: AdminUser) => {
     const activeOrgId = storageService.getActiveOrgId();
     if (!activeOrgId) return;
-    setConfirmModal({
-      isOpen: true,
-      title: t.users.removeFromOrg,
-      message: `${t.users.removeFromOrgConfirm}\n\n${user.email}`,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        const result = await admin.deleteOrgUser(user.id, activeOrgId);
-        if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); }
-        else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); }
-      }
+    setConfirmModal({ isOpen: true, title: t.users.removeFromOrg, message: `${t.users.removeFromOrgConfirm}\n\n${user.email}`,
+      onConfirm: async () => { setConfirmModal(null); const result = await admin.deleteOrgUser(user.id, activeOrgId); if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); } else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
 
@@ -582,12 +441,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     setSelfDeleteLoading(true);
     const result = await admin.deleteSelf();
     setSelfDeleteLoading(false);
-    if (result.success) {
-      setToast({ message: t.selfDelete.success, type: 'success' });
-      setTimeout(() => { window.location.reload(); }, 2000);
-    } else {
-      setToast({ message: `${t.selfDelete.failed} ${result.message}`, type: 'error' });
-    }
+    if (result.success) { setToast({ message: t.selfDelete.success, type: 'success' }); setTimeout(() => { window.location.reload(); }, 2000); }
+    else { setToast({ message: `${t.selfDelete.failed} ${result.message}`, type: 'error' }); }
   }, [admin, selfDeleteInput, t]);
 
   const handleSaveGlobalInstructions = useCallback(async () => {
@@ -597,14 +452,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   }, [admin, editedInstructions, t]);
 
   const handleResetGlobalInstructions = useCallback(() => {
-    setConfirmModal({
-      isOpen: true, title: t.instructions.reset, message: t.instructions.resetConfirm,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        const result = await admin.resetInstructionsToDefault();
-        if (result.success) { setEditedInstructions({}); setToast({ message: t.instructions.resetDone, type: 'success' }); }
-        else { setToast({ message: `${t.instructions.resetFailed} ${result.message}`, type: 'error' }); }
-      }
+    setConfirmModal({ isOpen: true, title: t.instructions.reset, message: t.instructions.resetConfirm,
+      onConfirm: async () => { setConfirmModal(null); const result = await admin.resetInstructionsToDefault(); if (result.success) { setEditedInstructions({}); setToast({ message: t.instructions.resetDone, type: 'success' }); } else { setToast({ message: `${t.instructions.resetFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
 
@@ -628,7 +477,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     if (activeKey === '') { setMessage(language === 'si' ? 'Nastavitve shranjene.' : 'Settings saved.'); setIsValidating(false); setTimeout(() => onClose(), 1000); return; }
     const isValid = await validateProviderKey(aiProvider, activeKey);
     setIsValidating(false);
-    if (isValid) { setMessage(language === 'si' ? 'API ključ potrjen in shranjen!' : 'API Key validated and saved!'); setTimeout(() => onClose(), 1000); }
+    if (isValid) { setMessage(language === 'si' ? 'API klju\u010D potrjen in shranjen!' : 'API Key validated and saved!'); setTimeout(() => onClose(), 1000); }
     else { setIsError(true); setMessage(tAuth.invalidKey || "Invalid API Key"); }
   };
 
@@ -659,12 +508,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     if (enrollCode.length !== 6) { setEnrollError(language === 'si' ? 'Vnesi 6-mestno kodo.' : 'Enter a 6-digit code.'); return; }
     if (!enrollData) return;
     const result = await storageService.challengeAndVerifyMFA(enrollData.factorId, enrollCode);
-    if (result.success) { setMfaEnrolling(false); setEnrollData(null); const { totp } = await storageService.getMFAFactors(); setMfaFactors(totp.filter((f: any) => f.status === 'verified')); setMessage(language === 'si' ? '2FA uspešno aktiviran!' : '2FA enabled successfully!'); setIsError(false); }
-    else { setEnrollError(result.message || (language === 'si' ? 'Napačna koda.' : 'Invalid code.')); setEnrollCode(''); }
+    if (result.success) { setMfaEnrolling(false); setEnrollData(null); const { totp } = await storageService.getMFAFactors(); setMfaFactors(totp.filter((f: any) => f.status === 'verified')); setMessage(language === 'si' ? '2FA uspe\u0161no aktiviran!' : '2FA enabled successfully!'); setIsError(false); }
+    else { setEnrollError(result.message || (language === 'si' ? 'Napa\u010Dna koda.' : 'Invalid code.')); setEnrollCode(''); }
   };
 
   const handleDisableMFA = async (factorId: string) => {
-    if (!confirm(language === 'si' ? 'Ali res želiš deaktivirati 2FA?' : 'Disable two-factor authentication?')) return;
+    if (!confirm(language === 'si' ? 'Ali res \u017Eeli\u0161 deaktivirati 2FA?' : 'Disable two-factor authentication?')) return;
     const result = await storageService.unenrollMFA(factorId);
     if (result.success) { setMfaFactors(prev => prev.filter(f => f.id !== factorId)); setMessage(language === 'si' ? '2FA deaktiviran.' : '2FA disabled.'); setIsError(false); }
     else { setIsError(true); setMessage(result.message || (language === 'si' ? 'Napaka pri deaktivaciji.' : 'Failed to disable 2FA.')); }
@@ -680,10 +529,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     else if (sectionKey === 'SUMMARY_RULES') { updateAppInstructions(prev => ({ ...prev, SUMMARY_RULES: defaults.SUMMARY_RULES })); }
     else if (sectionKey.startsWith('chapter')) { updateAppInstructions(prev => ({ ...prev, CHAPTERS: { ...prev.CHAPTERS, [sectionKey]: defaults.CHAPTERS[sectionKey] } })); }
     else if (defaults.FIELD_RULES[sectionKey] !== undefined) { updateAppInstructions(prev => ({ ...prev, FIELD_RULES: { ...prev.FIELD_RULES, [sectionKey]: defaults.FIELD_RULES[sectionKey] } })); }
-    setMessage(language === 'si' ? `Razdelek ponastavljen.` : `Section reset to default.`); setIsError(false);
+    setMessage(language === 'si' ? 'Razdelek ponastavljen.' : 'Section reset to default.'); setIsError(false);
   };
 
-  // ★ v4.0: Knowledge Base handlers
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -693,57 +541,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const handleKBUpload = useCallback(async (files: FileList | File[]) => {
     const orgId = storageService.getActiveOrgId();
     if (!orgId) { setToast({ message: language === 'si' ? 'Ni aktivne organizacije.' : 'No active organization.', type: 'error' }); return; }
-
     setKbUploading(true);
     let successCount = 0;
     let lastError = '';
-
     for (const file of Array.from(files)) {
       const result = await knowledgeBaseService.uploadDocument(orgId, file, isUserSuperAdmin);
-      if (result.success) {
-        successCount++;
-      } else {
-        lastError = result.message;
-      }
+      if (result.success) { successCount++; } else { lastError = result.message; }
     }
-
-    // Refresh document list
     const docs = await knowledgeBaseService.getDocuments(orgId);
     setKbDocuments(docs);
     setKbUploading(false);
-
-    if (successCount > 0) {
-      setToast({ message: `${successCount} ${t.knowledge.uploadSuccess}`, type: 'success' });
-    }
-    if (lastError) {
-      setToast({ message: `${t.knowledge.uploadFailed} ${lastError}`, type: 'error' });
-    }
-  }, [t, language]);
+    if (successCount > 0) { setToast({ message: `${successCount} ${t.knowledge.uploadSuccess}`, type: 'success' }); }
+    if (lastError) { setToast({ message: `${t.knowledge.uploadFailed} ${lastError}`, type: 'error' }); }
+  }, [t, language, isUserSuperAdmin]);
 
   const handleKBDelete = useCallback((doc: KBDocument) => {
-    setConfirmModal({
-      isOpen: true,
-      title: t.knowledge.delete,
-      message: `${t.knowledge.deleteConfirm}\n\n📄 ${doc.file_name}`,
+    setConfirmModal({ isOpen: true, title: t.knowledge.delete, message: `${t.knowledge.deleteConfirm}\n\n${doc.file_name}`,
       onConfirm: async () => {
         setConfirmModal(null);
         const result = await knowledgeBaseService.deleteDocument(doc.id, doc.storage_path);
-        if (result.success) {
-          setKbDocuments(prev => prev.filter(d => d.id !== doc.id));
-          setToast({ message: t.knowledge.deleteSuccess, type: 'success' });
-        } else {
-          setToast({ message: `${t.knowledge.deleteFailed} ${result.message}`, type: 'error' });
-        }
+        if (result.success) { setKbDocuments(prev => prev.filter(d => d.id !== doc.id)); setToast({ message: t.knowledge.deleteSuccess, type: 'success' }); }
+        else { setToast({ message: `${t.knowledge.deleteFailed} ${result.message}`, type: 'error' }); }
       }
     });
   }, [t]);
 
   const handleKBDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setKbDragOver(false);
-    if (e.dataTransfer.files.length > 0) {
-      handleKBUpload(e.dataTransfer.files);
-    }
+    e.preventDefault(); setKbDragOver(false);
+    if (e.dataTransfer.files.length > 0) { handleKBUpload(e.dataTransfer.files); }
   }, [handleKBUpload]);
 
   const handleSave = () => { if (activeTab === 'ai') handleAISave(); else if (activeTab === 'profile') handlePasswordChange(); else if (activeTab === 'instructions') handleSaveGlobalInstructions(); };
@@ -754,16 +579,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '👥', instructions: '📋', ai: '🤖', profile: '👤', audit: '📜', errors: '🐛', knowledge: '📚' };
+  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
-  const appInstructionsSubTabs = [ { id: 'global', label: 'Global Rules' }, { id: 'chapters', label: 'Chapters' }, { id: 'fields', label: 'Field Rules' }, { id: 'translation', label: 'Translation' }, { id: 'summary', label: 'Summary' } ];
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 12px', border: `1px solid ${colors.border.light}`, borderRadius: radii.lg,
-    fontSize: typography.fontSize.sm, color: colors.text.body, background: colors.surface.card,
-    outline: 'none', transition: `border-color ${animation.duration.fast}`, fontFamily: typography.fontFamily.mono,
-  };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: `1px solid ${colors.border.light}`, borderRadius: radii.lg, fontSize: typography.fontSize.sm, color: colors.text.body, background: colors.surface.card, outline: 'none', transition: `border-color ${animation.duration.fast}`, fontFamily: typography.fontFamily.mono };
   const labelStyle: React.CSSProperties = { display: 'block', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.text.heading, marginBottom: '6px' };
 
   const successBg = isDark ? 'rgba(16,185,129,0.12)' : lightColors.success[50];
@@ -781,9 +601,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const secondaryInfoBg = isDark ? 'rgba(6,182,212,0.10)' : lightColors.secondary[50];
   const secondaryInfoBorder = isDark ? 'rgba(6,182,212,0.25)' : lightColors.secondary[200];
   const secondaryInfoText = isDark ? '#67E8F9' : lightColors.secondary[700];
-  const warningInfoBg = isDark ? 'rgba(245,158,11,0.10)' : lightColors.warning[50];
-  const warningInfoBorder = isDark ? 'rgba(245,158,11,0.25)' : lightColors.warning[200];
-  const warningInfoText = isDark ? '#FDE68A' : lightColors.warning[700];
   const rowHoverBg = isDark ? '#1C2940' : lightColors.primary[50];
   const rowDefaultBg = isDark ? '#162032' : 'transparent';
   const tabActiveColor = isDark ? '#A5B4FC' : lightColors.primary[600];
@@ -796,7 +613,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const dangerBtnBg = isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2';
   const dangerBtnBorder = isDark ? 'rgba(239,68,68,0.3)' : '#FECACA';
   const dangerBtnText = isDark ? '#FCA5A5' : '#DC2626';
-
   // ═══════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════
@@ -811,25 +627,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
         width: '100%', maxWidth: '1100px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'scaleIn 0.25s ease-out',
       }}>
 
-        {/* ─── Header ─── */}
+        {/* Header */}
         <div style={{ background: colors.primary.gradient, padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <h2 style={{ color: colors.text.inverse, fontSize: typography.fontSize['xl'], fontWeight: typography.fontWeight.bold, margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {isUserSuperAdmin ? '👑' : isUserAdmin ? '🛡️' : '⚙️'}{' '}
+              {isUserSuperAdmin ? '\uD83D\uDC51' : isUserAdmin ? '\uD83D\uDEE1\uFE0F' : '\u2699\uFE0F'}{' '}
               {isUserSuperAdmin ? t.titleSuperAdmin : isUserAdmin ? t.title : t.titleRegular}
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>
               {isUserSuperAdmin ? t.subtitleSuperAdmin : isUserAdmin ? t.subtitle : t.subtitleRegular}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: radii.lg, padding: '8px', cursor: 'pointer', color: colors.text.inverse, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: `background ${animation.duration.fast}` }}
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: radii.lg, padding: '8px', cursor: 'pointer', color: colors.text.inverse, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}>
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        {/* ─── Tabs ─── */}
+        {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border.light}`, background: colors.surface.card, flexShrink: 0, padding: '0 24px', overflowX: 'auto' }}>
           {availableTabs.map((tab) => (
             <button key={tab} onClick={() => { setActiveTab(tab); setMessage(''); }}
@@ -845,10 +661,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           ))}
         </div>
 
-        {/* ─── Content ─── */}
+        {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
 
-          {/* ═══ TOAST ═══ */}
+          {/* TOAST */}
           {toast && (
             <div style={{
               padding: '12px 16px', marginBottom: '16px', borderRadius: radii.lg,
@@ -858,11 +674,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium,
               display: 'flex', alignItems: 'center', gap: '8px',
             }}>
-              {toast.type === 'success' ? '✅' : '❌'} {toast.message}
+              {toast.type === 'success' ? '\u2705' : '\u274C'} {toast.message}
             </div>
           )}
 
-          {/* ═══ CONFIRM MODAL ═══ */}
+          {/* CONFIRM MODAL */}
           {confirmModal?.isOpen && (
             <div style={{
               position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -872,18 +688,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 12px' }}>{confirmModal.title}</h3>
                 <p style={{ color: colors.text.body, fontSize: typography.fontSize.sm, margin: '0 0 20px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>{confirmModal.message}</p>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => setConfirmModal(null)}
-                    style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
-                    {language === 'si' ? 'Prekliči' : 'Cancel'}
+                  <button onClick={() => setConfirmModal(null)} style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
+                    {language === 'si' ? 'Prekli\u010Di' : 'Cancel'}
                   </button>
-                  <button onClick={confirmModal.onConfirm}
-                    style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
+                  <button onClick={confirmModal.onConfirm} style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
                     {language === 'si' ? 'Potrdi' : 'Confirm'}
                   </button>
                 </div>
               </div>
             </div>
           )}
+
           {/* ═══ USERS TAB ═══ */}
           {activeTab === 'users' && isUserAdmin && (
             <div>
@@ -891,18 +706,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>{t.users.title}</h3>
                 <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{t.users.subtitle}</p>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
-                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                    {t.users.totalUsers}: {totalUsers}
-                  </span>
-                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                    {t.users.totalAdmins}: {totalAdmins}
-                  </span>
-                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                    👑 {t.users.totalSuperAdmins}: {totalSuperAdmins}
-                  </span>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{t.users.totalUsers}: {totalUsers}</span>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{t.users.totalAdmins}: {totalAdmins}</span>
+                  <span style={{ padding: '4px 12px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{'\uD83D\uDC51'} {t.users.totalSuperAdmins}: {totalSuperAdmins}</span>
                 </div>
               </div>
-
               {admin.isLoadingUsers ? <SkeletonTable rows={4} cols={6} /> : admin.users.length === 0 ? (
                 <p style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>{t.users.noUsers}</p>
               ) : (
@@ -932,17 +740,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           <td style={{ padding: '10px 12px', color: colors.text.body }}>{user.displayName}</td>
                           <td style={{ padding: '10px 12px' }}>
                             {user.role === 'superadmin' ? (
-                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold }}>
-                                👑 Super Admin
-                              </span>
+                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold }}>{'\uD83D\uDC51'} Super Admin</span>
                             ) : user.role === 'admin' ? (
-                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                                🛡️ Admin
-                              </span>
+                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{'\uD83D\uDEE1\uFE0F'} Admin</span>
                             ) : (
-                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                                User
-                              </span>
+                              <span style={{ padding: '2px 10px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>User</span>
                             )}
                           </td>
                           <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(user.createdAt, true)}</td>
@@ -950,47 +752,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                               {user.role === 'superadmin' ? (
-                                <span style={{ padding: '4px 10px', borderRadius: radii.lg, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}>
-                                  🔒 {t.users.protected}
-                                </span>
+                                <span style={{ padding: '4px 10px', borderRadius: radii.lg, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}>{'\uD83D\uDD12'} {t.users.protected}</span>
                               ) : (
-                                <button onClick={() => handleRoleChange(user)}
-                                  style={{
-                                    background: user.role === 'admin' ? warningBadgeBg : primaryBadgeBg,
-                                    border: `1px solid ${user.role === 'admin' ? warningBadgeBorder : primaryBadgeBorder}`,
-                                    borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer',
-                                    color: user.role === 'admin' ? warningBadgeText : primaryBadgeText,
-                                    fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium, transition: `all ${animation.duration.fast}`,
-                                  }}>
+                                <button onClick={() => handleRoleChange(user)} style={{ background: user.role === 'admin' ? warningBadgeBg : primaryBadgeBg, border: `1px solid ${user.role === 'admin' ? warningBadgeBorder : primaryBadgeBorder}`, borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer', color: user.role === 'admin' ? warningBadgeText : primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}>
                                   {user.role === 'admin' ? t.users.makeUser : t.users.makeAdmin}
                                 </button>
                               )}
                               {isUserSuperAdmin && user.role !== 'superadmin' && (
-                                <button onClick={() => handleDeleteUser(user)}
-                                  title={t.users.deleteUser}
-                                  style={{
-                                    background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`,
-                                    borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer',
-                                    color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium,
-                                    transition: `all ${animation.duration.fast}`,
-                                  }}
+                                <button onClick={() => handleDeleteUser(user)} title={t.users.deleteUser} style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}
                                   onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.25)' : '#FEE2E2'; }}
                                   onMouseLeave={(e) => { e.currentTarget.style.background = dangerBtnBg; }}>
-                                  🗑️ {language === 'si' ? 'Izbriši' : 'Delete'}
+                                  {'\uD83D\uDDD1\uFE0F'} {language === 'si' ? 'Izbri\u0161i' : 'Delete'}
                                 </button>
                               )}
                               {!isUserSuperAdmin && isUserAdmin && user.role !== 'superadmin' && user.role !== 'admin' && (
-                                <button onClick={() => handleRemoveOrgUser(user)}
-                                  title={t.users.removeFromOrg}
-                                  style={{
-                                    background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`,
-                                    borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer',
-                                    color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium,
-                                    transition: `all ${animation.duration.fast}`,
-                                  }}
+                                <button onClick={() => handleRemoveOrgUser(user)} title={t.users.removeFromOrg} style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}
                                   onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.25)' : '#FEE2E2'; }}
                                   onMouseLeave={(e) => { e.currentTarget.style.background = dangerBtnBg; }}>
-                                  🗑️ {t.users.removeFromOrg}
+                                  {'\uD83D\uDDD1\uFE0F'} {t.users.removeFromOrg}
                                 </button>
                               )}
                             </div>
@@ -1009,16 +788,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
               <div style={{ width: '200px', flexShrink: 0, borderRight: `1px solid ${colors.border.light}`, paddingRight: '16px' }}>
                 {instructionSections.map((section) => (
-                  <button key={section}
-                    onClick={() => setActiveInstructionSection(section)}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', marginBottom: '4px',
-                      borderRadius: radii.md, border: 'none', cursor: 'pointer',
-                      background: activeInstructionSection === section ? primaryBadgeBg : 'transparent',
-                      color: activeInstructionSection === section ? primaryBadgeText : colors.text.body,
-                      fontSize: typography.fontSize.xs, fontWeight: activeInstructionSection === section ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                      transition: `all ${animation.duration.fast}`,
-                    }}>
+                  <button key={section} onClick={() => setActiveInstructionSection(section)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', marginBottom: '4px', borderRadius: radii.md, border: 'none', cursor: 'pointer', background: activeInstructionSection === section ? primaryBadgeBg : 'transparent', color: activeInstructionSection === section ? primaryBadgeText : colors.text.body, fontSize: typography.fontSize.xs, fontWeight: activeInstructionSection === section ? typography.fontWeight.semibold : typography.fontWeight.medium }}>
                     {t.instructions.sections[section]}
                   </button>
                 ))}
@@ -1027,21 +797,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
                   {t.instructions.sections[activeInstructionSection as keyof typeof t.instructions.sections] || activeInstructionSection}
                 </h3>
-                <textarea
-                  value={editedInstructions[activeInstructionSection] || ''}
-                  onChange={(e) => handleInstructionChange(activeInstructionSection, e.target.value)}
-                  placeholder={getDefaultPlaceholder(activeInstructionSection)}
-                  style={{ ...inputStyle, minHeight: '300px', resize: 'vertical', fontFamily: typography.fontFamily.mono, fontSize: '12px', lineHeight: '1.6' }}
-                />
+                <textarea value={editedInstructions[activeInstructionSection] || ''} onChange={(e) => handleInstructionChange(activeInstructionSection, e.target.value)} placeholder={getDefaultPlaceholder(activeInstructionSection)} style={{ ...inputStyle, minHeight: '300px', resize: 'vertical', fontFamily: typography.fontFamily.mono, fontSize: '12px', lineHeight: '1.6' }} />
                 <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                  <button onClick={handleSaveGlobalInstructions}
-                    style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
-                    {t.instructions.save}
-                  </button>
-                  <button onClick={handleResetGlobalInstructions}
-                    style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
-                    {t.instructions.reset}
-                  </button>
+                  <button onClick={handleSaveGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>{t.instructions.save}</button>
+                  <button onClick={handleResetGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{t.instructions.reset}</button>
                 </div>
               </div>
             </div>
@@ -1050,21 +809,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           {/* ═══ AI TAB ═══ */}
           {activeTab === 'ai' && (
             <div>
-              <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>
-                🤖 {language === 'si' ? 'AI Ponudnik' : 'AI Provider'}
-              </h3>
+              <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>{'\uD83E\uDD16'} {language === 'si' ? 'AI Ponudnik' : 'AI Provider'}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                 {(['gemini', 'openai', 'openrouter'] as AIProviderType[]).map((provider) => {
                   const isActive = aiProvider === provider;
-                  const names = { gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', openrouter: 'OpenRouter' };
-                  const icons = { gemini: '💎', openai: '🧠', openrouter: '🌐' };
+                  const names: Record<string, string> = { gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', openrouter: 'OpenRouter' };
+                  const icons: Record<string, string> = { gemini: '\uD83D\uDC8E', openai: '\uD83E\uDDE0', openrouter: '\uD83C\uDF10' };
                   return (
-                    <button key={provider} onClick={() => handleProviderChange(provider)}
-                      style={{
-                        padding: '16px', borderRadius: radii.lg, cursor: 'pointer', textAlign: 'left',
-                        border: isActive ? `2px solid ${colors.primary[500]}` : `1px solid ${colors.border.light}`,
-                        background: isActive ? primaryBadgeBg : colors.surface.card, transition: `all ${animation.duration.fast}`,
-                      }}>
+                    <button key={provider} onClick={() => handleProviderChange(provider)} style={{ padding: '16px', borderRadius: radii.lg, cursor: 'pointer', textAlign: 'left', border: isActive ? `2px solid ${colors.primary[500]}` : `1px solid ${colors.border.light}`, background: isActive ? primaryBadgeBg : colors.surface.card }}>
                       <div style={{ fontSize: '24px', marginBottom: '8px' }}>{icons[provider]}</div>
                       <div style={{ color: colors.text.heading, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>{names[provider]}</div>
                     </button>
@@ -1073,117 +825,66 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'} API Key</label>
-                <input type="password"
-                  value={aiProvider === 'gemini' ? geminiKey : aiProvider === 'openai' ? openaiKey : openRouterKey}
-                  onChange={(e) => { if (aiProvider === 'gemini') setGeminiKey(e.target.value); else if (aiProvider === 'openai') setOpenaiKey(e.target.value); else setOpenRouterKey(e.target.value); }}
-                  placeholder={`Enter ${aiProvider} API key...`}
-                  style={inputStyle} />
+                <input type="password" value={aiProvider === 'gemini' ? geminiKey : aiProvider === 'openai' ? openaiKey : openRouterKey} onChange={(e) => { if (aiProvider === 'gemini') setGeminiKey(e.target.value); else if (aiProvider === 'openai') setOpenaiKey(e.target.value); else setOpenRouterKey(e.target.value); }} placeholder={`Enter ${aiProvider} API key...`} style={inputStyle} />
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={labelStyle}>{language === 'si' ? 'Model' : 'Model'}</label>
-                <select value={modelName} onChange={(e) => setModelName(e.target.value)}
-                  style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
+                <label style={labelStyle}>Model</label>
+                <select value={modelName} onChange={(e) => setModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
               </div>
-              {message && (
-                <div style={{ padding: '10px 14px', borderRadius: radii.lg, marginBottom: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm }}>
-                  {isError ? '❌' : '✅'} {message}
-                </div>
-              )}
-              <button onClick={handleAISave} disabled={isValidating}
-                style={{ padding: '10px 24px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: isValidating ? 'not-allowed' : 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, opacity: isValidating ? 0.7 : 1 }}>
+              {message && (<div style={{ padding: '10px 14px', borderRadius: radii.lg, marginBottom: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm }}>{isError ? '\u274C' : '\u2705'} {message}</div>)}
+              <button onClick={handleAISave} disabled={isValidating} style={{ padding: '10px 24px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: isValidating ? 'not-allowed' : 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, opacity: isValidating ? 0.7 : 1 }}>
                 {isValidating ? (language === 'si' ? 'Preverjam...' : 'Validating...') : (language === 'si' ? 'Shrani nastavitve' : 'Save Settings')}
               </button>
             </div>
           )}
 
-          {/* ═══ PROFILE & SECURITY TAB ═══ */}
+          {/* ═══ PROFILE TAB ═══ */}
           {activeTab === 'profile' && (
             <div>
-              <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>
-                👤 {language === 'si' ? 'Profil & Varnost' : 'Profile & Security'}
-              </h3>
+              <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 16px' }}>{'\uD83D\uDC64'} {language === 'si' ? 'Profil & Varnost' : 'Profile & Security'}</h3>
               <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
-                  🔑 {language === 'si' ? 'Spremeni geslo' : 'Change Password'}
-                </h4>
+                <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>{'\uD83D\uDD11'} {language === 'si' ? 'Spremeni geslo' : 'Change Password'}</h4>
                 <div style={{ display: 'grid', gap: '12px', maxWidth: '400px' }}>
-                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder={language === 'si' ? 'Novo geslo' : 'New password'} style={inputStyle} />
-                  <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder={language === 'si' ? 'Potrdi geslo' : 'Confirm password'} style={inputStyle} />
-                  <button onClick={handlePasswordChange}
-                    style={{ padding: '10px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, maxWidth: '200px' }}>
-                    {language === 'si' ? 'Spremeni geslo' : 'Change Password'}
-                  </button>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={language === 'si' ? 'Novo geslo' : 'New password'} style={inputStyle} />
+                  <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={language === 'si' ? 'Potrdi geslo' : 'Confirm password'} style={inputStyle} />
+                  <button onClick={handlePasswordChange} style={{ padding: '10px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, maxWidth: '200px' }}>{language === 'si' ? 'Spremeni geslo' : 'Change Password'}</button>
                 </div>
-                {message && activeTab === 'profile' && (
-                  <div style={{ padding: '10px 14px', borderRadius: radii.lg, marginTop: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm, maxWidth: '400px' }}>
-                    {isError ? '❌' : '✅'} {message}
-                  </div>
-                )}
+                {message && activeTab === 'profile' && (<div style={{ padding: '10px 14px', borderRadius: radii.lg, marginTop: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm, maxWidth: '400px' }}>{isError ? '\u274C' : '\u2705'} {message}</div>)}
               </div>
               <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
-                  🔐 {language === 'si' ? 'Dvofaktorska avtentikacija (2FA)' : 'Two-Factor Authentication (2FA)'}
-                </h4>
+                <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>{'\uD83D\uDD10'} {language === 'si' ? 'Dvofaktorska avtentikacija (2FA)' : 'Two-Factor Authentication (2FA)'}</h4>
                 {hasMFA ? (
                   <div>
-                    <div style={{ padding: '12px 16px', borderRadius: radii.lg, background: successBg, border: `1px solid ${successBorder}`, color: successText, marginBottom: '12px', fontSize: typography.fontSize.sm }}>
-                      ✅ {language === 'si' ? '2FA je aktiviran' : '2FA is enabled'}
-                    </div>
+                    <div style={{ padding: '12px 16px', borderRadius: radii.lg, background: successBg, border: `1px solid ${successBorder}`, color: successText, marginBottom: '12px', fontSize: typography.fontSize.sm }}>{'\u2705'} {language === 'si' ? '2FA je aktiviran' : '2FA is enabled'}</div>
                     {mfaFactors.map((f) => (
                       <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: `1px solid ${colors.border.light}`, borderRadius: radii.lg, marginBottom: '8px' }}>
                         <span style={{ color: colors.text.body, fontSize: typography.fontSize.sm }}>{f.friendly_name || 'TOTP'}</span>
-                        <button onClick={() => handleDisableMFA(f.id)}
-                          style={{ padding: '4px 12px', borderRadius: radii.lg, border: `1px solid ${dangerBtnBorder}`, background: dangerBtnBg, color: dangerBtnText, cursor: 'pointer', fontSize: typography.fontSize.xs }}>
-                          {language === 'si' ? 'Deaktiviraj' : 'Disable'}
-                        </button>
+                        <button onClick={() => handleDisableMFA(f.id)} style={{ padding: '4px 12px', borderRadius: radii.lg, border: `1px solid ${dangerBtnBorder}`, background: dangerBtnBg, color: dangerBtnText, cursor: 'pointer', fontSize: typography.fontSize.xs }}>{language === 'si' ? 'Deaktiviraj' : 'Disable'}</button>
                       </div>
                     ))}
                   </div>
                 ) : mfaEnrolling && enrollData ? (
                   <div style={{ maxWidth: '400px' }}>
-                    <p style={{ color: colors.text.body, fontSize: typography.fontSize.sm, marginBottom: '12px' }}>
-                      {language === 'si' ? 'Skeniraj QR kodo z avtentikatorjem:' : 'Scan this QR code with your authenticator app:'}
-                    </p>
+                    <p style={{ color: colors.text.body, fontSize: typography.fontSize.sm, marginBottom: '12px' }}>{language === 'si' ? 'Skeniraj QR kodo z avtentikatorjem:' : 'Scan this QR code with your authenticator app:'}</p>
                     <QRCodeImage value={enrollData.qrUri} size={200} colors={colors} />
-                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, margin: '8px 0', fontFamily: typography.fontFamily.mono, wordBreak: 'break-all' }}>
-                      {enrollData.secret}
-                    </p>
-                    <input type="text" maxLength={6} value={enrollCode} onChange={(e) => setEnrollCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000" style={{ ...inputStyle, maxWidth: '150px', textAlign: 'center', letterSpacing: '4px', fontSize: typography.fontSize.lg, marginBottom: '8px' }} />
-                    {enrollError && <p style={{ color: errorText, fontSize: typography.fontSize.xs, margin: '4px 0' }}>❌ {enrollError}</p>}
-                    <button onClick={handleVerifyMFAEnroll}
-                      style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, display: 'block', marginTop: '8px' }}>
-                      {language === 'si' ? 'Potrdi' : 'Verify'}
-                    </button>
+                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, margin: '8px 0', fontFamily: typography.fontFamily.mono, wordBreak: 'break-all' }}>{enrollData.secret}</p>
+                    <input type="text" maxLength={6} value={enrollCode} onChange={(e) => setEnrollCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" style={{ ...inputStyle, maxWidth: '150px', textAlign: 'center', letterSpacing: '4px', fontSize: typography.fontSize.lg, marginBottom: '8px' }} />
+                    {enrollError && <p style={{ color: errorText, fontSize: typography.fontSize.xs, margin: '4px 0' }}>{'\u274C'} {enrollError}</p>}
+                    <button onClick={handleVerifyMFAEnroll} style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, display: 'block', marginTop: '8px' }}>{language === 'si' ? 'Potrdi' : 'Verify'}</button>
                   </div>
                 ) : (
-                  <button onClick={handleStartMFAEnroll}
-                    style={{ padding: '10px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
-                    {language === 'si' ? 'Aktiviraj 2FA' : 'Enable 2FA'}
-                  </button>
+                  <button onClick={handleStartMFAEnroll} style={{ padding: '10px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{language === 'si' ? 'Aktiviraj 2FA' : 'Enable 2FA'}</button>
                 )}
               </div>
               {isUserSuperAdmin ? (
                 <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>
-                    🎨 {t.whiteLabel.logoTitle}
-                  </h4>
+                  <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, margin: '0 0 12px' }}>{'\uD83C\uDFA8'} {t.whiteLabel.logoTitle}</h4>
                   {customLogo && <img src={customLogo} alt="Custom Logo" style={{ maxWidth: 200, maxHeight: 60, marginBottom: '12px', borderRadius: radii.md }} />}
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <label style={{ padding: '8px 16px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
-                      {language === 'si' ? 'Naloži logo' : 'Upload Logo'}
-                      <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
-                    </label>
-                    {customLogo && (
-                      <button onClick={handleRemoveLogo}
-                        style={{ padding: '8px 16px', borderRadius: radii.lg, border: `1px solid ${dangerBtnBorder}`, background: dangerBtnBg, color: dangerBtnText, cursor: 'pointer', fontSize: typography.fontSize.sm }}>
-                        {language === 'si' ? 'Odstrani' : 'Remove'}
-                      </button>
-                    )}
+                    <label style={{ padding: '8px 16px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{language === 'si' ? 'Nalo\u017Ei logo' : 'Upload Logo'}<input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} /></label>
+                    {customLogo && (<button onClick={handleRemoveLogo} style={{ padding: '8px 16px', borderRadius: radii.lg, border: `1px solid ${dangerBtnBorder}`, background: dangerBtnBg, color: dangerBtnText, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{language === 'si' ? 'Odstrani' : 'Remove'}</button>)}
                   </div>
                 </div>
               ) : (
@@ -1193,32 +894,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 </div>
               )}
               <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
-                <h4 style={{ color: dangerBtnText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
-                  ⚠️ {t.selfDelete.title}
-                </h4>
-                <p style={{ color: isDark ? '#FDA4AF' : '#991B1B', fontSize: typography.fontSize.sm, margin: '0 0 16px', lineHeight: '1.5' }}>
-                  {t.selfDelete.warning}
-                </p>
+                <h4 style={{ color: dangerBtnText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>{'\u26A0\uFE0F'} {t.selfDelete.title}</h4>
+                <p style={{ color: isDark ? '#FDA4AF' : '#991B1B', fontSize: typography.fontSize.sm, margin: '0 0 16px', lineHeight: '1.5' }}>{t.selfDelete.warning}</p>
                 {storageService.isSuperAdmin() ? (
-                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, fontStyle: 'italic' }}>
-                    {language === 'si' ? 'SuperAdmin ne more izbrisati lastnega računa. Najprej si odvzemite SuperAdmin vlogo.' : 'SuperAdmin cannot delete own account. Demote yourself first.'}
-                  </p>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, fontStyle: 'italic' }}>{language === 'si' ? 'SuperAdmin ne more izbrisati lastnega ra\u010Duna. Najprej si odvzemite SuperAdmin vlogo.' : 'SuperAdmin cannot delete own account. Demote yourself first.'}</p>
                 ) : (
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      type="text" value={selfDeleteInput} onChange={(e) => setSelfDeleteInput(e.target.value)}
-                      placeholder={language === 'si' ? 'Vnesite DELETE' : 'Type DELETE'}
-                      style={{ ...inputStyle, maxWidth: '200px', borderColor: dangerBtnBorder }}
-                    />
-                    <button onClick={handleSelfDelete} disabled={selfDeleteInput !== 'DELETE' || selfDeleteLoading}
-                      style={{
-                        padding: '10px 20px', borderRadius: radii.lg, border: 'none',
-                        background: selfDeleteInput === 'DELETE' ? '#DC2626' : (isDark ? '#4B1113' : '#FCA5A5'),
-                        color: '#fff', cursor: selfDeleteInput === 'DELETE' ? 'pointer' : 'not-allowed',
-                        fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold,
-                        opacity: selfDeleteInput === 'DELETE' ? 1 : 0.5,
-                      }}>
-                      {selfDeleteLoading ? '...' : `🗑️ ${t.selfDelete.button}`}
+                    <input type="text" value={selfDeleteInput} onChange={(e) => setSelfDeleteInput(e.target.value)} placeholder={language === 'si' ? 'Vnesite DELETE' : 'Type DELETE'} style={{ ...inputStyle, maxWidth: '200px', borderColor: dangerBtnBorder }} />
+                    <button onClick={handleSelfDelete} disabled={selfDeleteInput !== 'DELETE' || selfDeleteLoading} style={{ padding: '10px 20px', borderRadius: radii.lg, border: 'none', background: selfDeleteInput === 'DELETE' ? '#DC2626' : (isDark ? '#4B1113' : '#FCA5A5'), color: '#fff', cursor: selfDeleteInput === 'DELETE' ? 'pointer' : 'not-allowed', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, opacity: selfDeleteInput === 'DELETE' ? 1 : 0.5 }}>
+                      {selfDeleteLoading ? '...' : `\uD83D\uDDD1\uFE0F ${t.selfDelete.button}`}
                     </button>
                   </div>
                 )}
@@ -1247,20 +931,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                     </thead>
                     <tbody>
                       {admin.adminLog.map((entry) => (
-                        <tr key={entry.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
+                        <tr key={entry.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }} onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }} onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
                           <td style={{ padding: '10px 12px', color: colors.text.muted, whiteSpace: 'nowrap' }}>{formatDate(entry.createdAt)}</td>
                           <td style={{ padding: '10px 12px', color: colors.text.body }}>{entry.adminEmail}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs }}>
-                              {(t.log.actions as Record<string, string>)[entry.action] || entry.action}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: colors.text.body }}>{entry.targetEmail || '—'}</td>
-                          <td style={{ padding: '10px 12px', color: colors.text.muted, fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.mono, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {JSON.stringify(entry.details).substring(0, 80)}
-                          </td>
+                          <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 8px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs }}>{(t.log.actions as Record<string, string>)[entry.action] || entry.action}</span></td>
+                          <td style={{ padding: '10px 12px', color: colors.text.body }}>{entry.targetEmail || '\u2014'}</td>
+                          <td style={{ padding: '10px 12px', color: colors.text.muted, fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.mono, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{JSON.stringify(entry.details).substring(0, 80)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1275,38 +951,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>
-                    🐛 {t.errors.title}
-                  </h3>
-                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>
-                    {t.errors.subtitle} — {errorLogs.length} {language === 'si' ? 'vnosov' : 'entries'}
-                  </p>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>{'\uD83D\uDC1B'} {t.errors.title}</h3>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>{t.errors.subtitle} {'\u2014'} {errorLogs.length} {language === 'si' ? 'vnosov' : 'entries'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => {
-                      const text = errorLogService.formatLogsForExport(errorLogs);
-                      navigator.clipboard.writeText(text);
-                      setToast({ message: t.errors.copied, type: 'success' });
-                    }}
-                    style={{ background: colors.primary[600], color: '#fff', border: 'none', borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>
-                    📋 {t.errors.copyForDev}
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(t.errors.clearConfirm)) return;
-                      const result = await errorLogService.clearAllLogs();
-                      if (result.success) { setErrorLogs([]); setToast({ message: t.errors.cleared, type: 'success' }); }
-                    }}
-                    style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.sm }}>
-                    🗑️ {t.errors.clearAll}
-                  </button>
+                  <button onClick={() => { const text = errorLogService.formatLogsForExport(errorLogs); navigator.clipboard.writeText(text); setToast({ message: t.errors.copied, type: 'success' }); }} style={{ background: colors.primary[600], color: '#fff', border: 'none', borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>{'\uD83D\uDCCB'} {t.errors.copyForDev}</button>
+                  <button onClick={async () => { if (!confirm(t.errors.clearConfirm)) return; const result = await errorLogService.clearAllLogs(); if (result.success) { setErrorLogs([]); setToast({ message: t.errors.cleared, type: 'success' }); } }} style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.sm }}>{'\uD83D\uDDD1\uFE0F'} {t.errors.clearAll}</button>
                 </div>
               </div>
               {errorLogsLoading ? <SkeletonTable rows={5} cols={5} /> : errorLogs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted }}>
-                  ✅ {t.errors.noErrors}
-                </div>
+                <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted }}>{'\u2705'} {t.errors.noErrors}</div>
               ) : (
                 <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
@@ -1321,24 +975,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                     </thead>
                     <tbody>
                       {errorLogs.map((log) => (
-                        <tr key={log.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
-                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: colors.text.muted }}>
-                            {new Date(log.created_at).toLocaleString('sl-SI', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td style={{ padding: '10px 12px', color: colors.text.body }}>{log.user_email || '—'}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{ background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, padding: '2px 8px', borderRadius: radii.full, fontSize: typography.fontSize.xs }}>
-                              {log.component || '—'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: colors.text.body, maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {log.error_message}
-                          </td>
-                          <td style={{ padding: '10px 12px', color: colors.text.muted, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}>
-                            {log.error_code || '—'}
-                          </td>
+                        <tr key={log.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }} onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }} onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: colors.text.muted }}>{new Date(log.created_at).toLocaleString('sl-SI', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                          <td style={{ padding: '10px 12px', color: colors.text.body }}>{log.user_email || '\u2014'}</td>
+                          <td style={{ padding: '10px 12px' }}><span style={{ background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, padding: '2px 8px', borderRadius: radii.full, fontSize: typography.fontSize.xs }}>{log.component || '\u2014'}</span></td>
+                          <td style={{ padding: '10px 12px', color: colors.text.body, maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.error_message}</td>
+                          <td style={{ padding: '10px 12px', color: colors.text.muted, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}>{log.error_code || '\u2014'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1348,22 +990,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             </div>
           )}
 
-          {/* ═══ ★ v4.0: KNOWLEDGE BASE TAB ═══ */}
+          {/* ═══ KNOWLEDGE BASE TAB ═══ */}
           {activeTab === 'knowledge' && isUserAdmin && (
             <div>
+              {/* KB Header row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>
-                    📚 {t.knowledge.title}
-                  </h3>
-                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>
-                    {t.knowledge.subtitle}
-                  </p>
-               </div>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>{'\uD83D\uDCDA'} {t.knowledge.title}</h3>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>{t.knowledge.subtitle}</p>
+                </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
-                    {kbDocuments.length}{isUserSuperAdmin ? '' : ` / ${knowledgeBaseService.MAX_DOCS_PER_ORG}`} {t.knowledge.docCount}
-                    {isUserSuperAdmin && ' (∞)'}
+                    {kbDocuments.length}{isUserSuperAdmin ? ' (\u221E)' : ` / ${knowledgeBaseService.MAX_DOCS_PER_ORG}`} {t.knowledge.docCount}
                   </span>
                   <span style={{ padding: '4px 12px', borderRadius: radii.full, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, color: secondaryInfoText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
                     {t.knowledge.maxSize}: {knowledgeBaseService.MAX_FILE_SIZE / 1024 / 1024} MB
@@ -1373,68 +1011,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </span>
                 </div>
               </div>
-              {/* Info banner */}
-              <div style={{
-                padding: '12px 16px', borderRadius: radii.lg, marginBottom: '16px',
-                background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`,
-                color: secondaryInfoText, fontSize: typography.fontSize.sm,
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                💡 {t.knowledge.info}
+              {/* KB Info banner */}
+              <div style={{ padding: '12px 16px', borderRadius: radii.lg, marginBottom: '16px', background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, color: secondaryInfoText, fontSize: typography.fontSize.sm, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {'\uD83D\uDCA1'} {t.knowledge.info}
               </div>
-
-              {/* Drag & Drop upload zone */}
+              {/* KB Drag & Drop */}
               <div
                 onDrop={handleKBDrop}
                 onDragOver={(e) => { e.preventDefault(); setKbDragOver(true); }}
                 onDragLeave={() => setKbDragOver(false)}
-                style={{
-                  border: `2px dashed ${kbDragOver ? colors.primary[400] : colors.border.light}`,
-                  borderRadius: radii.xl,
-                  padding: '24px',
-                  textAlign: 'center' as const,
-                  marginBottom: '20px',
-                  background: kbDragOver ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent',
-                  transition: `all ${animation.duration.fast}`,
-                  cursor: 'pointer',
-                }}
                 onClick={() => document.getElementById('kb-file-input')?.click()}
+                style={{ border: `2px dashed ${kbDragOver ? colors.primary[400] : colors.border.light}`, borderRadius: radii.xl, padding: '24px', textAlign: 'center', marginBottom: '20px', background: kbDragOver ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent', transition: `all ${animation.duration.fast}`, cursor: 'pointer' }}
               >
-                <input
-                  id="kb-file-input"
-                  type="file"
-                  multiple
-                  accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      handleKBUpload(e.target.files);
-                      e.target.value = '';
-                    }
-                  }}
-                />
+                <input id="kb-file-input" type="file" multiple accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => { if (e.target.files && e.target.files.length > 0) { handleKBUpload(e.target.files); e.target.value = ''; } }} />
                 {kbUploading ? (
-                  <div style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
-                    ⏳ {t.knowledge.uploading}
-                  </div>
+                  <div style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>{'\u23F3'} {t.knowledge.uploading}</div>
                 ) : (
-                  <>
-                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>📄</div>
-                    <div style={{ color: colors.text.body, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>
-                      {t.knowledge.dragDrop}
-                    </div>
-                    <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, marginTop: '4px' }}>
-                      {t.knowledge.allowedTypes}
-                    </div>
-                  </>
+                  <React.Fragment>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>{'\uD83D\uDCC4'}</div>
+                    <div style={{ color: colors.text.body, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>{t.knowledge.dragDrop}</div>
+                    <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, marginTop: '4px' }}>{t.knowledge.allowedTypes}</div>
+                  </React.Fragment>
                 )}
               </div>
-
-              {/* Document table */}
+              {/* KB Document table */}
               {kbLoading ? <SkeletonTable rows={3} cols={5} /> : kbDocuments.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted, fontSize: typography.fontSize.sm }}>
-                  📂 {t.knowledge.noDocuments}
-                </div>
+                <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted, fontSize: typography.fontSize.sm }}>{'\uD83D\uDCC2'} {t.knowledge.noDocuments}</div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
@@ -1449,46 +1051,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                     </thead>
                     <tbody>
                       {kbDocuments.map((doc) => {
-                        const typeIcons: Record<string, string> = { pdf: '📕', docx: '📘', xlsx: '📗', pptx: '📙', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' };
-                        const icon = typeIcons[doc.file_type] || '📄';
+                        const typeIcons: Record<string, string> = { pdf: '\uD83D\uDCD5', docx: '\uD83D\uDCD8', xlsx: '\uD83D\uDCD7', pptx: '\uD83D\uDCD9', jpg: '\uD83D\uDDBC\uFE0F', jpeg: '\uD83D\uDDBC\uFE0F', png: '\uD83D\uDDBC\uFE0F' };
+                        const icon = typeIcons[doc.file_type] || '\uD83D\uDCC4';
                         const hasText = doc.extracted_text && doc.extracted_text.length > 50 && !doc.extracted_text.startsWith('[');
                         return (
-                          <tr key={doc.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
+                          <tr key={doc.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }} onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }} onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
                             <td style={{ padding: '10px 12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '18px' }}>{icon}</span>
                                 <div>
-                                  <div style={{ color: colors.text.body, fontWeight: typography.fontWeight.medium }}>
-                                    {doc.file_name}
-                                  </div>
+                                  <div style={{ color: colors.text.body, fontWeight: typography.fontWeight.medium }}>{doc.file_name}</div>
                                   <div style={{ fontSize: typography.fontSize.xs, color: hasText ? (isDark ? '#6EE7B7' : lightColors.success[600]) : (isDark ? '#FDE68A' : lightColors.warning[600]) }}>
-                                    {hasText
-                                      ? (language === 'si' ? '✓ Besedilo ekstrahirano' : '✓ Text extracted')
-                                      : (language === 'si' ? '⚠ Brez besedila' : '⚠ No text')}
+                                    {hasText ? (language === 'si' ? '\u2713 Besedilo ekstrahirano' : '\u2713 Text extracted') : (language === 'si' ? '\u26A0 Brez besedila' : '\u26A0 No text')}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: '10px 12px' }}>
-                              <span style={{ padding: '2px 8px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, textTransform: 'uppercase' as const }}>
-                                {doc.file_type}
-                              </span>
-                            </td>
+                            <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 8px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, textTransform: 'uppercase' }}>{doc.file_type}</span></td>
                             <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatFileSize(doc.file_size)}</td>
                             <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(doc.uploaded_at, true)}</td>
                             <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                              <button onClick={() => handleKBDelete(doc)}
-                                style={{
-                                  background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`,
-                                  borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer',
-                                  color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium,
-                                  transition: `all ${animation.duration.fast}`,
-                                }}
+                              <button onClick={() => handleKBDelete(doc)} style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '4px 10px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}
                                 onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.25)' : '#FEE2E2'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.background = dangerBtnBg; }}>
-                                🗑️ {t.knowledge.delete}
+                                {'\uD83D\uDDD1\uFE0F'} {t.knowledge.delete}
                               </button>
                             </td>
                           </tr>
