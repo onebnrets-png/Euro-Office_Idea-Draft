@@ -200,6 +200,7 @@ const App = () => {
   const STEPS = getSteps(language);
   const completedStepsStatus = useMemo(() => STEPS.map((step) => isStepCompleted(pm.projectData, step.key)), [pm.projectData, language, STEPS]);
   const currentProjectMeta = pm.userProjects.find((p: any) => p.id === pm.currentProjectId);
+  const hasActiveProject = activeView === 'project';
 
   // ★ v4.3: Show "No Project Selected" when no project is loaded
   const hasActiveProject = !!pm.currentProjectId;
