@@ -1,11 +1,11 @@
 // components/StepNavigationBar.tsx
 // ═══════════════════════════════════════════════════════════════
 // Horizontal intervention logic navigation bar with connected circles.
-// Replaces WelcomeScreen circular layout.
-// v1.0 — 2026-02-18
+// v1.1 — 2026-02-21
+//   ★ v1.1: Responsive sizing — circles and arrows scale on smaller screens
 // ═══════════════════════════════════════════════════════════════
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ICONS, getSteps } from '../constants.tsx';
 import { stepColors, radii, animation, typography, type StepColorKey } from '../design/theme.ts';
 import { lightColors, darkColors } from '../design/theme.ts';
@@ -30,13 +30,34 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
   const colors = isDark ? darkColors : lightColors;
   const STEPS = getSteps(language);
 
+  // ★ v1.1: Responsive breakpoint
+  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' && window.innerWidth < 900);
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 900);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Responsive sizes
+  const activeSize = isCompact ? 30 : 42;
+  const inactiveSize = isCompact ? 26 : 36;
+  const arrowWidth = isCompact ? 16 : 28;
+  const arrowHeight = isCompact ? 10 : 16;
+  const checkSize = isCompact ? 12 : 16;
+  const activeFontSize = isCompact ? '9px' : '12px';
+  const inactiveFontSize = isCompact ? '8px' : '10px';
+  const labelFontSize = isCompact ? '7px' : '9px';
+  const borderActive = isCompact ? 2 : 3;
+  const borderInactive = isCompact ? 1.5 : 2;
+
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 0,
-      padding: '0 8px',
+      padding: isCompact ? '0 2px' : '0 8px',
       height: '100%',
     }}>
       {STEPS.map((step, idx) => {
@@ -45,14 +66,15 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
         const isActive = currentStepId === step.id;
         const isCompleted = completedStepsStatus[idx];
         const isClickable = step.id === 1 || isProblemAnalysisComplete;
+        const size = isActive ? activeSize : inactiveSize;
 
         return (
           <React.Fragment key={step.id}>
             {/* Arrow before each step (except first) */}
             {idx > 0 && (
-              <svg width="28" height="16" viewBox="0 0 28 16" style={{ flexShrink: 0, opacity: 0.4 }}>
-                <line x1="0" y1="8" x2="20" y2="8" stroke={colors.border.medium} strokeWidth="1.5" />
-                <polygon points="18,4 26,8 18,12" fill={colors.border.medium} />
+              <svg width={arrowWidth} height={arrowHeight} viewBox={`0 0 ${arrowWidth} ${arrowHeight}`} style={{ flexShrink: 0, opacity: 0.4 }}>
+                <line x1="0" y1={arrowHeight / 2} x2={arrowWidth - 8} y2={arrowHeight / 2} stroke={colors.border.medium} strokeWidth={isCompact ? 1 : 1.5} />
+                <polygon points={`${arrowWidth - 8},${arrowHeight / 2 - 4} ${arrowWidth},${arrowHeight / 2} ${arrowWidth - 8},${arrowHeight / 2 + 4}`} fill={colors.border.medium} />
               </svg>
             )}
 
@@ -62,8 +84,8 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
               disabled={!isClickable}
               title={step.title}
               style={{
-                width: isActive ? 42 : 36,
-                height: isActive ? 42 : 36,
+                width: size,
+                height: size,
                 borderRadius: '50%',
                 background: isActive
                   ? sc.main
@@ -71,10 +93,10 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
                     ? sc.main
                     : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
                 border: isActive
-                  ? `3px solid ${sc.border}`
+                  ? `${borderActive}px solid ${sc.border}`
                   : isCompleted
-                    ? `2px solid ${sc.main}`
-                    : `2px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
+                    ? `${borderInactive}px solid ${sc.main}`
+                    : `${borderInactive}px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -83,18 +105,17 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
                 transition: `all ${animation.duration.fast} ${animation.easing.default}`,
                 flexShrink: 0,
                 position: 'relative',
-                boxShadow: isActive ? `0 0 12px ${sc.main}40` : 'none',
-                transform: isActive ? 'scale(1)' : 'scale(1)',
+                boxShadow: isActive ? `0 0 ${isCompact ? 6 : 12}px ${sc.main}40` : 'none',
+                padding: 0,
               }}
             >
-              {/* Completed check or step number */}
               {isCompleted && !isActive ? (
                 <ICONS.CHECK style={{
-                  width: 16, height: 16, color: 'white',
+                  width: checkSize, height: checkSize, color: 'white',
                 }} />
               ) : (
                 <span style={{
-                  fontSize: isActive ? '12px' : '10px',
+                  fontSize: isActive ? activeFontSize : inactiveFontSize,
                   fontWeight: 800,
                   color: (isActive || isCompleted) ? 'white' : colors.text.muted,
                   lineHeight: 1,
@@ -104,8 +125,8 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
                 </span>
               )}
 
-              {/* Step label — only for active */}
-              {isActive && (
+              {/* Step label — only for active, hidden on compact */}
+              {isActive && !isCompact && (
                 <div style={{
                   position: 'absolute',
                   top: '100%',
@@ -113,7 +134,7 @@ const StepNavigationBar: React.FC<StepNavigationBarProps> = ({
                   transform: 'translateX(-50%)',
                   marginTop: '4px',
                   whiteSpace: 'nowrap',
-                  fontSize: '9px',
+                  fontSize: labelFontSize,
                   fontWeight: 700,
                   color: sc.main,
                   letterSpacing: '0.02em',
