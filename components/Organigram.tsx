@@ -83,7 +83,7 @@ const Organigram = ({ structure, activities, language = 'en', id, forceViewMode 
         <div
             id={id}
             ref={zoomContainerRef}
-            className="w-full p-8 bg-slate-50 relative rounded-xl border border-slate-200"
+            className="w-full p-8 bg-white relative rounded-xl border border-slate-200"
             style={{
                 ...zoomContainerStyle,
                 overflow: 'auto',
