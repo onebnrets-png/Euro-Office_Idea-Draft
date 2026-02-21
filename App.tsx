@@ -584,6 +584,13 @@ const App = () => {
                 )}
               </div>
             </div>
+            {/* ═══ GLOBAL ERROR/WARNING NOTIFICATION ═══ */}
+            <ErrorNotification
+              message={generation.error}
+              onDismiss={() => generation.setError(null)}
+              colors={colors}
+              isDark={isDark}
+        c />
 
             {/* ★ v4.2: Content area below toolbar — scrollable */}
             <div id="main-content-area" style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
