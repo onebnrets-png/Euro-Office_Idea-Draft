@@ -10,6 +10,13 @@
 //  - Calling the AI provider
 //  - Post-processing (JSON parsing, sanitization, merging)
 //
+// v5.5 — 2026-02-21 — KNOWLEDGE BASE INTEGRATION
+//   - NEW: import knowledgeBaseService
+//   - NEW: getKnowledgeBaseContext() — loads and caches KB documents for AI context
+//   - CHANGED: generateSectionContent() — KB context injected into every prompt
+//   - CHANGED: generateActivitiesPerWP() — KB context injected into scaffold + WP prompts
+//   - All previous v5.4 changes preserved.
+//
 // v5.4 — 2026-02-16 — SUB-SECTION GENERATION
 //   - NEW: Schemas, mappings, and prompt focus for 9 sub-sections:
 //     coreProblem, causes, consequences, projectTitleAcronym, mainAim,
@@ -43,6 +50,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { storageService } from './storageService.ts';
+// ★ v5.5 [A]: Knowledge Base import
+import { knowledgeBaseService } from './knowledgeBaseService.ts';
 import {
   getAppInstructions,
   getFieldRule,
@@ -211,6 +220,52 @@ const stripMarkdown = (obj: any): any => {
     return cleaned;
   }
   return obj;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// ★ v5.5 [B]: KNOWLEDGE BASE CONTEXT — loads KB docs for AI injection
+// ═══════════════════════════════════════════════════════════════
+
+let _kbCache: { orgId: string; texts: string; timestamp: number } | null = null;
+
+const KB_CACHE_TTL = 60000; // 60 seconds
+
+const getKnowledgeBaseContext = async (): Promise<string> => {
+  try {
+    const orgId = storageService.getActiveOrgId();
+    if (!orgId) return '';
+
+    if (_kbCache && _kbCache.orgId === orgId && (Date.now() - _kbCache.timestamp) < KB_CACHE_TTL) {
+      return _kbCache.texts;
+    }
+
+    const documents = await knowledgeBaseService.getAllExtractedTexts(orgId);
+
+    if (documents.length === 0) {
+      _kbCache = { orgId, texts: '', timestamp: Date.now() };
+      return '';
+    }
+
+    const header = '\u2550\u2550\u2550 MANDATORY KNOWLEDGE BASE DOCUMENTS \u2550\u2550\u2550\n' +
+      'The following documents are uploaded by the organization admin.\n' +
+      'You MUST consider this information when generating content.\n' +
+      'Treat these as authoritative reference material.\n\n';
+
+    const body = documents.map((doc, idx) =>
+      `\u2500\u2500 Document ${idx + 1}: ${doc.fileName} \u2500\u2500\n${doc.text.substring(0, 8000)}`
+    ).join('\n\n');
+
+    const result = header + body;
+
+    _kbCache = { orgId, texts: result, timestamp: Date.now() };
+
+    console.log(`[KnowledgeBase] Injected ${documents.length} documents (${result.length} chars) into AI context`);
+
+    return result;
+  } catch (e) {
+    console.warn('[KnowledgeBase] Failed to load KB context:', e);
+    return '';
+  }
 };
 
 // ─── PROJECT CONTEXT BUILDER ─────────────────────────────────────
@@ -1255,6 +1310,9 @@ export const generateSectionContent = async (
   language: 'en' | 'si' = 'en',
   mode: string = 'regenerate'
 ) => {
+  // ★ v5.5 [C]: Load KB context ONCE for this generation call
+  const kbContext = await getKnowledgeBaseContext();
+
   // ★ Handle 'expectedResults' as a composite section
   if (sectionKey === 'expectedResults') {
     const subSections = ['outputs', 'outcomes', 'impacts'];
@@ -1263,9 +1321,12 @@ export const generateSectionContent = async (
     for (const subKey of subSections) {
       try {
         const currentSubData = projectData[subKey];
-        const { prompt, schema } = getPromptAndSchemaForSection(
+        const { prompt: basePrompt, schema } = getPromptAndSchemaForSection(
           subKey, projectData, language, mode, currentSubData
         );
+
+        // ★ v5.5 [C]: Prepend KB context to each sub-prompt
+        const prompt = kbContext ? `${kbContext}\n\n${basePrompt}` : basePrompt;
 
         const config = getProviderConfig();
         const useNativeSchema = config.provider === 'gemini';
@@ -1297,9 +1358,12 @@ export const generateSectionContent = async (
 
   // ─── Standard (non-composite) generation ───
   const currentSectionData = projectData[sectionKey];
-  const { prompt, schema } = getPromptAndSchemaForSection(
+  const { prompt: basePrompt, schema } = getPromptAndSchemaForSection(
     sectionKey, projectData, language, mode, currentSectionData
   );
+
+  // ★ v5.5 [C]: Prepend KB context to the prompt
+  const prompt = kbContext ? `${kbContext}\n\n${basePrompt}` : basePrompt;
 
   const config = getProviderConfig();
   const useNativeSchema = config.provider === 'gemini';
@@ -1586,6 +1650,9 @@ export const generateActivitiesPerWP = async (
     projectDurationMonths: String(durationMonths),
   });
 
+  // ★ v5.5 [D]: Load KB context ONCE for the entire per-WP generation
+  const kbContext = await getKnowledgeBaseContext();
+
     // ════════════════════════════════════════════════════════════
   // PHASE 1: Generate WP scaffold OR use existing one
   // ════════════════════════════════════════════════════════════
@@ -1599,7 +1666,7 @@ export const generateActivitiesPerWP = async (
     console.log(`[PerWP] Phase 1: Generating scaffold...`);
     if (onProgress) onProgress(-1, 0, language === 'si' ? 'Generiranje strukture DS...' : 'Generating WP structure...');
 
-    const scaffoldPrompt = [
+    const scaffoldBasePrompt = [
       temporalRule,
       langDirective,
       language === 'si'
@@ -1619,6 +1686,9 @@ NO tasks, milestones, or deliverables — ONLY scaffold.`,
       context,
       temporalRule,
     ].filter(Boolean).join('\n\n');
+
+    // ★ v5.5 [D]: Prepend KB context to scaffold prompt
+    const scaffoldPrompt = kbContext ? `${kbContext}\n\n${scaffoldBasePrompt}` : scaffoldBasePrompt;
 
     const scaffoldSchema = {
       type: Type.ARRAY,
@@ -1832,7 +1902,7 @@ Follow this pattern. Adapt titles and descriptions to the project context, but D
     const firstTaskId = `T${wpNum}.1`;
     const isFirstWP = i === 0;
 
-    const wpPrompt = [
+    const wpBasePrompt = [
       temporalRule,
       langDirective,
       language === 'si'
@@ -1870,6 +1940,9 @@ Return ONE JSON object (not array): { "id": "${wp.id}", "title": "${wp.title}", 
       sectionRules,
       temporalRule,
     ].filter(Boolean).join('\n\n');
+
+    // ★ v5.5 [D]: Prepend KB context to each WP prompt
+    const wpPrompt = kbContext ? `${kbContext}\n\n${wpBasePrompt}` : wpBasePrompt;
 
     const wpResult = await generateContent({
       prompt: wpPrompt,
