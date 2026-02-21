@@ -1,7 +1,11 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v4.1 — 2026-02-20
+// v4.3 — 2026-02-21
+//   ★ v4.3: FIX: "No Project Selected" when no project chosen after login
+//     - Sidebar steps are disabled when no project is loaded
+//     - displayTitle shows "No Project Selected" / "Ni izbranega projekta"
+//     - hasActiveProject prop passed to Sidebar
 //   ★ v4.1: FIX: Dashboard scroll — overflow: auto on main when in dashboard view
 //   ★ v4.0: Dashboard Home as default view after login
 //     - NEW: activeView state ('dashboard' | 'project')
@@ -111,84 +115,6 @@ const ApiWarningBanner = ({ onDismiss, onOpenSettings, language }: { onDismiss: 
     </div>
   );
 };
-/* ═══ ERROR / WARNING NOTIFICATION BANNER ═══ */
-const ErrorNotification: React.FC<{
-  message: string | null;
-  onDismiss: () => void;
-  colors: ColorScheme;
-  isDark: boolean;
-}> = ({ message, onDismiss, colors: c, isDark }) => {
-  if (!message) return null;
-
-  // Detect severity: translation partial = warning, other = error
-  const isWarning = message.includes('partially done') || 
-                    message.includes('delno uspel') ||
-                    message.includes('fields failed') ||
-                    message.includes('polj ni uspelo');
-
-  const palette = isWarning ? c.warning : c.error;
-  const icon = isWarning ? '⚠️' : '❌';
-  const bgColor = isDark
-    ? (isWarning ? 'rgba(245, 158, 11, 0.10)' : 'rgba(239, 68, 68, 0.10)')
-    : (isWarning ? palette[50] : palette[50]);
-  const borderColor = isDark
-    ? (isWarning ? 'rgba(245, 158, 11, 0.25)' : 'rgba(239, 68, 68, 0.25)')
-    : (isWarning ? palette[200] : palette[200]);
-  const textColor = isDark
-    ? (isWarning ? '#FDE68A' : '#FCA5A5')
-    : (isWarning ? palette[800] : palette[800]);
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: spacing.sm,
-      padding: `${spacing.md} ${spacing.lg}`,
-      background: bgColor,
-      borderBottom: `1px solid ${borderColor}`,
-      flexShrink: 0,
-    }}>
-      <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>
-        {icon}
-      </span>
-      <p style={{
-        margin: 0,
-        flex: 1,
-        fontSize: typography.fontSize.sm,
-        fontWeight: typography.fontWeight.medium,
-        color: textColor,
-        lineHeight: typography.lineHeight.normal,
-      }}>
-        {message}
-      </p>
-      <button
-        onClick={onDismiss}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: textColor,
-          opacity: 0.5,
-          padding: spacing.xs,
-          borderRadius: radii.sm,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          transition: `opacity ${animation.duration.fast} ${animation.easing.default}`,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
-        title="Dismiss"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-  );
-};
-
 /* ═══ MAIN APP COMPONENT ═══ */
 
 const App = () => {
@@ -274,10 +200,12 @@ const App = () => {
   const STEPS = getSteps(language);
   const completedStepsStatus = useMemo(() => STEPS.map((step) => isStepCompleted(pm.projectData, step.key)), [pm.projectData, language, STEPS]);
   const currentProjectMeta = pm.userProjects.find((p: any) => p.id === pm.currentProjectId);
+
+  // ★ v4.3: Show "No Project Selected" when no project is loaded
   const hasActiveProject = !!pm.currentProjectId;
   const displayTitle = hasActiveProject
-  ? (currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled)
-  : (language === 'si' ? 'Ni izbranega projekta' : 'No Project Selected');
+    ? (currentProjectMeta?.title || pm.projectData.projectIdea?.projectTitle || t.projects.untitled)
+    : (language === 'si' ? 'Ni izbranega projekta' : 'No Project Selected');
 
   /* ═══ HANDLERS ═══ */
   const handleSettingsClose = async () => { setIsSettingsOpen(false); setIsAdminPanelOpen(false); setAdminPanelInitialTab(undefined); await auth.checkApiKey(); auth.loadCustomLogo(); };
@@ -405,7 +333,7 @@ const App = () => {
           {/* ═══ SIDEBAR ═══ */}
           <Sidebar
             language={language} projectData={pm.projectData} currentStepId={pm.currentStepId}
-            setCurrentStepId={(id: number) => { pm.setCurrentStepId(id); setActiveView('project'); }}
+            setCurrentStepId={(id: number) => { if (pm.currentProjectId) { pm.setCurrentStepId(id); setActiveView('project'); } }}
             completedStepsStatus={completedStepsStatus}
             displayTitle={displayTitle} currentUser={auth.currentUser} appLogo={auth.appLogo}
             isAdmin={adminHook.isAdmin} isSidebarOpen={isSidebarOpen}
@@ -428,6 +356,7 @@ const App = () => {
             onCollapseChange={setSidebarCollapsed}
             activeView={activeView}
             onOpenDashboard={() => setActiveView('dashboard')}
+            hasActiveProject={hasActiveProject}
           />
 
           {/* ═══ MAIN CONTENT ═══ */}
@@ -587,13 +516,6 @@ const App = () => {
                 )}
               </div>
             </div>
-            {/* ═══ GLOBAL ERROR/WARNING NOTIFICATION ═══ */}
-            <ErrorNotification
-              message={generation.error}
-              onDismiss={() => generation.setError(null)}
-              colors={colors}
-              isDark={isDark}
-        c />
 
             {/* ★ v4.2: Content area below toolbar — scrollable */}
             <div id="main-content-area" style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
@@ -626,6 +548,7 @@ const App = () => {
                   onAddItem={pm.handleAddItem}
                   onRemoveItem={pm.handleRemoveItem}
                   isLoading={generation.isLoading}
+                  error={generation.error}
                   missingApiKey={auth.showAiWarning}
                   completedStepsStatus={completedStepsStatus}
                   onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
