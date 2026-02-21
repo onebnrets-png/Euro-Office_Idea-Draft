@@ -641,29 +641,24 @@ html.dark .border-b[style*="border"] {
   border-color: #1E3050 !important;
 }
 
-
 /* ═══════════════════════════════════════════════════════════════
    7. STEP CONTENT CARDS
    Uses CSS custom properties set by ProjectDisplay:
      --step-card-bg     (light tint of section color)
      --step-card-border  (section accent color)
    ═══════════════════════════════════════════════════════════════ */
+
 /* Step cards: tinted backgrounds */
 .step-content .bg-white {
   background-color: var(--step-card-bg, #FFFFFF);
   border-color: var(--step-card-border, #E2E8F0);
 }
 
-/* ★ v5.1: Charts/diagrams keep white background — no step color bleeding */
+/* ★ v5.1 FIX: Charts/diagrams keep white background — immune to step color tinting */
 .step-content .chart-container-white,
-.step-content .chart-container-white .bg-white,
-.step-content .chart-container-white .bg-slate-50 {
+.step-content .chart-container-white *:not(select):not(input):not(button):not(option) {
+  --step-card-bg: #FFFFFF !important;
   background-color: #FFFFFF !important;
-}
-/* Light mode: subtle tinted background */
-.step-content .bg-white {
-  background-color: var(--step-card-bg, #FFFFFF);
-  border-color: var(--step-card-border, #E2E8F0);
 }
 
 /* Dark mode: override handled in 6.3 + 6.4 above */
