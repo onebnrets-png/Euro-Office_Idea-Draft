@@ -258,7 +258,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
   const handleDragEnd = useCallback(() => { setDragIdx(null); setDragOverIdx(null); }, []);
 
   const completeness = useMemo(() => calculateCompleteness(projectData), [projectData]);
-  const structuralCharts = useMemo(() => extractStructuralData(projectData), [projectData]);
+  const structuralCharts = useMemo(() => extractStructuralData(projectData, language), [projectData, language]);
 
   const orderedStats = useMemo(() => {
     return statOrder.map(id => STAT_DEFINITIONS.find(s => s.id === id)).filter(Boolean) as StatItem[];
