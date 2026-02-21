@@ -35,6 +35,7 @@ RETURNS BOOLEAN AS $$
     WHERE id = auth.uid()
     AND role = 'admin'
   );
+
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 
@@ -73,6 +74,7 @@ BEGIN
 
   RETURN NEW;
 END;
+
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger: fires after a new user is created in auth.users
@@ -198,8 +200,6 @@ DROP POLICY IF EXISTS "profiles_admin_update" ON profiles;
 DROP POLICY IF EXISTS "profiles_insert_trigger" ON profiles;
 
 -- ★ FIX DB-3: Allow SECURITY DEFINER functions (handle_new_user) to insert profiles
--- Note: handle_new_user() is SECURITY DEFINER so it bypasses RLS anyway,
--- but this policy also allows service_role / direct inserts if needed.
 CREATE POLICY "profiles_insert_trigger"
   ON profiles FOR INSERT
   WITH CHECK (true);
@@ -463,6 +463,7 @@ BEGIN
   WHERE id = NEW.user_id;
   RETURN NEW;
 END;
+
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger on auth.sessions (fires on each new session = login)
