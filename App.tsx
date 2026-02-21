@@ -111,6 +111,84 @@ const ApiWarningBanner = ({ onDismiss, onOpenSettings, language }: { onDismiss: 
     </div>
   );
 };
+/* ═══ ERROR / WARNING NOTIFICATION BANNER ═══ */
+const ErrorNotification: React.FC<{
+  message: string | null;
+  onDismiss: () => void;
+  colors: ColorScheme;
+  isDark: boolean;
+}> = ({ message, onDismiss, colors: c, isDark }) => {
+  if (!message) return null;
+
+  // Detect severity: translation partial = warning, other = error
+  const isWarning = message.includes('partially done') || 
+                    message.includes('delno uspel') ||
+                    message.includes('fields failed') ||
+                    message.includes('polj ni uspelo');
+
+  const palette = isWarning ? c.warning : c.error;
+  const icon = isWarning ? '⚠️' : '❌';
+  const bgColor = isDark
+    ? (isWarning ? 'rgba(245, 158, 11, 0.10)' : 'rgba(239, 68, 68, 0.10)')
+    : (isWarning ? palette[50] : palette[50]);
+  const borderColor = isDark
+    ? (isWarning ? 'rgba(245, 158, 11, 0.25)' : 'rgba(239, 68, 68, 0.25)')
+    : (isWarning ? palette[200] : palette[200]);
+  const textColor = isDark
+    ? (isWarning ? '#FDE68A' : '#FCA5A5')
+    : (isWarning ? palette[800] : palette[800]);
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: `${spacing.md} ${spacing.lg}`,
+      background: bgColor,
+      borderBottom: `1px solid ${borderColor}`,
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>
+        {icon}
+      </span>
+      <p style={{
+        margin: 0,
+        flex: 1,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.medium,
+        color: textColor,
+        lineHeight: typography.lineHeight.normal,
+      }}>
+        {message}
+      </p>
+      <button
+        onClick={onDismiss}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: textColor,
+          opacity: 0.5,
+          padding: spacing.xs,
+          borderRadius: radii.sm,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          transition: `opacity ${animation.duration.fast} ${animation.easing.default}`,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
+        title="Dismiss"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 /* ═══ MAIN APP COMPONENT ═══ */
 
 const App = () => {
