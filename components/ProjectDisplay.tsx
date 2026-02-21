@@ -984,7 +984,29 @@ const renderExpectedResults = (props) => {
           </div>
       </header>
 
-      {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 m-6 rounded-r shadow-sm" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
+      {error && (() => {
+        const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
+        return (
+          <div
+            className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
+              isWarning
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}
+            role="alert"
+          >
+            <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold mb-0.5">
+                {isWarning
+                  ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
+                  : 'Error'}
+              </p>
+              <p className="text-sm leading-relaxed">{error}</p>
+            </div>
+          </div>
+        );
+      })()}
       
       {isLoading && <div className="p-4 m-6 text-center text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">{typeof isLoading === 'string' ? isLoading : t.loading}</div>}
 
