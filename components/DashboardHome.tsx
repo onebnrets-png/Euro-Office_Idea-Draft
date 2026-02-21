@@ -353,7 +353,7 @@ const ProjectChartsCard: React.FC<{
   const activeData = activeProjectId ? loadedData[activeProjectId] : null;
   const chartsData = useMemo(() => {
     if (!activeData) return null;
-    try { return extractStructuralData(activeData); } catch { return null; }
+    try { return extractStructuralData(activeData, language); } catch { return null; }
   }, [activeData]);
   const completeness = useMemo(() => activeData ? calculateCompleteness(activeData) : 0, [activeData]);
   const isLoading = loadingId === activeProjectId;
