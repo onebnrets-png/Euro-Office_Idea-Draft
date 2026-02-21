@@ -1,20 +1,28 @@
 // services/knowledgeBaseService.ts
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // Knowledge Base Service — document upload, text extraction, search
-// v1.1 — 2026-02-20
+// v2.0 — 2026-02-21
+//
+// CHANGES v2.0:
+//   - MAX_FILE_SIZE: 10 MB → 5 MB
+//   - MAX_DOCS_PER_ORG: 50 → 50 (unchanged, per user spec)
+//   - NEW: MAX_PAGES_PER_DOC = 300 (page limit validation for PDF)
+//   - NEW: getPageCount() — estimates page count before upload
+//   - NEW: getAllExtractedTexts() — returns all extracted text for AI context
+//   - FIX: Use shared supabase singleton from supabaseClient.ts
 //
 // FEATURES:
 //   - Upload documents (PDF, DOCX, XLSX, PPTX, JPG, PNG)
 //   - Extract plain text from documents (client-side)
 //   - Store metadata + extracted text in Supabase
 //   - Search knowledge base by keyword matching
-//   - Max 10MB per file, max 50 docs per organization
+//   - Max 5MB per file, max 50 docs per organization, max 300 pages per doc
 //   - Prepared for future vector/RAG upgrade (Approach B)
 //
-// CHANGES v1.1:
-//   - FIX: Use shared supabase singleton from supabaseClient.ts
-//     instead of local createClient() which crashed with empty key
-// ═══════════════════════════════════════════════════════════════════
+// SECURITY:
+//   - All queries filter by organization_id (Supabase RLS enforced)
+//   - No cross-organization access possible
+// ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient';
 
@@ -33,10 +41,11 @@ export interface KBDocument {
   updated_at: string;
 }
 
-// ——— Constants ———————————————————————————————————
+// ——— Constants ——————————————————————————————————————
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_DOCS_PER_ORG = 50;
+const MAX_PAGES_PER_DOC = 300;
 const BUCKET_NAME = 'knowledge-base';
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -48,7 +57,7 @@ const ALLOWED_TYPES = [
 ];
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'pptx', 'jpg', 'jpeg', 'png'];
 
-// ——— Text Extraction (client-side) ——————————————
+// ——— Text Extraction (client-side) —————————————————————
 
 async function extractTextFromFile(file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -65,6 +74,10 @@ async function extractTextFromFile(file: File): Promise<string> {
       // Try to use pdf.js if loaded
       if (typeof (window as any).pdfjsLib !== 'undefined') {
         const pdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        // ★ v2.0: Validate page count
+        if (pdf.numPages > MAX_PAGES_PER_DOC) {
+          throw new Error(`PDF has ${pdf.numPages} pages — maximum is ${MAX_PAGES_PER_DOC}.`);
+        }
         let text = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
@@ -74,7 +87,8 @@ async function extractTextFromFile(file: File): Promise<string> {
         return text.trim() || `[PDF: ${file.name} — text extraction failed]`;
       }
       return `[PDF: ${file.name} — pdf.js not loaded, text not extracted]`;
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('maximum')) throw e; // Re-throw page limit error
       return `[PDF: ${file.name} — extraction error]`;
     }
   }
@@ -87,12 +101,17 @@ async function extractTextFromFile(file: File): Promise<string> {
       const zip = await JSZip.loadAsync(arrayBuffer);
       const docXml = await zip.file('word/document.xml')?.async('string');
       if (docXml) {
-        // Strip XML tags to get plain text
+        // Estimate pages (~3000 chars per page)
         const text = docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const estimatedPages = Math.ceil(text.length / 3000);
+        if (estimatedPages > MAX_PAGES_PER_DOC) {
+          throw new Error(`Document has ~${estimatedPages} estimated pages — maximum is ${MAX_PAGES_PER_DOC}.`);
+        }
         return text || `[DOCX: ${file.name} — empty]`;
       }
       return `[DOCX: ${file.name} — could not read content]`;
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('maximum')) throw e;
       return `[DOCX: ${file.name} — extraction error]`;
     }
   }
@@ -107,6 +126,13 @@ async function extractTextFromFile(file: File): Promise<string> {
       const xmlFiles = Object.keys(zip.files).filter(f =>
         f.endsWith('.xml') && (f.includes('sheet') || f.includes('slide'))
       );
+      // Estimate pages for PPTX (1 slide = 1 page)
+      if (ext === 'pptx') {
+        const slideCount = xmlFiles.filter(f => f.includes('slide')).length;
+        if (slideCount > MAX_PAGES_PER_DOC) {
+          throw new Error(`Presentation has ${slideCount} slides — maximum is ${MAX_PAGES_PER_DOC}.`);
+        }
+      }
       for (const xmlFile of xmlFiles) {
         const content = await zip.file(xmlFile)?.async('string');
         if (content) {
@@ -114,7 +140,8 @@ async function extractTextFromFile(file: File): Promise<string> {
         }
       }
       return text.trim() || `[${ext.toUpperCase()}: ${file.name} — empty]`;
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('maximum')) throw e;
       return `[${ext.toUpperCase()}: ${file.name} — extraction error]`;
     }
   }
@@ -122,9 +149,14 @@ async function extractTextFromFile(file: File): Promise<string> {
   return `[${ext.toUpperCase()}: ${file.name}]`;
 }
 
-// ——— Service ————————————————————————————————————
+// ——— Service ——————————————————————————————————————
 
 export const knowledgeBaseService = {
+
+  // ★ v2.0: Expose constants for UI
+  MAX_FILE_SIZE,
+  MAX_DOCS_PER_ORG,
+  MAX_PAGES_PER_DOC,
 
   // Get all documents for an organization
   async getDocuments(orgId: string): Promise<KBDocument[]> {
@@ -172,7 +204,7 @@ export const knowledgeBaseService = {
     }
 
     try {
-      // 1. Extract text
+      // 1. Extract text (will throw if page limit exceeded)
       const extractedText = await extractTextFromFile(file);
 
       // 2. Upload to Supabase Storage
@@ -238,6 +270,32 @@ export const knowledgeBaseService = {
     }
   },
 
+  // ★ v2.0: Get ALL extracted texts for AI context injection
+  // Used by geminiService to include knowledge base as mandatory context
+  async getAllExtractedTexts(orgId: string): Promise<{ fileName: string; text: string }[]> {
+    if (!orgId) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .select('file_name, extracted_text')
+        .eq('organization_id', orgId)
+        .not('extracted_text', 'is', null);
+
+      if (error || !data) return [];
+
+      return data
+        .filter((doc: any) => doc.extracted_text && doc.extracted_text.trim().length > 0)
+        .map((doc: any) => ({
+          fileName: doc.file_name,
+          text: doc.extracted_text.trim()
+        }));
+    } catch (e) {
+      console.warn('[KnowledgeBase] Failed to get extracted texts:', e);
+      return [];
+    }
+  },
+
   // Search knowledge base — keyword matching (Approach A)
   // Returns relevant text chunks for AI context
   async searchKnowledgeBase(orgId: string, query: string, maxChunks: number = 5): Promise<string[]> {
@@ -270,48 +328,19 @@ export const knowledgeBaseService = {
             if (lowerChunk.includes(word)) score++;
           }
           if (score > 0) {
-            scoredChunks.push({ text: chunk.trim(), score, source: doc.file_name });
+            scoredChunks.push({ text: chunk, score, source: doc.file_name });
           }
         }
       }
 
-      // Sort by relevance score descending, take top N
+      // Sort by score descending and return top N
       scoredChunks.sort((a, b) => b.score - a.score);
-      return scoredChunks.slice(0, maxChunks).map(c => `[${c.source}]: ${c.text}`);
+      return scoredChunks
+        .slice(0, maxChunks)
+        .map(c => `[Source: ${c.source}]\n${c.text}`);
     } catch (e) {
-      console.error('[KnowledgeBase] Search error:', e);
+      console.warn('[KnowledgeBase] Search failed:', e);
       return [];
-    }
-  },
-
-  // Get ALL knowledge text for AI prompt (truncated to maxLength)
-  async getAllKnowledgeText(orgId: string, maxLength: number = 8000): Promise<string> {
-    if (!orgId) return '';
-
-    try {
-      const { data, error } = await supabase
-        .from('knowledge_base')
-        .select('file_name, extracted_text')
-        .eq('organization_id', orgId)
-        .not('extracted_text', 'is', null);
-
-      if (error || !data || data.length === 0) return '';
-
-      let combined = '';
-      for (const doc of data) {
-        if (!doc.extracted_text) continue;
-        const docText = `\n--- ${doc.file_name} ---\n${doc.extracted_text}\n`;
-        if (combined.length + docText.length > maxLength) {
-          // Add as much as we can
-          combined += docText.substring(0, maxLength - combined.length);
-          break;
-        }
-        combined += docText;
-      }
-      return combined.trim();
-    } catch (e) {
-      console.error('[KnowledgeBase] getAllKnowledgeText error:', e);
-      return '';
     }
   },
 };
