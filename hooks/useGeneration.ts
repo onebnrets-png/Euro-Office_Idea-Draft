@@ -1,38 +1,19 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v5.0 — 2026-02-22 — PARTNERS (CONSORTIUM) AI GENERATION
+//   - NEW: executeGeneration handles sectionKey='partners'
+//     → generates partner types, expertise, PM rates via AI
+//     → post-processing ensures IDs and codes
+//   - NEW: Data insertion for 'partners' → handleUpdateData(['partners'], data)
+//   - All previous v4.2 changes preserved.
+//
 // v4.2 — 2026-02-16 — SUB-SECTION GENERATION
-//   - NEW: SUB_SECTION_MAP for mapping sub-section keys to parent/path.
-//   - NEW: executeGeneration handles sub-section keys — generates only
-//     the specific sub-part and inserts at correct path in ProjectData.
-//   - NEW: handleGenerateSection checks sub-section content specifically
-//     while using parent key for cross-language content lookup.
-//   - Supports: coreProblem, causes, consequences, projectTitleAcronym,
-//     mainAim, stateOfTheArt, proposedSolution, readinessLevels, policies.
-//   - All previous v3.9 changes preserved.
-//
 // v3.9 — 2026-02-16 — PER-WP GENERATION COMPLETE
-//   - FIX: Fill mode for incomplete WPs now uses generateActivitiesPerWP()
-//     with existingScaffold + onlyIndices instead of broken generateSectionContent()
-//     with unsupported _generateOnlyWP properties.
-//   - FIX: Mandatory WP detection (PM/Dissemination) no longer destroys
-//     existing WPs — now generates ONLY missing mandatory WPs and adds them
-//     at the correct positions (PM=WP1, Dissemination=second-to-last).
-//   - All previous v3.8 changes preserved.
-//
 // v3.8 — 2026-02-16 — PER-WP GENERATION
 // v3.7 — 2026-02-15 — SMART FILL COMPOSITE
 // v3.6 — 2026-02-15 — RETRY + BACKOFF + FRIENDLY MODALS
 // v3.5.2 — 2026-02-14 — AUTO PM + ROBUST CHECKS + 3-OPTION MODAL
-//
-// SMART 4-LEVEL LOGIC for "Generate with AI" button:
-//   1. OTHER language has content for THIS SECTION, CURRENT is empty
-//      → "Translate from SI/EN" (primary) or "Generate new" (secondary)
-//   2. BOTH languages have content for THIS SECTION
-//      → "Generate/Enhance current" (primary) or "Translate from XX" (secondary)
-//   3. CURRENT language has content, OTHER does not
-//      → 3-option modal: Enhance / Fill / Regenerate
-//   4. Nothing exists → generate without asking
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useCallback } from 'react';
@@ -181,13 +162,13 @@ export const useGeneration = ({
     [projectData, hasDeepContent]
   );
 
-  // ─── ★ v4.2: Sub-section mapping — maps sub-section keys to their parent and data path ──
+  // ─── ★ v4.2: Sub-section mapping ──
 
   const SUB_SECTION_MAP: Record<string, { parent: string; path: string[]; isString?: boolean }> = {
     coreProblem:        { parent: 'problemAnalysis', path: ['problemAnalysis', 'coreProblem'] },
     causes:             { parent: 'problemAnalysis', path: ['problemAnalysis', 'causes'] },
     consequences:       { parent: 'problemAnalysis', path: ['problemAnalysis', 'consequences'] },
-    projectTitleAcronym:{ parent: 'projectIdea',     path: ['projectIdea'] }, // merges projectTitle + projectAcronym
+    projectTitleAcronym:{ parent: 'projectIdea',     path: ['projectIdea'] },
     mainAim:            { parent: 'projectIdea',     path: ['projectIdea', 'mainAim'], isString: true },
     stateOfTheArt:      { parent: 'projectIdea',     path: ['projectIdea', 'stateOfTheArt'], isString: true },
     proposedSolution:   { parent: 'projectIdea',     path: ['projectIdea', 'proposedSolution'], isString: true },
@@ -397,6 +378,7 @@ export const useGeneration = ({
     },
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
+
   // ─── Check if other language has content FOR THIS SECTION (v3.5) ──
 
   const checkOtherLanguageHasContent = useCallback(
@@ -482,8 +464,8 @@ export const useGeneration = ({
       handleAIError,
     ]
   );
-
   // ─── Execute section generation ────────────────────────────────
+  // ★ v5.0: Added partners generation
   // ★ v4.2: Added sub-section support via SUB_SECTION_MAP
   // v3.9 FIX: Fill mode now uses generateActivitiesPerWP() with
   // existingScaffold + onlyIndices. Mandatory WP detection adds
@@ -509,6 +491,65 @@ export const useGeneration = ({
             language,
             mode
           );
+
+        // ★ v5.0: Partners (Consortium) generation
+        } else if (sectionKey === 'partners') {
+          const existingPartners = projectData.partners || [];
+
+          if (mode === 'regenerate' || existingPartners.length === 0) {
+            setIsLoading(
+              language === 'si'
+                ? 'Generiram konzorcij (partnerji)...'
+                : 'Generating consortium (partners)...'
+            );
+            generatedData = await generateSectionContent(
+              'partners',
+              projectData,
+              language,
+              'regenerate'
+            );
+          } else if (mode === 'enhance') {
+            setIsLoading(
+              language === 'si'
+                ? 'Izboljšujem konzorcij...'
+                : 'Enhancing consortium...'
+            );
+            generatedData = await generateSectionContent(
+              'partners',
+              projectData,
+              language,
+              'enhance'
+            );
+          } else {
+            // fill mode — check for empty fields
+            const needsFill = existingPartners.some((p: any) =>
+              !p.name || p.name.trim() === '' || !p.expertise || p.expertise.trim() === '' || !p.pmRate
+            );
+            if (needsFill) {
+              setIsLoading(
+                language === 'si'
+                  ? 'Dopolnjujem podatke o partnerjih...'
+                  : 'Filling partner data...'
+              );
+              generatedData = await generateSectionContent(
+                'partners',
+                { ...projectData, partners: existingPartners },
+                language,
+                'fill'
+              );
+            } else {
+              generatedData = existingPartners;
+            }
+          }
+
+          // Post-processing: ensure IDs and codes
+          if (Array.isArray(generatedData)) {
+            generatedData = generatedData.map((p: any, idx: number) => ({
+              ...p,
+              id: p.id || `partner-${idx + 1}`,
+              code: p.code || `P${idx + 1}`,
+            }));
+          }
 
         // ★ v3.8/v3.9: Smart per-WP generation for activities
         } else if (sectionKey === 'activities') {
@@ -693,7 +734,7 @@ export const useGeneration = ({
             generatedData = existingWPs;
           }
 
-                } else if (
+        } else if (
           mode === 'fill' &&
           ['projectIdea', 'problemAnalysis', 'projectManagement'].includes(sectionKey) &&
           projectData[sectionKey] &&
@@ -780,7 +821,7 @@ export const useGeneration = ({
             );
           }
 
-                } else if (mode === 'fill') {
+        } else if (mode === 'fill') {
           const sectionData = projectData[sectionKey];
 
           if (!sectionData || (Array.isArray(sectionData) && sectionData.length === 0) || !hasDeepContent(sectionData)) {
@@ -980,21 +1021,19 @@ export const useGeneration = ({
         }
 
         // ═══════════════════════════════════════════════════════════
-        // ★ v4.2: DATA INSERTION — sub-section aware
+        // ★ v5.0 / v4.2: DATA INSERTION — sub-section + partners aware
         // ═══════════════════════════════════════════════════════════
         let newData = { ...projectData };
 
         if (subMapping) {
           // ★ v4.2: Sub-section data insertion
           if (sectionKey === 'projectTitleAcronym') {
-            // Merge projectTitle + projectAcronym into projectIdea
             newData.projectIdea = {
               ...newData.projectIdea,
               projectTitle: generatedData.projectTitle || newData.projectIdea.projectTitle,
               projectAcronym: generatedData.projectAcronym || newData.projectIdea.projectAcronym,
             };
           } else if (subMapping.isString) {
-            // String sub-sections (mainAim, stateOfTheArt, proposedSolution)
             const parentKey = subMapping.path[0];
             const fieldKey = subMapping.path[1];
             newData[parentKey] = {
@@ -1002,7 +1041,6 @@ export const useGeneration = ({
               [fieldKey]: generatedData,
             };
           } else if (subMapping.path.length === 2) {
-            // Object/Array sub-sections (coreProblem, causes, consequences, readinessLevels, policies)
             const parentKey = subMapping.path[0];
             const fieldKey = subMapping.path[1];
             newData[parentKey] = {
@@ -1010,6 +1048,9 @@ export const useGeneration = ({
               [fieldKey]: generatedData,
             };
           }
+        } else if (sectionKey === 'partners') {
+          // ★ v5.0: Partners data insertion
+          newData.partners = generatedData;
         } else if (['problemAnalysis', 'projectIdea'].includes(sectionKey)) {
           newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
         } else if (sectionKey === 'activities') {
@@ -1078,7 +1119,7 @@ export const useGeneration = ({
                     ...(pmRetry?.structure || {}),
                   },
                 };
-                            } catch (e2) {
+              } catch (e2) {
                 console.error('[Auto-gen projectManagement] Retry also failed:', e2);
                 setError(
                   language === 'si'
