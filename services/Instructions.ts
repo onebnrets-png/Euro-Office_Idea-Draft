@@ -482,6 +482,58 @@ Each KER: id, title (specific noun phrase — the product/asset name), descripti
 Title MUST be a specific asset/product name: "GreenGrid Decision Support Tool" NOT "Development of a tool".
 No markdown. Vary sentence structures.`
   }
+    ,
+  partners: {
+    en: `Generate a realistic consortium (partnership) for this EU project.
+
+CONTEXT AWARENESS:
+- Analyse the project's problem analysis, objectives, activities (work packages), and expected results.
+- The consortium must cover ALL competences needed to deliver ALL work packages.
+- The number of partners depends on project complexity: typically 4–8 for Interreg, 6–15 for Horizon Europe, 3–6 for Erasmus+.
+
+FUNDING MODEL:
+- The user has ALREADY selected the funding model (centralized or decentralized). Do NOT change it.
+- Use the fundingModel value from the project data context.
+
+WHAT TO GENERATE FOR EACH PARTNER:
+1. "id" — unique string: "partner-1", "partner-2", etc.
+2. "code" — short code: "P1", "P2", "P3", etc. P1 is always the Lead Partner / Coordinator.
+3. "name" — PARTNER TYPE description (NOT a real organisation name). Examples:
+   - "Research University specialising in Environmental Science"
+   - "SME in Digital Technologies and Software Development"
+   - "Regional Development Agency with cross-border experience"
+   - "Public Authority responsible for Urban Mobility"
+   - "NGO focused on Social Inclusion and Youth Empowerment"
+   - "Technology Transfer Centre in Renewable Energy"
+   - "Chamber of Commerce with Industry Network Access"
+   - "Vocational Training Institute for Green Skills"
+4. "expertise" — 2–4 sentences describing what specific expertise this partner type brings to the project, which WPs they would lead or contribute to, and what unique value they add.
+5. "pmRate" — realistic EU Person-Month cost rate for this organisation type (in EUR):
+   - Large Research University: 5500–7000
+   - Applied Sciences University: 4500–6000
+   - SME (technology): 4000–5500
+   - SME (consulting): 3500–5000
+   - Public Authority: 3000–4500
+   - NGO / Non-profit: 2500–4000
+   - Chamber / Association: 3000–4500
+   - Vocational Training: 3500–5000
+
+PARTNER COMPOSITION RULES:
+- P1 (Lead Partner / Coordinator): must have strong project management capacity and topic expertise.
+- Include at LEAST one research/academic partner if the project has innovation or R&D components.
+- Include at LEAST one practice/implementation partner (public authority, SME, or NGO).
+- Ensure geographic diversity where the project scope implies cross-border/transnational work.
+- Every WP should have at least one partner with relevant expertise.
+- Do NOT include more partners than the project complexity justifies.
+
+CRITICAL RULES:
+- NEVER use real organisation names — always use PARTNER TYPE descriptions.
+- The "name" field describes WHAT KIND of organisation, not WHO specifically.
+- PM rates must be realistic for EU-funded projects (not too low, not too high).
+- The total consortium must be balanced: not all universities, not all SMEs.
+- Write expertise descriptions like an experienced EU project consultant.
+- No markdown formatting. No banned AI phrases.`
+  }
 };
 
 // ───────────────────────────────────────────────────────────────
