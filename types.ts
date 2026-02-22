@@ -1,16 +1,18 @@
 // types.ts
 // ═══════════════════════════════════════════════════════════════
 // TypeScript type definitions for the EU Project Idea Draft app.
-// v6.0 — 2026-02-22 — CHANGES:
-//   - ★ v6.0: Partnership & Finance data model
-//     → PM_HOURS_PER_MONTH = 143 (EU standard)
-//     → FundingModel, CostModelType types
-//     → ProjectPartner, DirectCostItem, IndirectCostItem,
-//       TaskPartnerAllocation interfaces
-//     → CENTRALIZED_DIRECT_COSTS, CENTRALIZED_INDIRECT_COSTS,
-//       DECENTRALIZED_DIRECT_COSTS, DECENTRALIZED_INDIRECT_COSTS constants
-//     → Task extended with optional partnerAllocations
-//     → ProjectData extended with partners[], fundingModel, maxPartners
+// v7.0 — 2026-02-22 — CHANGES:
+//   - ★ v7.0: BREAKING CHANGES for Finance/Partners refactor:
+//     → FIX: "Potovalni stroški" → "Potni stroški"
+//     → NEW: PartnerType union type (faculty, researchInstitute, sme, etc.)
+//     → CHANGED: ProjectPartner now includes partnerType field
+//     → NEW: IndirectCostSettings — project-level % and applicable categories
+//     → CHANGED: TaskPartnerAllocation simplified — indirectCosts removed
+//       (indirect costs now calculated centrally from IndirectCostSettings)
+//     → CHANGED: ProjectData extended with indirectCostSettings
+//     → REMOVED: CENTRALIZED_INDIRECT_COSTS, DECENTRALIZED_INDIRECT_COSTS
+//       (replaced by project-level IndirectCostSettings)
+//   - v6.0: Partnership & Finance data model (base)
 //   - v5.1: Multi-tenant organization types
 //   - v5.0: Chart image data, admin logs, extraction types
 // ═══════════════════════════════════════════════════════════════
@@ -22,24 +24,30 @@ export const PM_HOURS_PER_MONTH = 143;
 export type FundingModel = 'centralized' | 'decentralized';
 export type CostModelType = 'actual' | 'unit' | 'lumpSum' | 'flatRate';
 
+// ─── PARTNER TYPES ───────────────────────────────────────────────
+// ★ v7.0: Strongly-typed partner categories
+export type PartnerType =
+  | 'faculty'
+  | 'researchInstitute'
+  | 'sme'
+  | 'publicAgency'
+  | 'internationalAssociation'
+  | 'ministry'
+  | 'ngo'
+  | 'largeEnterprise'
+  | 'other';
+
 // ─── COST CATEGORY CONSTANTS ─────────────────────────────────────
+// ★ v7.0: FIX "Potovalni stroški" → "Potni stroški"
 
 export const CENTRALIZED_DIRECT_COSTS = [
   { key: 'labourCosts', en: 'Labour costs', si: 'Stroški dela' },
   { key: 'subContractorCosts', en: 'Sub-contractor costs', si: 'Stroški podizvajalcev' },
-  { key: 'travelCosts', en: 'Travel costs', si: 'Potovalni stroški' },
+  { key: 'travelCosts', en: 'Travel costs', si: 'Potni stroški' },
   { key: 'materials', en: 'Materials / Consumables', si: 'Material / Potrošni material' },
   { key: 'depreciationEquipment', en: 'Depreciation of equipment', si: 'Amortizacija opreme' },
   { key: 'otherProjectCosts', en: 'Other project costs', si: 'Drugi projektni stroški' },
   { key: 'investmentCosts', en: 'Investment costs', si: 'Investicijski stroški' },
-];
-
-export const CENTRALIZED_INDIRECT_COSTS = [
-  { key: 'rent', en: 'Rent', si: 'Najemnina' },
-  { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
-  { key: 'telecommunications', en: 'Telecommunications', si: 'Telekomunikacije' },
-  { key: 'smallConsumables', en: 'Small consumables', si: 'Drobni potrošni material' },
-  { key: 'administrativeCosts', en: 'Administrative costs', si: 'Administrativni stroški' },
 ];
 
 export const DECENTRALIZED_DIRECT_COSTS = [
@@ -52,13 +60,19 @@ export const DECENTRALIZED_DIRECT_COSTS = [
   { key: 'tangibleAssetInvestment', en: 'Investments in tangible assets', si: 'Investicije v opredmetena osnovna sredstva' },
 ];
 
-export const DECENTRALIZED_INDIRECT_COSTS = [
+// ★ v7.0: Indirect cost categories kept for REFERENCE in Finance settings UI
+// (user picks which direct categories the indirect % applies to)
+export const INDIRECT_COST_REFERENCE_CATEGORIES = [
   { key: 'rent', en: 'Rent', si: 'Najemnina' },
   { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
   { key: 'telecommunications', en: 'Telecommunications', si: 'Telekomunikacije' },
   { key: 'smallConsumables', en: 'Small consumables', si: 'Drobni potrošni material' },
   { key: 'administrativeCosts', en: 'Administrative costs', si: 'Administrativni stroški' },
 ];
+
+// ★ v7.0: BACKWARD COMPAT — keep old names as aliases
+export const CENTRALIZED_INDIRECT_COSTS = INDIRECT_COST_REFERENCE_CATEGORIES;
+export const DECENTRALIZED_INDIRECT_COSTS = INDIRECT_COST_REFERENCE_CATEGORIES;
 
 // ─── PROBLEM ANALYSIS ────────────────────────────────────────────
 
@@ -108,6 +122,7 @@ export interface ReadinessLevels {
 }
 
 // ─── PARTNERSHIP ─────────────────────────────────────────────────
+// ★ v7.0: Added partnerType field
 
 export interface ProjectPartner {
   id: string;
@@ -115,6 +130,7 @@ export interface ProjectPartner {
   name: string;
   expertise: string;
   pmRate: number;
+  partnerType?: PartnerType;
 }
 
 // ─── FINANCE: COST ITEMS ─────────────────────────────────────────
@@ -127,6 +143,7 @@ export interface DirectCostItem {
   costModel?: CostModelType;
 }
 
+// ★ v7.0: Kept for backward compat but no longer used on task level
 export interface IndirectCostItem {
   id: string;
   categoryKey: string;
@@ -136,14 +153,24 @@ export interface IndirectCostItem {
   calculatedAmount: number;
 }
 
+// ★ v7.0: Project-level indirect cost settings (defined in Finance sub-chapter)
+export interface IndirectCostSettings {
+  percentage: number;                // e.g. 7, 15, 25
+  appliesToCategories: string[];     // keys from direct cost categories that this % applies to
+}
+
 // ─── TASK-LEVEL PARTNER ALLOCATION ───────────────────────────────
+// ★ v7.0: Simplified — indirect costs calculated centrally, not per-task
 
 export interface TaskPartnerAllocation {
   partnerId: string;
   hours: number;
   pm: number;
   directCosts: DirectCostItem[];
-  indirectCosts: IndirectCostItem[];
+  totalDirectCost: number;
+  // ★ v7.0: indirectCosts[] REMOVED from task level
+  //   Indirect cost = totalDirectCost(applicable categories) × indirectCostSettings.percentage / 100
+  //   Calculated dynamically in UI, not stored per task
   totalCost: number;
 }
 
@@ -243,6 +270,7 @@ export interface ProjectIdea {
 }
 
 // ─── FULL PROJECT DATA ───────────────────────────────────────────
+// ★ v7.0: Added indirectCostSettings
 
 export interface ProjectData {
   problemAnalysis: ProblemAnalysis;
@@ -259,6 +287,7 @@ export interface ProjectData {
   partners?: ProjectPartner[];
   fundingModel?: FundingModel;
   maxPartners?: number;
+  indirectCostSettings?: IndirectCostSettings;
 }
 
 // ─── VERSIONING & META ───────────────────────────────────────────
