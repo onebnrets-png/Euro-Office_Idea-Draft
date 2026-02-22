@@ -1,6 +1,23 @@
+// index.tsx
+// ═══════════════════════════════════════════════════════════════
+// EURO-OFFICE — Application Entry Point
+// v2.0 — 2026-02-22
+//
+// CHANGES v2.0:
+//   ★ initTheme() called BEFORE React mount to eliminate dark mode
+//     race condition. All components that read getThemeMode() in
+//     their initial useState() now get the correct value.
+//
+// v1.0 — 2026-02-17: Initial entry with ErrorBoundary
+// ═══════════════════════════════════════════════════════════════
+
 import React, { ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
+import { initTheme } from './services/themeService.ts';
+
+// ★ v2.0: Initialize theme BEFORE React renders — prevents flash of wrong theme
+initTheme();
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
