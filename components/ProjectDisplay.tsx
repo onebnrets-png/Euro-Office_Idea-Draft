@@ -1,15 +1,10 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v7.0 — 2026-02-22 — REFACTOR: Partners, Finance, Indirect Costs
-//   - renderPartners: removed funding model (moved to finance),
-//     added partnerType dropdown, auto-resize fields (textarea),
-//     responsive design
-//   - renderFinance: funding model HERE, indirect cost settings
-//     (percentage + checkbox categories), simplified display
-//   - Task allocations: indirect costs = single line (project-level %),
-//     "Generate Partner Allocations" button on tasks
-//   - Responsive design throughout
-//   - All previous v6.1 changes preserved.
+// v7.0.1 — 2026-02-22 — BUGFIX: partners.map is not a function
+//   - FIX: All partners access now uses Array.isArray guard
+//   - FIX: renderPartners .map calls restored to proper JSX
+//   - FIX: renderFinance + renderActivities partners guard added
+//   - All v7.0 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -536,7 +531,7 @@ const renderRisks = (props) => {
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${risks.length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${(risks || []).length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
                 <GenerateButton onClick={() => onGenerateSection('risks')} isLoading={isLoading === `${t.generating} risks...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             {(risks || []).map((risk, index) => {
@@ -603,7 +598,7 @@ const renderKERs = (props) => {
 
     return (
         <div id="kers" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${kers.length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${(kers || []).length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
                 <GenerateButton onClick={() => onGenerateSection('kers')} isLoading={isLoading === `${t.generating} kers...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             {(kers || []).map((ker, index) => (
@@ -625,14 +620,12 @@ const renderKERs = (props) => {
         </div>
     );
 };
+
 // ═══════════════════════════════════════════════════════════════
-// ★ v7.0: Partnership (Consortium) renderer — REFACTORED
-//   - REMOVED: funding model selector (moved to renderFinance)
-//   - REMOVED: maxPartners field
-//   - ADDED: partnerType dropdown with localized labels
-//   - ADDED: AutoResizeTextarea for name + expertise (no shrinking)
-//   - ADDED: "Generate Partner Allocations" button
-//   - Responsive grid layout
+// ★ v7.0.1: Partnership (Consortium) renderer — BUGFIX
+//   - FIX: partners.map restored to proper JSX {expression}
+//   - FIX: summary table .map restored to proper JSX {expression}
+//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderPartners = (props) => {
     const { projectData, onUpdateData, onAddItem, onRemoveItem, onGenerateSection, isLoading, language, missingApiKey } = props;
@@ -658,7 +651,7 @@ const renderPartners = (props) => {
                 <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">{tp.partnerName || 'Partners'}</h4>
                 <div className="flex gap-2">
                     {/* Generate Partner Allocations Button */}
-                    {partners.length > 0 && (projectData.activities || []).length > 0 && (
+                    {partners.length > 0 && (Array.isArray(projectData.activities) ? projectData.activities : []).length > 0 && (
                         <button
                             onClick={() => onGenerateSection('partnerAllocations')}
                             disabled={!!isLoading}
@@ -693,8 +686,9 @@ const renderPartners = (props) => {
                     {tp.noPartnersYet || 'No partners defined yet.'}
                 </div>
             )}
-             (Array.isArray(partners) ? partners : []).map((partner, index) => { ... })
 
+            {/* ★ v7.0.1 FIX: Proper JSX expression for partner cards */}
+            {partners.map((partner, index) => (
                 <div key={partner.id || index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <RemoveButton onClick={() => onRemoveItem(['partners'], index)} text={tp.removePartner || t.remove} />
@@ -792,7 +786,8 @@ const renderPartners = (props) => {
                                 </tr>
                             </thead>
                             <tbody>
-                              (Array.isArray(partners) ? partners : []).map((partner, index) => { ... })
+                                {/* ★ v7.0.1 FIX: Proper JSX expression for summary table rows */}
+                                {partners.map((p, i) => (
                                     <tr key={i} className="border-b border-slate-100 hover:bg-white transition-colors">
                                         <td className="py-2 px-3 font-bold text-sky-700">{p.code}</td>
                                         <td className="py-2 px-3 text-slate-500 text-xs">
@@ -817,11 +812,9 @@ const renderPartners = (props) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ★ v7.0: Finance (Budget) renderer — REFACTORED
-//   - ADDED: Funding Model selector at TOP (moved from Partners)
-//   - ADDED: Indirect Cost Settings (percentage + checkbox categories)
-//   - Indirect costs on tasks = single calculated line
-//   - Responsive design
+// ★ v7.0.1: Finance (Budget) renderer — BUGFIX
+//   - FIX: partners now uses Array.isArray guard
+//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderFinance = (props) => {
     const { projectData, onUpdateData, language } = props;
@@ -829,7 +822,7 @@ const renderFinance = (props) => {
     const tf = t.finance || {};
     const tp = t.partners || {};
     const fundingModel = projectData.fundingModel || 'centralized';
-    const partners = projectData.partners || [];
+    const partners = Array.isArray(projectData.partners) ? projectData.partners : [];
     const activities = Array.isArray(projectData.activities) ? projectData.activities : [];
     const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
 
@@ -843,7 +836,6 @@ const renderFinance = (props) => {
         if (applicableCategories.length === 0) return 0;
 
         const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            // Check if this direct cost's category is in the applicable list
             const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
             if (applicableCategories.includes(catKey)) {
                 return sum + (dc.amount || 0);
@@ -1124,12 +1116,9 @@ const renderFinance = (props) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ★ v7.0: renderActivities — REFACTORED task-level allocations
-//   - Indirect costs = single auto-calculated line from project settings
-//   - REMOVED: per-task indirect cost category selectors
-//   - ADDED: "Generate Partner Allocations" button per task
-//   - Direct cost categories now store categoryKey (not categoryIndex)
-//   - Responsive design
+// ★ v7.0.1: renderActivities — BUGFIX
+//   - FIX: taskPartnersList now uses Array.isArray guard
+//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
@@ -1162,8 +1151,8 @@ const renderActivities = (props) => {
         }
     };
 
-    // v7.0 helper variables
-    const taskPartnersList = projectData.partners || [];
+    // ★ v7.0.1 FIX: Array.isArray guard for partners
+    const taskPartnersList = Array.isArray(projectData.partners) ? projectData.partners : [];
     const fundingModel = projectData.fundingModel || 'centralized';
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
     const lang = language === 'si' ? 'si' : 'en';
@@ -1566,8 +1555,7 @@ const ProjectDisplay = (props) => {
             <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
                 <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
                     <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ minWidth: 0 }}>
-                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
+                    <div style={{ minWidth: 0 }}><h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
                         <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
                     </div>
                 </div>
@@ -1636,3 +1624,4 @@ const ProjectDisplay = (props) => {
 };
 
 export default ProjectDisplay;
+                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{
