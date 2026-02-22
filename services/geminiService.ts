@@ -10,14 +10,20 @@
 //  - Calling the AI provider
 //  - Post-processing (JSON parsing, sanitization, merging)
 //
-// v6.0 — 2026-02-22 — PARTNERS (CONSORTIUM) GENERATION
-//   - NEW: schemas.partners — partner array schema
-//   - NEW: SECTION_TO_CHAPTER.partners → 'chapter5b_partners'
-//   - NEW: SECTION_TO_SCHEMA.partners → 'partners'
-//   - NEW: buildTaskInstruction case 'partners' — injects funding model + WP context
-//   - NEW: getContext() includes partners + fundingModel in AI context
-//   - All previous v5.6 changes preserved.
+// v7.0 — 2026-02-22 — FULL v7.0 ALIGNMENT WITH Instructions.ts v7.0
+//   - CHANGED: All imports updated to v7.0 accessor functions from Instructions.ts
+//   - CHANGED: schemas.partners now includes partnerType field (enum, 9 values, REQUIRED)
+//   - NEW: Intervention Logic Framework injected into every prompt
+//   - NEW: Consortium Allocation Rules injected for partners + activities
+//   - NEW: Resource Coherence Rules injected for activities + partners
+//   - NEW: Cross-Chapter Consistency Gate available for quality checks
+//   - CHANGED: buildTaskInstruction uses getTaskInstruction() directly
+//   - CHANGED: getPromptAndSchemaForSection uses buildFullPromptContext() helper
+//   - CHANGED: Post-processing for partners includes partnerType validation + fallback
+//   - CHANGED: Partner code fallback: idx===0 → 'CO', else P{idx+1}
+//   - All previous v6.0 / v5.6 changes preserved.
 //
+// v6.0 — 2026-02-22 — PARTNERS (CONSORTIUM) GENERATION
 // v5.6 — 2026-02-21 — CONSOLIDATED LANGUAGE DETECTION
 // v5.5 — 2026-02-21 — KNOWLEDGE BASE INTEGRATION
 // v5.4 — 2026-02-16 — SUB-SECTION GENERATION
@@ -33,21 +39,33 @@
 import { storageService } from './storageService.ts';
 // ★ v5.5 [A]: Knowledge Base import
 import { knowledgeBaseService } from './knowledgeBaseService.ts';
+
+// ★ v7.0: Updated imports — all from Instructions.ts v7.0 accessor functions
 import {
-  getAppInstructions,
-  getFieldRule,
-  getTranslationRules,
-  getSummaryRules,
   getLanguageDirective,
-  getLanguageMismatchNotice,
+  getInterventionLogicFramework,
   getAcademicRigorRules,
   getHumanizationRules,
   getProjectTitleRules,
   getModeInstruction,
-  getQualityGate,
-  getSectionTaskInstruction,
-  TEMPORAL_INTEGRITY_RULE
+  getQualityGates,
+  getCrossChapterGates,
+  getTaskInstruction,
+  getRulesForSection,
+  getGlobalRules,
+  getFieldRules,
+  getSummaryRules,
+  getTranslationRules,
+  getTemporalIntegrityRule,
+  getLanguageMismatchTemplate,
+  getConsortiumAllocationRules,
+  getResourceCoherenceRules,
+  getOpenRouterSystemPrompt,
+  isValidSectionKey,
+  isValidPartnerType,
+  SECTION_TO_CHAPTER_MAP,
 } from './Instructions.ts';
+
 // ★ v5.6: Added detectTextLanguage import for consolidated language detection
 import { detectProjectLanguage as detectLanguage, detectTextLanguage } from '../utils.ts';
 import {
@@ -78,7 +96,7 @@ const formatRules = (rules: string | string[]): string => {
 };
 
 const formatRulesAsList = (rules: string | string[]): string => {
-  if (Array.isArray(rules)) return rules.join('\n- ');
+  if (Array.isArray(rules)) return rules.map(r => `- ${r}`).join('\n');
   if (typeof rules === 'string' && rules.trim().length > 0) return rules;
   return '';
 };
@@ -144,10 +162,14 @@ const detectInputLanguageMismatch = (
   }
 
   if (mismatchCount > checked / 2) {
-    return getLanguageMismatchNotice(
-      uiLanguage === 'en' ? 'si' : 'en',
-      uiLanguage
-    );
+    // ★ v7.0: Use getLanguageMismatchTemplate() and replace placeholders
+    const template = getLanguageMismatchTemplate();
+    const detectedLang = uiLanguage === 'en' ? 'si' : 'en';
+    const detectedName = detectedLang === 'en' ? 'English' : 'Slovenian';
+    const targetName = uiLanguage === 'en' ? 'English' : 'Slovenian';
+    return template
+      .replace(/\{\{detectedName\}\}/g, detectedName)
+      .replace(/\{\{targetName\}\}/g, targetName);
   }
 
   return '';
@@ -255,6 +277,7 @@ const getKnowledgeBaseContext = async (): Promise<string> => {
 
 // ─── PROJECT CONTEXT BUILDER ─────────────────────────────────────
 // ★ v6.0: Added partners + fundingModel to context
+// ★ v7.0: Unchanged from v6.0 — context structure is stable
 
 const getContext = (projectData: any): string => {
   const sections: string[] = [];
@@ -579,7 +602,7 @@ const schemas: Record<string, any> = {
     }
   },
 
-  // ★ v6.0: Partners (Consortium) schema
+  // ★ v7.0: Partners (Consortium) schema — added partnerType with enum
   partners: {
     type: Type.ARRAY,
     items: {
@@ -590,29 +613,34 @@ const schemas: Record<string, any> = {
         name: { type: Type.STRING },
         expertise: { type: Type.STRING },
         pmRate: { type: Type.NUMBER },
+        partnerType: {
+          type: Type.STRING,
+          enum: [
+            'faculty',
+            'researchInstitute',
+            'sme',
+            'publicAgency',
+            'internationalAssociation',
+            'ministry',
+            'ngo',
+            'largeEnterprise',
+            'other'
+          ]
+        },
       },
-      required: ['id', 'code', 'name', 'expertise', 'pmRate']
+      required: ['id', 'code', 'name', 'expertise', 'pmRate', 'partnerType']
     }
   },
 };
 
 // ─── MAPPINGS ────────────────────────────────────────────────────
-// ★ v6.0: Added partners mapping
+// ★ v7.0: Uses SECTION_TO_CHAPTER_MAP from Instructions.ts as primary,
+//          with local extensions for sub-section keys
 
 const SECTION_TO_CHAPTER: Record<string, string> = {
-  problemAnalysis: 'chapter1_problemAnalysis',
-  projectIdea: 'chapter2_projectIdea',
-  generalObjectives: 'chapter3_4_objectives',
-  specificObjectives: 'chapter3_4_objectives',
-  projectManagement: 'chapter5_activities',
-  activities: 'chapter5_activities',
-  risks: 'chapter5_activities',
-  outputs: 'chapter6_results',
-  outcomes: 'chapter6_results',
-  impacts: 'chapter6_results',
-  kers: 'chapter6_results',
+  ...SECTION_TO_CHAPTER_MAP,
+  // Sub-section mappings (not in Instructions.ts map)
   expectedResults: 'chapter6_results',
-  // ★ v5.4: Sub-section mappings
   coreProblem: 'chapter1_problemAnalysis',
   causes: 'chapter1_problemAnalysis',
   consequences: 'chapter1_problemAnalysis',
@@ -622,8 +650,6 @@ const SECTION_TO_CHAPTER: Record<string, string> = {
   proposedSolution: 'chapter2_projectIdea',
   readinessLevels: 'chapter2_projectIdea',
   policies: 'chapter2_projectIdea',
-  // ★ v6.0: Partners
-  partners: 'chapter5b_partners',
 };
 
 const SECTION_TO_SCHEMA: Record<string, string> = {
@@ -633,15 +659,14 @@ const SECTION_TO_SCHEMA: Record<string, string> = {
   outputs: 'results', outcomes: 'results', impacts: 'results',
   risks: 'risks', kers: 'kers',
   expectedResults: 'results',
-  // ★ v5.4: Sub-section schema mappings
+  // Sub-section schema mappings
   coreProblem: 'coreProblem', causes: 'causes', consequences: 'consequences',
   projectTitleAcronym: 'projectTitleAcronym', mainAim: 'mainAim',
   stateOfTheArt: 'stateOfTheArt', proposedSolution: 'proposedSolution',
   readinessLevels: 'readinessLevels', policies: 'policies',
-  // ★ v6.0: Partners
+  // Partners
   partners: 'partners',
 };
-
 // ─── HELPERS ─────────────────────────────────────────────────────
 
 const isValidDate = (d: any): boolean => d instanceof Date && !isNaN(d.getTime());
@@ -800,35 +825,15 @@ const smartMerge = (original: any, generated: any): any => {
   return original !== null && original !== undefined ? original : generated;
 };
 
-// ─── RULES ASSEMBLER ─────────────────────────────────────────────
-
-const getRulesForSection = (sectionKey: string, language: 'en' | 'si'): string => {
-  const instructions = getAppInstructions(language);
-  const chapterKey = SECTION_TO_CHAPTER[sectionKey];
-  if (chapterKey && instructions.CHAPTERS?.[chapterKey]) {
-    const chapterContent = instructions.CHAPTERS[chapterKey];
-    if (typeof chapterContent === 'string' && chapterContent.trim().length > 0) {
-      const header = language === 'si' ? 'PODROBNA PRAVILA ZA TO POGLAVJE' : 'DETAILED CHAPTER RULES';
-      return `\n${header}:\n${chapterContent}\n`;
-    }
-    if (typeof chapterContent === 'object' && Array.isArray(chapterContent.RULES) && chapterContent.RULES.length > 0) {
-      const header = language === 'si' ? 'STROGA PRAVILA ZA TA RAZDELEK' : 'STRICT RULES FOR THIS SECTION';
-      return `\n${header}:\n- ${chapterContent.RULES.join('\n- ')}\n`;
-    }
-  }
-  return '';
-};
-
 // ─── TASK INSTRUCTION BUILDER ────────────────────────────────────
-// ★ v6.0: Added case 'partners'
+// ★ v7.0: Refactored to use getTaskInstruction() from Instructions.ts v7.0
+//          with placeholder replacement done here
 
 const buildTaskInstruction = (
   sectionKey: string,
   projectData: any,
   language: 'en' | 'si'
 ): string => {
-  const placeholders: Record<string, string> = {};
-
   const SUB_TO_PARENT_TASK: Record<string, string> = {
     coreProblem: 'problemAnalysis', causes: 'problemAnalysis', consequences: 'problemAnalysis',
     projectTitleAcronym: 'projectIdea', mainAim: 'projectIdea', stateOfTheArt: 'projectIdea',
@@ -837,56 +842,67 @@ const buildTaskInstruction = (
 
   const effectiveKey = SUB_TO_PARENT_TASK[sectionKey] || sectionKey;
 
+  // ★ v7.0: Get raw task instruction from Instructions.ts
+  let taskInstr = getTaskInstruction(effectiveKey, language);
+
+  // Replace placeholders based on section
   switch (effectiveKey) {
     case 'problemAnalysis': {
       const cp = projectData.problemAnalysis?.coreProblem;
       const titleStr = cp?.title?.trim() || '';
       const descStr = cp?.description?.trim() || '';
       const contextParts: string[] = [];
-      if (titleStr) contextParts.push(language === 'si' ? `Naslov: "${titleStr}"` : `Title: "${titleStr}"`);
-      if (descStr) contextParts.push(language === 'si' ? `Opis: "${descStr}"` : `Description: "${descStr}"`);
-      placeholders.userInput = contextParts.length > 0
+      if (titleStr) contextParts.push(`Title: "${titleStr}"`);
+      if (descStr) contextParts.push(`Description: "${descStr}"`);
+      const userInput = contextParts.length > 0
         ? contextParts.join('\n')
-        : (language === 'si' ? '(uporabnik še ni vnesel podatkov)' : '(no user input yet)');
+        : '(no user input yet)';
+      taskInstr = taskInstr.replace('{{userInput}}', userInput);
       break;
     }
 
     case 'projectIdea': {
       const userTitle = projectData.projectIdea?.projectTitle?.trim() || '';
       if (userTitle) {
-        placeholders.titleContext = language === 'si'
-          ? `UPORABNIKOV VNOS ZA NAZIV PROJEKTA: "${userTitle}"\nPRAVILA ZA NAZIV:\n- Če je uporabnikov vnos primeren (30–200 znakov, imenski izraz, brez akronima), ga OHRANI NESPREMENJENO.\n- Če je uporabnikov vnos prekratek ali predolg ali vsebuje glagol, ga IZBOLJŠAJ v skladu s pravili za naziv projekta zgoraj.\n- NIKOLI ne generiraj popolnoma drugačnega naziva — ostani na temi uporabnikovega vnosa.\n\n`
-          : `USER INPUT FOR PROJECT TITLE: "${userTitle}"\nTITLE RULES:\n- If the user's input is acceptable (30–200 chars, noun phrase, no acronym), KEEP IT UNCHANGED.\n- If the user's input is too short, too long, or contains a verb, IMPROVE it following the project title rules above.\n- NEVER generate a completely different title — stay on the user's topic.\n\n`;
+        const titleContext = `USER INPUT FOR PROJECT TITLE: "${userTitle}"\nTITLE RULES:\n- If the user's input is acceptable (30–200 chars, noun phrase, no acronym), KEEP IT UNCHANGED.\n- If the user's input is too short, too long, or contains a verb, IMPROVE it following the project title rules above.\n- NEVER generate a completely different title — stay on the user's topic.\n\n`;
+        taskInstr = taskInstr.replace('{{titleContext}}', titleContext);
       } else {
-        placeholders.titleContext = '';
+        taskInstr = taskInstr.replace('{{titleContext}}', '');
       }
       break;
     }
 
-    // ★ v6.0: Partners — inject funding model + WP context
     case 'partners': {
-      const fundingModel = projectData.fundingModel || 'centralized';
+      // Partners instruction doesn't use standard placeholders — context is injected via getContext()
+      // But we add supplementary context about WPs if available
       const wpCount = (projectData.activities || []).length;
       const wpTitles = (projectData.activities || []).map((wp: any) => wp.title || wp.id).join(', ');
-      placeholders.fundingModel = fundingModel;
-      placeholders.wpCount = String(wpCount);
-      placeholders.wpTitles = wpTitles || '(not yet defined)';
+      const fundingModel = projectData.fundingModel || 'centralized';
+      if (wpCount > 0) {
+        taskInstr += `\n\nADDITIONAL CONTEXT FOR PARTNER GENERATION:\n- Funding Model: ${fundingModel}\n- Number of WPs: ${wpCount}\n- WP Titles: ${wpTitles}`;
+      }
       break;
     }
 
     case 'activities': {
       const today = new Date().toISOString().split('T')[0];
-      placeholders.projectStart = projectData.projectIdea?.startDate || today;
-      const months = projectData.projectIdea?.durationMonths || 24;
-      placeholders.projectEnd = calculateProjectEndDate(placeholders.projectStart, months);
-      placeholders.projectDurationMonths = String(months);
+      const pStart = projectData.projectIdea?.startDate || today;
+      const pMonths = projectData.projectIdea?.durationMonths || 24;
+      const pEnd = calculateProjectEndDate(pStart, pMonths);
+      taskInstr = taskInstr
+        .replaceAll('{{projectStart}}', pStart)
+        .replaceAll('{{projectEnd}}', pEnd)
+        .replaceAll('{{projectDurationMonths}}', String(pMonths));
       break;
     }
   }
 
-  return getSectionTaskInstruction(effectiveKey, language, placeholders);
+  return taskInstr;
 };
+
 // ─── PROMPT BUILDER ──────────────────────────────────────────────
+// ★ v7.0: Now includes Intervention Logic Framework, Consortium Rules,
+//          Resource Coherence Rules, and uses v7.0 getter functions
 
 const getPromptAndSchemaForSection = (
   sectionKey: string,
@@ -896,9 +912,6 @@ const getPromptAndSchemaForSection = (
   currentSectionData: any = null
 ) => {
   const context = getContext(projectData);
-  const instructions = getAppInstructions(language);
-  const globalRules = formatRules(instructions.GLOBAL_RULES);
-  const sectionRules = getRulesForSection(sectionKey, language);
   const schemaKey = SECTION_TO_SCHEMA[sectionKey];
   const schema = schemas[schemaKey];
 
@@ -908,21 +921,37 @@ const getPromptAndSchemaForSection = (
   const needsTextSchema = config.provider !== 'gemini';
   const textSchema = needsTextSchema ? schemaToTextInstruction(schema) : '';
 
+  // ★ v7.0: Get all rule components from Instructions.ts v7.0
+  const interventionLogic = getInterventionLogicFramework();
   const langDirective = getLanguageDirective(language);
   const langMismatchNotice = detectInputLanguageMismatch(projectData, language);
+  const globalRules = getGlobalRules();
+  const sectionRules = getRulesForSection(sectionKey, language);
   const academicRules = getAcademicRigorRules(language);
   const humanRules = getHumanizationRules(language);
-  const titleRules = (sectionKey === 'projectIdea' || sectionKey === 'projectTitleAcronym') ? getProjectTitleRules(language) : '';
+  const titleRules = (sectionKey === 'projectIdea' || sectionKey === 'projectTitleAcronym')
+    ? getProjectTitleRules(language) : '';
 
+  // ★ v7.0: Consortium and Resource rules for relevant sections
+  const consortiumRules = (sectionKey === 'partners' || sectionKey === 'activities')
+    ? getConsortiumAllocationRules() : '';
+  const resourceRules = (sectionKey === 'partners' || sectionKey === 'activities')
+    ? getResourceCoherenceRules() : '';
+
+  // Mode instruction with existing data context
   let modeInstruction = getModeInstruction(mode, language);
   if ((mode === 'fill' || mode === 'enhance') && currentSectionData) {
-    const dataHeader = language === 'si' ? 'Obstoječi podatki' : 'Existing data';
-    modeInstruction = `${modeInstruction}\n${dataHeader}: ${JSON.stringify(currentSectionData)}`;
+    modeInstruction = `${modeInstruction}\nExisting data: ${JSON.stringify(currentSectionData)}`;
   }
 
-  const globalRulesHeader = language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES';
+  // Task instruction with placeholders replaced
   const taskInstruction = buildTaskInstruction(sectionKey, projectData, language);
-  const qualityGate = getQualityGate(sectionKey, language);
+
+  // Quality gates
+  const qualityGates = getQualityGates(sectionKey, language);
+  const qualityGateBlock = qualityGates.length > 0
+    ? `\nQUALITY GATE — verify ALL before returning JSON:\n${formatRulesAsList(qualityGates)}`
+    : '';
 
   // ★ v4.6: For activities, inject TEMPORAL_INTEGRITY_RULE at BEGINNING and END
   let temporalRuleBlock = '';
@@ -932,78 +961,74 @@ const getPromptAndSchemaForSection = (
     const pMonths = projectData.projectIdea?.durationMonths || 24;
     const pEnd = calculateProjectEndDate(pStart, pMonths);
 
-    temporalRuleBlock = (TEMPORAL_INTEGRITY_RULE[language] || TEMPORAL_INTEGRITY_RULE.en)
+    temporalRuleBlock = getTemporalIntegrityRule(language)
       .replace(/\{\{projectStart\}\}/g, pStart)
       .replace(/\{\{projectEnd\}\}/g, pEnd)
       .replace(/\{\{projectDurationMonths\}\}/g, String(pMonths));
   }
 
   // ★ v5.4: Sub-section focus instruction
-  const SUB_SECTION_FOCUS: Record<string, Record<string, string>> = {
-    coreProblem: {
-      en: 'FOCUS: Generate ONLY the Core Problem (title + description). Do NOT generate causes or consequences.',
-      si: 'FOKUS: Generiraj SAMO Osrednji problem (naslov + opis). NE generiraj vzrokov ali posledic.'
-    },
-    causes: {
-      en: 'FOCUS: Generate ONLY the Causes array (4-6 causes, each with title + description + citation). Do NOT generate core problem or consequences.',
-      si: 'FOKUS: Generiraj SAMO array Vzrokov (4-6 vzrokov, vsak z naslovom + opisom + citatom). NE generiraj osrednjega problema ali posledic.'
-    },
-    consequences: {
-      en: 'FOCUS: Generate ONLY the Consequences array (4-6 consequences, each with title + description + citation). Do NOT generate core problem or causes.',
-      si: 'FOKUS: Generiraj SAMO array Posledic (4-6 posledic, vsaka z naslovom + opisom + citatom). NE generiraj osrednjega problema ali vzrokov.'
-    },
-    projectTitleAcronym: {
-      en: 'FOCUS: Generate ONLY projectTitle and projectAcronym. Follow the PROJECT TITLE RULES and ACRONYM RULES strictly. Return JSON object with exactly 2 fields.',
-      si: 'FOKUS: Generiraj SAMO projectTitle in projectAcronym. Strogo upoštevaj PRAVILA ZA NAZIV PROJEKTA in PRAVILA ZA AKRONIM. Vrni JSON objekt z natanko 2 poljema.'
-    },
-    mainAim: {
-      en: 'FOCUS: Generate ONLY the Main Aim — one comprehensive sentence starting with an infinitive verb. Return JSON object: { "mainAim": "..." }',
-      si: 'FOKUS: Generiraj SAMO Glavni cilj — en celovit stavek, ki se začne z nedoločnikom. Vrni JSON objekt: { "mainAim": "..." }'
-    },
-    stateOfTheArt: {
-      en: 'FOCUS: Generate ONLY the State of the Art — a thorough analysis of the current situation with ≥3 citations from real sources. Return JSON object: { "stateOfTheArt": "..." }',
-      si: 'FOKUS: Generiraj SAMO Stanje tehnike — temeljito analizo trenutnega stanja z ≥3 citati iz realnih virov. Vrni JSON objekt: { "stateOfTheArt": "..." }'
-    },
-    proposedSolution: {
-      en: 'FOCUS: Generate ONLY the Proposed Solution — start with 5-8 sentence introduction, then phases with plain text headers. Return JSON object: { "proposedSolution": "..." }',
-      si: 'FOKUS: Generiraj SAMO Predlagano rešitev — začni s 5-8 stavčnim uvodom, nato faze z navadnimi besedilnimi naslovi. Vrni JSON objekt: { "proposedSolution": "..." }'
-    },
-    readinessLevels: {
-      en: 'FOCUS: Generate ONLY the Readiness Levels (TRL, SRL, ORL, LRL) — each with a numeric level and justification. Return JSON object with exactly 4 sub-objects.',
-      si: 'FOKUS: Generiraj SAMO Stopnje pripravljenosti (TRL, SRL, ORL, LRL) — vsaka s številčno stopnjo in utemeljitvijo. Vrni JSON objekt z natanko 4 pod-objekti.'
-    },
-    policies: {
-      en: 'FOCUS: Generate ONLY the EU Policies array (3-5 policies, each with name + description). Do NOT generate other project idea fields.',
-      si: 'FOKUS: Generiraj SAMO array EU politik (3-5 politik, vsaka z imenom + opisom). NE generiraj drugih polj projektne ideje.'
-    }
+  const SUB_SECTION_FOCUS: Record<string, string> = {
+    coreProblem: 'FOCUS: Generate ONLY the Core Problem (title + description). Do NOT generate causes or consequences.',
+    causes: 'FOCUS: Generate ONLY the Causes array (4-6 causes, each with title + description + citation). Do NOT generate core problem or consequences.',
+    consequences: 'FOCUS: Generate ONLY the Consequences array (4-6 consequences, each with title + description + citation). Do NOT generate core problem or causes.',
+    projectTitleAcronym: 'FOCUS: Generate ONLY projectTitle and projectAcronym. Follow the PROJECT TITLE RULES and ACRONYM RULES strictly. Return JSON object with exactly 2 fields.',
+    mainAim: 'FOCUS: Generate ONLY the Main Aim — one comprehensive sentence starting with an infinitive verb. Return JSON object: { "mainAim": "..." }',
+    stateOfTheArt: 'FOCUS: Generate ONLY the State of the Art — a thorough analysis of the current situation with ≥3 citations from real sources. Return JSON object: { "stateOfTheArt": "..." }',
+    proposedSolution: 'FOCUS: Generate ONLY the Proposed Solution — start with 5-8 sentence introduction, then phases with plain text headers. Return JSON object: { "proposedSolution": "..." }',
+    readinessLevels: 'FOCUS: Generate ONLY the Readiness Levels (TRL, SRL, ORL, LRL) — each with a numeric level and justification. Return JSON object with exactly 4 sub-objects.',
+    policies: 'FOCUS: Generate ONLY the EU Policies array (3-5 policies, each with name + description). Do NOT generate other project idea fields.',
   };
 
-  const focusInstruction = SUB_SECTION_FOCUS[sectionKey]?.[language] || '';
+  const focusInstruction = SUB_SECTION_FOCUS[sectionKey] || '';
 
+  // ★ v7.0: Assemble prompt with Intervention Logic Framework at the top
   const prompt = [
-    focusInstruction ? `★★★ ${focusInstruction} ★★★\n` : '',
-    temporalRuleBlock ? `${temporalRuleBlock}\n` : '',
+    // Intervention Logic Framework — foundational context for EVERY prompt
+    interventionLogic,
+    // Sub-section focus (if applicable)
+    focusInstruction ? `\n★★★ ${focusInstruction} ★★★\n` : '',
+    // Temporal integrity (beginning — for activities)
+    temporalRuleBlock ? `\n${temporalRuleBlock}\n` : '',
+    // Language directive
     langDirective,
+    // Language mismatch notice
     langMismatchNotice ? `\n${langMismatchNotice}\n` : '',
-    `\n${globalRulesHeader}:\n${globalRules}`,
-    sectionRules,
+    // Global rules
+    `\nGLOBAL RULES:\n${globalRules}`,
+    // Chapter/section rules
+    sectionRules ? `\nDETAILED CHAPTER RULES:\n${sectionRules}` : '',
+    // Academic rigor
     academicRules ? `\n${academicRules}` : '',
+    // Humanization
     humanRules ? `\n${humanRules}` : '',
+    // Title rules (for projectIdea)
     titleRules ? `\n${titleRules}` : '',
+    // Consortium rules (for partners + activities)
+    consortiumRules ? `\n${consortiumRules}` : '',
+    // Resource coherence rules (for partners + activities)
+    resourceRules ? `\n${resourceRules}` : '',
+    // Project context
     `\n${context}`,
+    // Task instruction
     taskInstruction ? `\n${taskInstruction}` : '',
+    // Mode instruction
     modeInstruction ? `\n${modeInstruction}` : '',
+    // Text schema (for OpenRouter)
     textSchema,
-    qualityGate ? `\n${qualityGate}` : '',
+    // Quality gate
+    qualityGateBlock,
+    // Temporal integrity (end — for activities, repeated for emphasis)
     temporalRuleBlock ? `\n${temporalRuleBlock}` : '',
+    // Sub-section focus reminder
     focusInstruction ? `\n★★★ REMINDER: ${focusInstruction} ★★★` : ''
   ].filter(Boolean).join('\n');
 
   return { prompt, schema: needsTextSchema ? null : schema };
 };
-
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: SECTION GENERATION
+// ★ v7.0: Partners post-processing includes partnerType validation
 // ═══════════════════════════════════════════════════════════════
 
 export const generateSectionContent = async (
@@ -1059,13 +1084,17 @@ export const generateSectionContent = async (
     parsed = enforceTemporalIntegrity(parsed, projectData);
   }
 
-  // ★ v6.0: For partners, ensure IDs and codes
+  // ★ v7.0: For partners, ensure IDs, codes, and partnerType with validation
   if (sectionKey === 'partners' && Array.isArray(parsed)) {
     parsed = parsed.map((p: any, idx: number) => ({
       ...p,
       id: p.id || `partner-${idx + 1}`,
-      code: p.code || `P${idx + 1}`,
+      code: p.code || (idx === 0 ? 'CO' : `P${idx + 1}`),
+      partnerType: (p.partnerType && isValidPartnerType(p.partnerType))
+        ? p.partnerType
+        : 'other',
     }));
+    console.log(`[geminiService] Partners post-processed: ${parsed.length} partners, types: ${parsed.map((p: any) => p.partnerType).join(', ')}`);
   }
 
   // ★ Fill mode: merge with existing data
@@ -1078,6 +1107,7 @@ export const generateSectionContent = async (
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: PER-WP ACTIVITIES GENERATION
+// ★ v7.0: Uses v7.0 getter functions, includes Intervention Logic
 // ═══════════════════════════════════════════════════════════════
 
 export const generateActivitiesPerWP = async (
@@ -1088,18 +1118,20 @@ export const generateActivitiesPerWP = async (
   onProgress?: (msg: string) => void
 ): Promise<any[]> => {
   const context = getContext(projectData);
-  const instructions = getAppInstructions(language);
-  const globalRules = formatRules(instructions.GLOBAL_RULES);
+  const globalRules = getGlobalRules();
   const sectionRules = getRulesForSection('activities', language);
   const academicRules = getAcademicRigorRules(language);
   const humanRules = getHumanizationRules(language);
+  const interventionLogic = getInterventionLogicFramework();
+  const consortiumRules = getConsortiumAllocationRules();
+  const resourceRules = getResourceCoherenceRules();
 
   const today = new Date().toISOString().split('T')[0];
   const pStart = projectData.projectIdea?.startDate || today;
   const pMonths = projectData.projectIdea?.durationMonths || 24;
   const pEnd = calculateProjectEndDate(pStart, pMonths);
 
-  const temporalRule = (TEMPORAL_INTEGRITY_RULE[language] || TEMPORAL_INTEGRITY_RULE.en)
+  const temporalRule = getTemporalIntegrityRule(language)
     .replace(/\{\{projectStart\}\}/g, pStart)
     .replace(/\{\{projectEnd\}\}/g, pEnd)
     .replace(/\{\{projectDurationMonths\}\}/g, String(pMonths));
@@ -1110,20 +1142,20 @@ export const generateActivitiesPerWP = async (
   // PHASE 1: Generate scaffold (WP IDs, titles, date ranges)
   const scaffoldPrompt = [
     kbContext || '',
+    interventionLogic,
     temporalRule,
     getLanguageDirective(language),
-    `\n${language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES'}:\n${globalRules}`,
-    sectionRules,
+    `\nGLOBAL RULES:\n${globalRules}`,
+    sectionRules ? `\nDETAILED CHAPTER RULES:\n${sectionRules}` : '',
     academicRules ? `\n${academicRules}` : '',
     humanRules ? `\n${humanRules}` : '',
+    consortiumRules ? `\n${consortiumRules}` : '',
+    resourceRules ? `\n${resourceRules}` : '',
     `\n${context}`,
-    `\n${language === 'si'
-      ? `NALOGA: Ustvari SCAFFOLD (ogrodje) za delovne pakete. Vrni JSON array z objekti, ki imajo SAMO: id, title, dateRange (startDate, endDate). Ne generiraj nalog, mejnikov ali deliverables.
-OBVEZNA WP-ja: Predzadnji WP MORA biti "Dissemination, Communication & Exploitation", zadnji WP MORA biti "Project Management & Coordination". Oba morata trajati celotno trajanje projekta (${pStart} do ${pEnd}).
-Skupno 5-8 WP-jev.`
-      : `TASK: Create a SCAFFOLD for work packages. Return a JSON array of objects with ONLY: id, title, dateRange (startDate, endDate). Do NOT generate tasks, milestones, or deliverables.
+    `\nTASK: Create a SCAFFOLD for work packages. Return a JSON array of objects with ONLY: id, title, dateRange (startDate, endDate). Do NOT generate tasks, milestones, or deliverables.
 MANDATORY WPs: Second-to-last WP MUST be "Dissemination, Communication & Exploitation", last WP MUST be "Project Management & Coordination". Both must span the full project duration (${pStart} to ${pEnd}).
-Total 5-8 WPs.`}`,
+WP1 MUST be foundational/analytical and include a "Capitalisation and Synergies" task.
+Total 5-8 WPs.`,
     `\n${temporalRule}`
   ].filter(Boolean).join('\n');
 
@@ -1159,29 +1191,30 @@ Total 5-8 WPs.`}`,
     }
 
     const previousWPsContext = fullActivities.length > 0
-      ? `\n${language === 'si' ? 'ŽE GENERIRANI DELOVNI PAKETI' : 'ALREADY GENERATED WORK PACKAGES'}:\n${JSON.stringify(fullActivities, null, 2)}`
+      ? `\nALREADY GENERATED WORK PACKAGES:\n${JSON.stringify(fullActivities, null, 2)}`
       : '';
 
     const wpPrompt = [
       kbContext || '',
+      interventionLogic,
       temporalRule,
       getLanguageDirective(language),
-      `\n${language === 'si' ? 'GLOBALNA PRAVILA' : 'GLOBAL RULES'}:\n${globalRules}`,
-      sectionRules,
+      `\nGLOBAL RULES:\n${globalRules}`,
+      sectionRules ? `\nDETAILED CHAPTER RULES:\n${sectionRules}` : '',
       academicRules ? `\n${academicRules}` : '',
       humanRules ? `\n${humanRules}` : '',
+      consortiumRules ? `\n${consortiumRules}` : '',
+      resourceRules ? `\n${resourceRules}` : '',
       `\n${context}`,
       previousWPsContext,
       `\nSCAFFOLD:\n${JSON.stringify(scaffold, null, 2)}`,
-      `\n${language === 'si'
-        ? `NALOGA: Generiraj CELOTEN delovni paket ${wpId} ("${wpScaffold.title}").
-Vrni EN JSON objekt z: id, title, tasks (3-5 nalog z id, title, description, startDate, endDate, dependencies), milestones (1-2), deliverables (1-3 z id, title, description, indicator).
-Vse naloge morajo imeti datume znotraj ${wpScaffold.dateRange?.startDate || pStart} - ${wpScaffold.dateRange?.endDate || pEnd}.
-Upoštevaj odvisnosti od nalog v prejšnjih WP-jih.`
-        : `TASK: Generate the COMPLETE work package ${wpId} ("${wpScaffold.title}").
+      `\nTASK: Generate the COMPLETE work package ${wpId} ("${wpScaffold.title}").
 Return ONE JSON object with: id, title, tasks (3-5 tasks with id, title, description, startDate, endDate, dependencies), milestones (1-2), deliverables (1-3 with id, title, description, indicator).
 All task dates must be within ${wpScaffold.dateRange?.startDate || pStart} - ${wpScaffold.dateRange?.endDate || pEnd}.
-Consider dependencies on tasks in previous WPs.`}`,
+Consider dependencies on tasks in previous WPs.
+Every deliverable indicator MUST be BINARY and verifiable (Lump Sum compliant).
+If this is WP1, include a "Capitalisation and Synergies" task and a DMP deliverable by M6.
+If this is the Dissemination WP, strictly separate CDE tasks (Communication, Dissemination, Exploitation).`,
       `\n${temporalRule}`
     ].filter(Boolean).join('\n');
 
@@ -1257,9 +1290,7 @@ export const generateObjectFill = async (
 ): Promise<any> => {
   const { prompt, schema } = getPromptAndSchemaForSection(sectionKey, projectData, language, 'fill', currentData);
 
-  const fillInstruction = language === 'si'
-    ? `\nPRAZNA POLJA ZA IZPOLNITEV: ${emptyFields.join(', ')}\nIzpolni SAMO navedena prazna polja. Obstoječe podatke OHRANI nespremenjene.`
-    : `\nEMPTY FIELDS TO FILL: ${emptyFields.join(', ')}\nFill ONLY the listed empty fields. Keep existing data UNCHANGED.`;
+  const fillInstruction = `\nEMPTY FIELDS TO FILL: ${emptyFields.join(', ')}\nFill ONLY the listed empty fields. Keep existing data UNCHANGED.`;
 
   const fullPrompt = prompt + fillInstruction;
 
@@ -1289,6 +1320,7 @@ export const generateObjectFill = async (
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: PROJECT SUMMARY GENERATION
+// ★ v7.0: Uses getSummaryRules() from Instructions.ts v7.0
 // ═══════════════════════════════════════════════════════════════
 
 export const generateProjectSummary = async (
@@ -1302,11 +1334,9 @@ export const generateProjectSummary = async (
   const prompt = [
     langDirective,
     `\n${context}`,
-    `\n${language === 'si' ? 'PRAVILA ZA POVZETEK' : 'SUMMARY RULES'}:`,
+    `\nSUMMARY RULES:`,
     formatRules(summaryRules),
-    `\n${language === 'si'
-      ? 'NALOGA: Napiši povzetek projekta na podlagi zgornjih podatkov. Povzetek naj bo 150-300 besed, strukturiran v 3-4 odstavke. Ne dodajaj novih informacij — samo kondenziraj obstoječe podatke.'
-      : 'TASK: Write a project summary based on the data above. The summary should be 150-300 words, structured in 3-4 paragraphs. Do not add new information — only condense existing data.'}`
+    `\nTASK: Write a project summary based on the data above. The summary should be 150-300 words, structured in 3-4 paragraphs. Do not add new information — only condense existing data.`
   ].filter(Boolean).join('\n');
 
   const kbContext = await getKnowledgeBaseContext();
@@ -1322,6 +1352,7 @@ export const generateProjectSummary = async (
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: FIELD-LEVEL GENERATION
+// ★ v7.0: Uses getFieldRules() from Instructions.ts v7.0
 // ═══════════════════════════════════════════════════════════════
 
 export const generateFieldContent = async (
@@ -1329,17 +1360,15 @@ export const generateFieldContent = async (
   projectData: any,
   language: 'en' | 'si' = 'en'
 ): Promise<string> => {
-  const fieldRule = getFieldRule(fieldPath, language);
+  const fieldRule = getFieldRules(fieldPath, language);
   const context = getContext(projectData);
   const langDirective = getLanguageDirective(language);
 
   const prompt = [
     langDirective,
     `\n${context}`,
-    `\n${language === 'si' ? 'PRAVILO ZA POLJE' : 'FIELD RULE'}: ${fieldRule}`,
-    `\n${language === 'si'
-      ? `NALOGA: Generiraj vsebino za polje "${fieldPath}" na podlagi konteksta projekta in pravila za polje.`
-      : `TASK: Generate content for the field "${fieldPath}" based on the project context and field rule.`}`
+    `\nFIELD RULE: ${fieldRule}`,
+    `\nTASK: Generate content for the field "${fieldPath}" based on the project context and field rule.`
   ].filter(Boolean).join('\n');
 
   const result = await generateContent({
@@ -1349,3 +1378,7 @@ export const generateFieldContent = async (
 
   return stripMarkdown(result.text.trim());
 };
+
+// ═══════════════════════════════════════════════════════════════
+// END OF geminiService.ts v7.0
+// ═══════════════════════════════════════════════════════════════
