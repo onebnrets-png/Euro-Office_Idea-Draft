@@ -1380,8 +1380,6 @@ export const generateFieldContent = async (
 };
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: PARTNER ALLOCATIONS GENERATION (v7.1)
-// Generates TaskPartnerAllocation[] for every task in every WP,
-// based on partner expertise, WP topics, and project context.
 // ═══════════════════════════════════════════════════════════════
 
 export const generatePartnerAllocations = async (
@@ -1397,7 +1395,6 @@ export const generatePartnerAllocations = async (
   if (partners.length === 0) throw new Error('No partners defined');
   if (activities.length === 0) throw new Error('No activities defined');
 
-  // Build a compact task list for the prompt
   const taskList: { wpId: string; wpTitle: string; taskId: string; taskTitle: string; taskDesc: string; startDate: string; endDate: string }[] = [];
   activities.forEach((wp: any) => {
     (wp.tasks || []).forEach((task: any) => {
@@ -1413,7 +1410,6 @@ export const generatePartnerAllocations = async (
     });
   });
 
-  // Build partner summary
   const partnerSummary = partners.map((p: any) => ({
     id: p.id,
     code: p.code,
@@ -1426,8 +1422,6 @@ export const generatePartnerAllocations = async (
   const langDirective = getLanguageDirective(language);
   const consortiumRules = getConsortiumAllocationRules();
   const resourceRules = getResourceCoherenceRules();
-
-  // ★ Knowledge Base context
   const kbContext = await getKnowledgeBaseContext();
 
   const allocPrompt = [
@@ -1451,10 +1445,9 @@ FUNDING MODEL: ${fundingModel}
 PROJECT DURATION: ${durationMonths} months
 
 ALLOCATION RULES:
-1. EVERY task MUST have at least 1 partner allocated (the WP leader or most relevant partner).
-2. Most tasks should have 2-4 partners allocated — not all partners on every task.
-3. The COORDINATOR (first partner, code "CO") should be allocated to ALL Project Management tasks
-   and have a presence in most WPs.
+1. EVERY task MUST have at least 1 partner allocated.
+2. Most tasks should have 2-4 partners allocated.
+3. The COORDINATOR (first partner, code "CO") should be allocated to ALL Project Management tasks and have a presence in most WPs.
 4. Match partner EXPERTISE to task TOPIC:
    - Research/analytical tasks → academic/research partners
    - Implementation/pilot tasks → SMEs, public agencies, NGOs
@@ -1462,20 +1455,19 @@ ALLOCATION RULES:
    - Project Management tasks → coordinator (heavy), all others (light)
 5. Hours and PM must be REALISTIC:
    - 1 PM = 143 hours (EU standard)
-   - A partner on a 6-month task typically contributes 0.2–2.0 PM depending on involvement
+   - A partner on a 6-month task typically contributes 0.2–2.0 PM
    - WP leaders get more PM than participants
-   - The coordinator typically has the highest total PM across the project
-6. Direct costs should include AT MINIMUM "labourCosts" for every allocation.
+   - The coordinator typically has the highest total PM
+6. Direct costs: AT MINIMUM "labourCosts" for every allocation.
    Labour cost = hours × (pmRate / 143).
-   Additional direct costs (travel, materials, subcontractors) should be added where logical:
-   - Travel costs for tasks involving meetings, workshops, pilots (500–3000 EUR per partner per task)
-   - Material/consumable costs for development/pilot tasks (200–2000 EUR)
-   - Sub-contractor costs only where external expertise is genuinely needed (2000–15000 EUR)
+   Additional costs where logical:
+   - Travel costs: 500–3000 EUR per partner per task (meetings, workshops, pilots)
+   - Materials: 200–2000 EUR (development/pilot tasks)
+   - Sub-contractors: 2000–15000 EUR (only where external expertise needed)
 7. totalDirectCost = sum of all directCosts amounts
-8. totalCost = totalDirectCost (indirect costs are calculated separately at project level)
+8. totalCost = totalDirectCost (indirect costs calculated separately)
 
-RESPONSE FORMAT:
-Return a JSON array where each element represents a TASK allocation:
+RESPONSE FORMAT — JSON array:
 [
   {
     "wpId": "WP1",
@@ -1496,17 +1488,14 @@ Return a JSON array where each element represents a TASK allocation:
   }
 ]
 
-CRITICAL RULES:
-- partnerId values MUST exactly match the partner IDs provided above
-- categoryKey for labour costs MUST be "labourCosts"
-- categoryKey for travel MUST be "travelCosts"
-- categoryKey for materials MUST be "materials"
-- categoryKey for subcontractors MUST be "subContractorCosts"
-- Amount for labourCosts = hours × (partner pmRate / 143), rounded to nearest integer
-- Every allocation MUST have labourCosts as the first directCost item
-- pm = hours / 143, rounded to 2 decimal places
-- Return EVERY task from the task list — do not skip any
-- Do NOT invent task IDs that don't exist in the task list
+CRITICAL:
+- partnerId MUST exactly match partner IDs above
+- categoryKey: "labourCosts", "travelCosts", "materials", "subContractorCosts"
+- labourCosts amount = hours × (pmRate / 143), rounded
+- Every allocation MUST have labourCosts
+- pm = hours / 143, rounded to 2 decimals
+- Return EVERY task — do not skip any
+- Do NOT invent task IDs
 ═══════════════════════════════════════════════════════════════════`,
   ].filter(Boolean).join('\n');
 
@@ -1519,7 +1508,6 @@ CRITICAL RULES:
   const config = getProviderConfig();
   const needsTextSchema = config.provider !== 'gemini';
 
-  // Schema for allocation response
   const allocSchema = {
     type: Type.ARRAY,
     items: {
@@ -1578,11 +1566,10 @@ CRITICAL RULES:
     const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
     parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) {
-      // Maybe wrapped in an object
-      if (parsed && Array.isArray(parsed.allocations)) {
-        parsed = parsed.allocations;
-      } else if (parsed && Array.isArray(parsed.tasks)) {
-        parsed = parsed.tasks;
+      if (parsed && Array.isArray((parsed as any).allocations)) {
+        parsed = (parsed as any).allocations;
+      } else if (parsed && Array.isArray((parsed as any).tasks)) {
+        parsed = (parsed as any).tasks;
       } else {
         throw new Error('Response is not an array');
       }
@@ -1592,7 +1579,6 @@ CRITICAL RULES:
     throw new Error('INVALID_JSON|' + (config.provider || 'unknown'));
   }
 
-  // Post-process: validate partner IDs, recalculate totals
   const validPartnerIds = new Set(partners.map((p: any) => p.id));
   const partnerRateMap = new Map(partners.map((p: any) => [p.id, p.pmRate || 0]));
 
@@ -1600,30 +1586,18 @@ CRITICAL RULES:
     const allocations = (taskAlloc.allocations || [])
       .filter((a: any) => validPartnerIds.has(a.partnerId))
       .map((a: any) => {
-        // Ensure hours and PM are consistent
         const hours = Math.max(0, Math.round(a.hours || 0));
         const pm = parseFloat((hours / 143).toFixed(2));
-
-        // Recalculate labour costs based on actual partner rate
         const rate = partnerRateMap.get(a.partnerId) || 0;
         const labourCost = Math.round(hours * (rate / 143));
 
         const directCosts = (a.directCosts || []).map((dc: any, dcIdx: number) => {
           if (dc.categoryKey === 'labourCosts') {
-            return {
-              ...dc,
-              id: dc.id || `dc-${Date.now()}-${dcIdx}`,
-              amount: labourCost,
-            };
+            return { ...dc, id: dc.id || `dc-${Date.now()}-${dcIdx}`, amount: labourCost };
           }
-          return {
-            ...dc,
-            id: dc.id || `dc-${Date.now()}-${dcIdx}`,
-            amount: Math.max(0, Math.round(dc.amount || 0)),
-          };
+          return { ...dc, id: dc.id || `dc-${Date.now()}-${dcIdx}`, amount: Math.max(0, Math.round(dc.amount || 0)) };
         });
 
-        // Ensure labourCosts exists
         const hasLabour = directCosts.some((dc: any) => dc.categoryKey === 'labourCosts');
         if (!hasLabour && hours > 0) {
           directCosts.unshift({
@@ -1642,7 +1616,7 @@ CRITICAL RULES:
           pm,
           directCosts,
           totalDirectCost,
-          totalCost: totalDirectCost, // indirect calculated at project level
+          totalCost: totalDirectCost,
         };
       });
 
@@ -1657,7 +1631,6 @@ CRITICAL RULES:
 
   return processedAllocations;
 };
-
 // ═══════════════════════════════════════════════════════════════
 // END OF geminiService.ts v7.0
 // ═══════════════════════════════════════════════════════════════
