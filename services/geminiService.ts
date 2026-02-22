@@ -10,47 +10,18 @@
 //  - Calling the AI provider
 //  - Post-processing (JSON parsing, sanitization, merging)
 //
-// v5.7 — 2026-02-21 — RE-EXPORT detectProjectLanguage
-//   - NEW: Added re-export of detectProjectLanguage for backward compatibility
-//     (useProjectManager.ts and any future consumers can import from here)
+// v6.0 — 2026-02-22 — PARTNERS (CONSORTIUM) GENERATION
+//   - NEW: schemas.partners — partner array schema
+//   - NEW: SECTION_TO_CHAPTER.partners → 'chapter5b_partners'
+//   - NEW: SECTION_TO_SCHEMA.partners → 'partners'
+//   - NEW: buildTaskInstruction case 'partners' — injects funding model + WP context
+//   - NEW: getContext() includes partners + fundingModel in AI context
 //   - All previous v5.6 changes preserved.
 //
 // v5.6 — 2026-02-21 — CONSOLIDATED LANGUAGE DETECTION
-//   - CHANGED: detectInputLanguageMismatch() now uses detectTextLanguage from utils.ts
-//   - CHANGED: import updated to include detectTextLanguage
-//   - All previous v5.5 changes preserved.
-//
 // v5.5 — 2026-02-21 — KNOWLEDGE BASE INTEGRATION
-//   - NEW: import knowledgeBaseService
-//   - NEW: getKnowledgeBaseContext() — loads and caches KB documents for AI context
-//   - CHANGED: generateSectionContent() — KB context injected into every prompt
-//   - CHANGED: generateActivitiesPerWP() — KB context injected into scaffold + WP prompts
-//   - All previous v5.4 changes preserved.
-//
 // v5.4 — 2026-02-16 — SUB-SECTION GENERATION
-//   - NEW: Schemas, mappings, and prompt focus for 9 sub-sections:
-//     coreProblem, causes, consequences, projectTitleAcronym, mainAim,
-//     stateOfTheArt, proposedSolution, readinessLevels, policies.
-//   - NEW: SUB_SECTION_FOCUS instructions injected at beginning and end of prompt.
-//   - NEW: buildTaskInstruction maps sub-keys to parent for task instruction reuse.
-//   - NEW: Post-processing unwraps string sub-sections (mainAim, stateOfTheArt, proposedSolution).
-//   - All previous v5.0 changes preserved.
-//
 // v5.0 — 2026-02-16 — PER-WP GENERATION + DATE FIX + SUMMARY FIX + ACRONYM
-//   - NEW: generateActivitiesPerWP() — 2-phase generation: first scaffold
-//     (WP ids, titles, date ranges), then each WP individually with full
-//     context of previously generated WPs for cross-WP dependencies.
-//   - NEW: calculateProjectEndDate() helper — avoids JavaScript Date
-//     month-overflow bugs (e.g., Jan 31 + 1 month → Mar 3). Replaces
-//     manual date calculation at ALL locations in the file.
-//   - NEW: projectAcronym added to schemas.projectIdea (properties + required)
-//   - FIXED: enforceTemporalIntegrity() guards against empty activities array.
-//   - FIXED: generateTargetedFill() now calls sanitizeActivities() and
-//     enforceTemporalIntegrity() when sectionKey is 'activities'.
-//   - FIXED: generateProjectSummary() uses condensation-only prompt
-//     without academicRules/humanRules. Summary rules injected directly.
-//   - All previous changes preserved.
-//
 // v4.7 — 2026-02-15 — TARGETED FILL
 // v4.6 — 2026-02-15 — TEMPORAL INTEGRITY ENFORCER
 // v4.5 — 2026-02-14 — DYNAMIC MAX_TOKENS
@@ -98,9 +69,6 @@ export const validateApiKey = async (apiKey: string): Promise<boolean> => {
 
 export const validateProviderApiKey = validateProviderKey;
 
-// ★ v5.7: Re-export detectProjectLanguage for backward compatibility
-export { detectProjectLanguage } from '../utils.ts';
-
 // ─── SAFE RULES FORMATTER ────────────────────────────────────────
 
 const formatRules = (rules: string | string[]): string => {
@@ -116,24 +84,20 @@ const formatRulesAsList = (rules: string | string[]): string => {
 };
 
 // ─── SAFE PROJECT END DATE CALCULATOR ────────────────────────────
-// ★ v5.0: Avoids JavaScript Date month-overflow bugs
-// (e.g., Jan 31 + 1 month → setMonth produces Mar 3 instead of Feb 28)
 
 const calculateProjectEndDate = (startDateStr: string, durationMonths: number): string => {
   const parts = startDateStr.split('-').map(Number);
   const startYear = parts[0];
-  const startMonth = parts[1] - 1; // 0-indexed
+  const startMonth = parts[1] - 1;
   const startDay = parts[2];
 
   let targetMonth = startMonth + durationMonths;
   const targetYear = startYear + Math.floor(targetMonth / 12);
   targetMonth = targetMonth % 12;
 
-  // Days in the target month (day 0 of next month = last day of target month)
   const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
   const targetDay = Math.min(startDay, daysInTargetMonth);
 
-  // Create date and subtract 1 day (project ends day before anniversary)
   const endDate = new Date(targetYear, targetMonth, targetDay);
   endDate.setDate(endDate.getDate() - 1);
 
@@ -144,7 +108,6 @@ const calculateProjectEndDate = (startDateStr: string, durationMonths: number): 
 };
 
 // ─── INPUT LANGUAGE DETECTION ────────────────────────────────────
-// ★ v5.6 (2026-02-21): Consolidated language detection — uses shared detectTextLanguage
 
 const detectInputLanguageMismatch = (
   projectData: any,
@@ -245,12 +208,12 @@ const stripMarkdown = (obj: any): any => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ★ v5.5 [B]: KNOWLEDGE BASE CONTEXT — loads KB docs for AI injection
+// ★ v5.5 [B]: KNOWLEDGE BASE CONTEXT
 // ═══════════════════════════════════════════════════════════════
 
 let _kbCache: { orgId: string; texts: string; timestamp: number } | null = null;
 
-const KB_CACHE_TTL = 60000; // 60 seconds
+const KB_CACHE_TTL = 60000;
 
 const getKnowledgeBaseContext = async (): Promise<string> => {
   try {
@@ -291,6 +254,7 @@ const getKnowledgeBaseContext = async (): Promise<string> => {
 };
 
 // ─── PROJECT CONTEXT BUILDER ─────────────────────────────────────
+// ★ v6.0: Added partners + fundingModel to context
 
 const getContext = (projectData: any): string => {
   const sections: string[] = [];
@@ -329,6 +293,12 @@ const getContext = (projectData: any): string => {
     sections.push(`Outcomes:\n${JSON.stringify(projectData.outcomes, null, 2)}`);
   if (projectData.impacts?.length > 0)
     sections.push(`Impacts:\n${JSON.stringify(projectData.impacts, null, 2)}`);
+
+  // ★ v6.0: Partners and funding model context
+  if (projectData.partners?.length > 0)
+    sections.push(`Partners (Consortium):\n${JSON.stringify(projectData.partners, null, 2)}`);
+  if (projectData.fundingModel)
+    sections.push(`Funding Model: ${projectData.fundingModel}`);
 
   return sections.length > 0
     ? `Here is the current project information (Context):\n${sections.join('\n')}`
@@ -371,9 +341,6 @@ const schemaToTextInstruction = (schema: any): string => {
 };
 
 // ─── JSON SCHEMAS ────────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════
-// v5.0 FIX [2A + 2B]: projectAcronym added to projectIdea schema
-// ═══════════════════════════════════════════════════════════════
 
 import { Type } from "@google/genai";
 
@@ -566,9 +533,7 @@ const schemas: Record<string, any> = {
     }
   },
 
-  // ═══════════════════════════════════════════════════════════════
-  // ★ v5.4: SUB-SECTION SCHEMAS — for per-subsection generation
-  // ═══════════════════════════════════════════════════════════════
+  // ★ v5.4: SUB-SECTION SCHEMAS
   coreProblem: problemNodeSchema,
   causes: { type: Type.ARRAY, items: problemNodeSchema },
   consequences: { type: Type.ARRAY, items: problemNodeSchema },
@@ -612,11 +577,27 @@ const schemas: Record<string, any> = {
       properties: { name: { type: Type.STRING }, description: { type: Type.STRING } },
       required: ['name', 'description']
     }
-  }
+  },
+
+  // ★ v6.0: Partners (Consortium) schema
+  partners: {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        code: { type: Type.STRING },
+        name: { type: Type.STRING },
+        expertise: { type: Type.STRING },
+        pmRate: { type: Type.NUMBER },
+      },
+      required: ['id', 'code', 'name', 'expertise', 'pmRate']
+    }
+  },
 };
 
 // ─── MAPPINGS ────────────────────────────────────────────────────
-// ★ v5.4: Added sub-section mappings
+// ★ v6.0: Added partners mapping
 
 const SECTION_TO_CHAPTER: Record<string, string> = {
   problemAnalysis: 'chapter1_problemAnalysis',
@@ -641,6 +622,8 @@ const SECTION_TO_CHAPTER: Record<string, string> = {
   proposedSolution: 'chapter2_projectIdea',
   readinessLevels: 'chapter2_projectIdea',
   policies: 'chapter2_projectIdea',
+  // ★ v6.0: Partners
+  partners: 'chapter5b_partners',
 };
 
 const SECTION_TO_SCHEMA: Record<string, string> = {
@@ -655,6 +638,8 @@ const SECTION_TO_SCHEMA: Record<string, string> = {
   projectTitleAcronym: 'projectTitleAcronym', mainAim: 'mainAim',
   stateOfTheArt: 'stateOfTheArt', proposedSolution: 'proposedSolution',
   readinessLevels: 'readinessLevels', policies: 'policies',
+  // ★ v6.0: Partners
+  partners: 'partners',
 };
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -691,7 +676,7 @@ const sanitizeActivities = (activities: any[]): any[] => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ★ v4.6: TEMPORAL INTEGRITY ENFORCER (post-processing)
+// ★ v4.6: TEMPORAL INTEGRITY ENFORCER
 // ═══════════════════════════════════════════════════════════════
 
 const enforceTemporalIntegrity = (activities: any[], projectData: any): any[] => {
@@ -835,7 +820,7 @@ const getRulesForSection = (sectionKey: string, language: 'en' | 'si'): string =
 };
 
 // ─── TASK INSTRUCTION BUILDER ────────────────────────────────────
-// ★ v5.4: Maps sub-section keys to parent for task instruction lookup
+// ★ v6.0: Added case 'partners'
 
 const buildTaskInstruction = (
   sectionKey: string,
@@ -878,6 +863,17 @@ const buildTaskInstruction = (
       break;
     }
 
+    // ★ v6.0: Partners — inject funding model + WP context
+    case 'partners': {
+      const fundingModel = projectData.fundingModel || 'centralized';
+      const wpCount = (projectData.activities || []).length;
+      const wpTitles = (projectData.activities || []).map((wp: any) => wp.title || wp.id).join(', ');
+      placeholders.fundingModel = fundingModel;
+      placeholders.wpCount = String(wpCount);
+      placeholders.wpTitles = wpTitles || '(not yet defined)';
+      break;
+    }
+
     case 'activities': {
       const today = new Date().toISOString().split('T')[0];
       placeholders.projectStart = projectData.projectIdea?.startDate || today;
@@ -890,9 +886,7 @@ const buildTaskInstruction = (
 
   return getSectionTaskInstruction(effectiveKey, language, placeholders);
 };
-
 // ─── PROMPT BUILDER ──────────────────────────────────────────────
-// ★ v5.4: Added SUB_SECTION_FOCUS for sub-section specific prompts
 
 const getPromptAndSchemaForSection = (
   sectionKey: string,
@@ -1065,6 +1059,15 @@ export const generateSectionContent = async (
     parsed = enforceTemporalIntegrity(parsed, projectData);
   }
 
+  // ★ v6.0: For partners, ensure IDs and codes
+  if (sectionKey === 'partners' && Array.isArray(parsed)) {
+    parsed = parsed.map((p: any, idx: number) => ({
+      ...p,
+      id: p.id || `partner-${idx + 1}`,
+      code: p.code || `P${idx + 1}`,
+    }));
+  }
+
   // ★ Fill mode: merge with existing data
   if (mode === 'fill' && currentSectionData) {
     return smartMerge(currentSectionData, parsed);
@@ -1155,7 +1158,6 @@ Total 5-8 WPs.`}`,
         : `Generating ${wpId}: ${wpScaffold.title || ''}...`);
     }
 
-    // Build context of previously generated WPs
     const previousWPsContext = fullActivities.length > 0
       ? `\n${language === 'si' ? 'ŽE GENERIRANI DELOVNI PAKETI' : 'ALREADY GENERATED WORK PACKAGES'}:\n${JSON.stringify(fullActivities, null, 2)}`
       : '';
@@ -1183,7 +1185,6 @@ Consider dependencies on tasks in previous WPs.`}`,
       `\n${temporalRule}`
     ].filter(Boolean).join('\n');
 
-    // Rate limit between WP generations
     if (wpIdx > 0) {
       await new Promise(r => setTimeout(r, 1500));
     }
@@ -1198,7 +1199,6 @@ Consider dependencies on tasks in previous WPs.`}`,
       const jsonStr = wpResult.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
       let wpData = JSON.parse(jsonStr);
 
-      // Handle case where AI returns an array with one element
       if (Array.isArray(wpData)) {
         wpData = wpData[0] || wpData;
       }
@@ -1207,7 +1207,6 @@ Consider dependencies on tasks in previous WPs.`}`,
       fullActivities.push(wpData);
     } catch (e) {
       console.error(`[geminiService] Failed to parse WP ${wpId}:`, e);
-      // Use scaffold data as fallback
       fullActivities.push({
         id: wpId,
         title: wpScaffold.title || '',
@@ -1218,7 +1217,6 @@ Consider dependencies on tasks in previous WPs.`}`,
     }
   }
 
-  // Post-process: sanitize and enforce temporal integrity
   let result = sanitizeActivities(fullActivities);
   result = enforceTemporalIntegrity(result, projectData);
 
@@ -1226,7 +1224,7 @@ Consider dependencies on tasks in previous WPs.`}`,
 };
 
 // ═══════════════════════════════════════════════════════════════
-// PUBLIC API: TARGETED FILL (fill empty fields only)
+// PUBLIC API: TARGETED FILL
 // ═══════════════════════════════════════════════════════════════
 
 export const generateTargetedFill = async (
@@ -1237,7 +1235,6 @@ export const generateTargetedFill = async (
 ): Promise<any> => {
   const result = await generateSectionContent(sectionKey, projectData, language, 'fill', currentData);
 
-  // ★ v5.0 FIX: sanitize and enforce temporal integrity for activities
   if (sectionKey === 'activities' && Array.isArray(result)) {
     let processed = sanitizeActivities(result);
     processed = enforceTemporalIntegrity(processed, projectData);
@@ -1248,7 +1245,7 @@ export const generateTargetedFill = async (
 };
 
 // ═══════════════════════════════════════════════════════════════
-// PUBLIC API: OBJECT FILL (fill empty fields in an object)
+// PUBLIC API: OBJECT FILL
 // ═══════════════════════════════════════════════════════════════
 
 export const generateObjectFill = async (
@@ -1287,7 +1284,6 @@ export const generateObjectFill = async (
 
   parsed = stripMarkdown(parsed);
 
-  // Merge: keep existing, fill empty
   return smartMerge(currentData, parsed);
 };
 
