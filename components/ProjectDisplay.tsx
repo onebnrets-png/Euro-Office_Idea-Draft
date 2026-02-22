@@ -907,50 +907,47 @@ const renderFinance = (props) => {
             <SectionHeader title={tf.title || 'Finance (Budget)'} />
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
 
-            {/* ★ v7.2: Funding Model Selector */}
+            {/* ★ v7.3: Funding Model + Unified Cost Categories Table */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="mb-4">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
-                    <p className="text-xs text-slate-400 mb-2">{tf.fundingModelDesc || ''}</p>
-                    <select
-                        value={fundingModel}
-                        onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
-                        className="w-full max-w-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                    >
-                        <option value="centralized">{tf.centralized || 'Centralized'}</option>
-                        <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
-                    </select>
+                <div className="flex flex-wrap items-end gap-6 mb-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
+                        <select
+                            value={fundingModel}
+                            onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
+                            className="w-56 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                        >
+                            <option value="centralized">{tf.centralized || 'Centralized'}</option>
+                            <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
+                        </select>
+                    </div>
                 </div>
 
-                {/* ★ v7.2: Indirect % + Applies-to in SAME ROW */}
-                <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 pt-4 border-t border-slate-100">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectPercentage || 'Indirect Cost Percentage (%)'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tf.indirectCostsSettingsDesc || ''}</p>
-                        <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={0.5}
-                            value={indirectSettings.percentage || ''}
-                            onChange={(e) => onUpdateData(['indirectCostSettings', 'percentage'], e.target.value ? parseFloat(e.target.value) : 0)}
-                            placeholder={tf.indirectPercentagePlaceholder || 'e.g. 7, 15, 25'}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectAppliesToLabel || 'Applies to the following direct categories:'}</label>
-                        <p className="text-xs text-slate-400 mb-3">{tf.indirectAppliesToDesc || ''}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                            {directCostDefs.map((cat) => {
+                {/* Unified table: Direct (left, with checkboxes) + Indirect (right, with %) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border border-slate-200 rounded-xl overflow-hidden">
+                    {/* LEFT: Direct Costs with checkboxes */}
+                    <div className="p-4 bg-green-50/30">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span>
+                            <span className="text-sm font-bold text-green-800 uppercase tracking-wider">
+                                {tf.directCosts || 'Direct Costs'}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-3">
+                            {language === 'si'
+                                ? 'Odkljukajte kategorije, na katere se nanaša % posrednih stroškov.'
+                                : 'Check the categories that the indirect cost % applies to.'}
+                        </p>
+                        <div className="space-y-1.5">
+                            {directCostDefs.map((cat, i) => {
                                 const isChecked = (indirectSettings.appliesToCategories || []).includes(cat.key);
                                 return (
                                     <label
                                         key={cat.key}
-                                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                                        className={`flex items-center gap-3 py-2 px-3 rounded-lg border cursor-pointer transition-all ${
                                             isChecked
                                                 ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
-                                                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                                : 'bg-white border-green-100 text-slate-700 hover:border-green-200 hover:bg-green-50/50'
                                         }`}
                                     >
                                         <input
@@ -965,14 +962,54 @@ const renderFinance = (props) => {
                                             }}
                                             className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
                                         />
+                                        <span className="font-mono text-green-700 font-bold w-6 text-sm">{i + 1}.</span>
                                         <span className="text-sm">{cat[lang]}</span>
                                     </label>
                                 );
                             })}
                         </div>
                     </div>
+
+                    {/* RIGHT: Indirect Costs with % input */}
+                    <div className="p-4 bg-amber-50/30 border-t lg:border-t-0 lg:border-l border-slate-200">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></span>
+                            <span className="text-sm font-bold text-amber-800 uppercase tracking-wider">
+                                {tf.indirectCosts || 'Indirect Costs'}
+                            </span>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                                {language === 'si' ? 'Odstotek posrednih stroškov (%)' : 'Indirect cost percentage (%)'}
+                            </label>
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.5}
+                                value={indirectSettings.percentage || ''}
+                                onChange={(e) => onUpdateData(['indirectCostSettings', 'percentage'], e.target.value ? parseFloat(e.target.value) : 0)}
+                                placeholder="e.g. 7, 15, 25"
+                                className="w-32 p-2.5 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-base font-mono bg-white"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-400 mb-3">
+                            {language === 'si'
+                                ? 'Referenčne kategorije posrednih stroškov:'
+                                : 'Indirect cost reference categories:'}
+                        </p>
+                        <div className="space-y-1.5">
+                            {indirectCostReferenceDefs.map((cat, i) => (
+                                <div key={cat.key} className="flex items-center gap-3 py-2 px-3 bg-white rounded-lg border border-amber-100 text-sm">
+                                    <span className="font-mono text-amber-700 font-bold w-6">{i + 1}.</span>
+                                    <span className="text-slate-700">{cat[lang]}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
+                {/* Summary line */}
                 {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
                     <div className="mt-4 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
                         {language === 'si'
@@ -981,52 +1018,6 @@ const renderFinance = (props) => {
                         }
                     </div>
                 )}
-            </div>
-
-            {/* ★ v7.2: Combined Direct + Indirect Cost Categories Table */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8">
-                <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">
-                    {language === 'si' ? 'Stroškovne kategorije' : 'Cost Categories'} — {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
-                </h4>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* LEFT: Direct Costs */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span>
-                            <span className="text-sm font-bold text-green-800 uppercase tracking-wider">
-                                {tf.directCosts || 'Direct Costs'}
-                            </span>
-                        </div>
-                        <div className="space-y-1.5">
-                            {directCostDefs.map((cat, i) => (
-                                <div key={cat.key} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
-                                    <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
-                                    <span className="text-slate-700">{cat[lang]}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    {/* RIGHT: Indirect Costs */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></span>
-                            <span className="text-sm font-bold text-amber-800 uppercase tracking-wider">
-                                {tf.indirectCosts || 'Indirect Costs'}
-                            </span>
-                            {indirectSettings.percentage > 0 && (
-                                <span className="text-xs text-amber-600 font-mono ml-1">({indirectSettings.percentage}%)</span>
-                            )}
-                        </div>
-                        <div className="space-y-1.5">
-                            {indirectCostReferenceDefs.map((cat, i) => (
-                                <div key={cat.key} className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 rounded-lg border border-amber-100 text-sm">
-                                    <span className="font-mono text-amber-700 font-bold w-6">{i + 1}.</span>
-                                    <span className="text-slate-700">{cat[lang]}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Budget Overview */}
