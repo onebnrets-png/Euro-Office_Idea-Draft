@@ -1623,5 +1623,4 @@ const ProjectDisplay = (props) => {
         </main>
     );
 };
-
 export default ProjectDisplay;
