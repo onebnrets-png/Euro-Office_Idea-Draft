@@ -2,12 +2,13 @@
 // ═══════════════════════════════════════════════════════════════
 // Utility functions: deep-setter, validation, project factory,
 // completion checks, scheduling logic, language detection.
-// v4.5 — 2026-02-21 — CHANGES:
-//   - NEW: detectTextLanguage() — consolidated single-string language detection
-//   - CHANGED: detectProjectLanguage() now delegates to detectTextLanguage()
-// v4.4 — 2026-02-14 — CHANGES:
-//   - FIXED: Added 'implementation' and 'organigram' sub-step completion checks
-//   - FIXED: Removed obsolete 'quality-efficiency' case
+// v5.0 — 2026-02-22 — CHANGES:
+//   - ★ v5.0: Partners & Finance support
+//     → createEmptyProjectData() includes partners[] and fundingModel
+//     → safeMerge() handles partners and fundingModel
+//     → isSubStepCompleted() handles 'partners' and 'finance' sub-steps
+//   - v4.5: detectTextLanguage() — consolidated single-string language detection
+//   - v4.4: Added 'implementation' and 'organigram' sub-step completion checks
 // ═══════════════════════════════════════════════════════════════
 
 import { SUB_STEPS } from './constants.tsx';
@@ -127,8 +128,8 @@ export const createEmptyProjectData = () => {
     impacts: [{ title: '', description: '', indicator: '' }],
     risks: [{ id: 'RISK1', category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' }],
     kers: [{ id: 'KER1', title: '', description: '', exploitationStrategy: '' }],
-    partners: [],                    // ★ v6.0: Empty consortium
-    fundingModel: 'centralized',     // ★ v6.0: Default to centralized
+    partners: [],                    // ★ v5.0: Empty consortium
+    fundingModel: 'centralized',     // ★ v5.0: Default to centralized
   };
 };
 
@@ -162,11 +163,12 @@ export const safeMerge = (importedData: any): any => {
       tasks: Array.isArray(wp.tasks) ? wp.tasks : [],
       milestones: Array.isArray(wp.milestones) ? wp.milestones : [],
       deliverables: Array.isArray(wp.deliverables) ? wp.deliverables : []
-   // ★ v6.0: Partners & funding model
-  if (!Array.isArray(merged.partners)) merged.partners = [];
-  if (!merged.fundingModel) merged.fundingModel = 'centralized';
     }));
   }
+
+  // ★ v5.0: Partners & funding model
+  if (!Array.isArray(merged.partners)) merged.partners = [];
+  if (!merged.fundingModel) merged.fundingModel = 'centralized';
 
   return merged;
 };
@@ -219,6 +221,11 @@ export const isSubStepCompleted = (
         return hasText(struct.coordinator) || hasText(struct.steeringCommittee) || hasText(struct.advisoryBoard);
       }
 
+      // ── Activities: Partners ──────────────────────────────  ★ v5.0
+      case 'partners':
+        return Array.isArray(projectData.partners) && projectData.partners.length > 0
+          && projectData.partners.some((p: any) => hasText(p.name));
+
       // ── Activities: Work Plan ─────────────────────────────
       case 'workplan':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) => hasText(wp.title) || (wp.tasks && wp.tasks.length > 0 && hasText(wp.tasks[0].title)));
@@ -230,6 +237,17 @@ export const isSubStepCompleted = (
       // ── Activities: PERT Chart ────────────────────────────
       case 'pert-chart':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) => wp.tasks && wp.tasks.length > 0 && wp.tasks.some((t: any) => hasText(t.title)));
+
+      // ── Activities: Finance ───────────────────────────────  ★ v5.0
+      case 'finance':
+        return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) =>
+          wp.tasks && wp.tasks.some((t: any) =>
+            t.partnerAllocations && t.partnerAllocations.length > 0
+            && t.partnerAllocations.some((pa: any) =>
+              pa.directCosts && pa.directCosts.some((dc: any) => dc.amount > 0)
+            )
+          )
+        );
 
       // ── Activities: Risk Mitigation ───────────────────────
       case 'risk-mitigation':
@@ -247,25 +265,11 @@ export const isSubStepCompleted = (
 
       default:
         return false;
-     }
-     } catch (e) {
-       return false;
-
-      // ── Activities: Partners ──────────────────────────────
-      case 'partners':
-        return Array.isArray(projectData.partners) && projectData.partners.length > 0 
-          && projectData.partners.some((p: any) => hasText(p.name));
-
-      // ── Activities: Finance ───────────────────────────────
-      case 'finance':
-        return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) =>
-          wp.tasks && wp.tasks.some((t: any) =>
-            t.partnerAllocations && t.partnerAllocations.length > 0
-            && t.partnerAllocations.some((pa: any) =>
-              pa.directCosts && pa.directCosts.some((dc: any) => dc.amount > 0)
-            )
-          )
-        );
+    }
+  } catch (e) {
+    return false;
+  }
+};
 
 export const isStepCompleted = (
   projectData: any,
