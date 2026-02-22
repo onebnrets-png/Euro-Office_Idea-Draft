@@ -1555,7 +1555,8 @@ const ProjectDisplay = (props) => {
             <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
                 <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
                     <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ minWidth: 0 }}><h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
+                    <div style={{ minWidth: 0 }}>
+                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
                         <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
                     </div>
                 </div>
@@ -1624,4 +1625,3 @@ const ProjectDisplay = (props) => {
 };
 
 export default ProjectDisplay;
-                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{
