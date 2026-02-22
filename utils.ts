@@ -127,6 +127,8 @@ export const createEmptyProjectData = () => {
     impacts: [{ title: '', description: '', indicator: '' }],
     risks: [{ id: 'RISK1', category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' }],
     kers: [{ id: 'KER1', title: '', description: '', exploitationStrategy: '' }],
+    partners: [],                    // ★ v6.0: Empty consortium
+    fundingModel: 'centralized',     // ★ v6.0: Default to centralized
   };
 };
 
