@@ -1,10 +1,18 @@
 // locales.ts
 // ═══════════════════════════════════════════════════════════════
 // UI text strings — English (en) & Slovenian (si)
-// v6.0 — 2026-02-22 — CHANGES:
-//   - ★ v6.0: Partners & Finance UI labels (EN + SI)
-//     → subSteps: added 'partners' and 'finance' keys
-//     → NEW blocks: partners{} and finance{} in both languages
+// v7.0 — 2026-02-22 — CHANGES:
+//   - ★ v7.0: Partners refactor:
+//     → SI: "Osebni meseci (OM)" → "Človek/mesec (ČM)" povsod
+//     → EN: PM labels unchanged (Person-Months)
+//     → Funding model REMOVED from partners → MOVED to finance
+//     → maxPartners, suggestPartners REMOVED from partners
+//     → NEW: generateAllocations key in partners (both languages)
+//   - ★ v7.0: Finance refactor:
+//     → Funding model ADDED here (moved from partners)
+//     → NEW: indirectCostsSettings, indirectPercentage,
+//       indirectAppliesToLabel, indirectAppliesToDesc
+//   - v6.0: Partners & Finance UI labels (base)
 //   - v5.0: organization section (EN + SI) for multi-tenant UI
 //   - All previous v4.6 changes preserved.
 // ═══════════════════════════════════════════════════════════════
@@ -207,12 +215,12 @@ export const TEXT = {
       euPolicies: "EU Policies",
       implementation: "Implementation",
       organigram: "Organizational Structure",
-      partners: "Partnership (Consortium)",                    // ★ v6.0 NEW
+      partners: "Partnership (Consortium)",
       qualityEfficiency: "Quality & Efficiency",
       workplan: "Workplan",
       ganttChart: "Gantt Chart",
       pertChart: "PERT Chart",
-      finance: "Finance (Budget)",                             // ★ v6.0 NEW
+      finance: "Finance (Budget)",
       riskMitigation: "Risk Mitigation",
       outputs: "Outputs",
       outcomes: "Outcomes",
@@ -359,7 +367,7 @@ export const TEXT = {
       instructionsReset: "Organization instructions reset to global defaults.",
       noInstructions: "No custom instructions set. Global instructions apply.",
     },
-    // ★ v6.0: Partnership UI labels
+    // ★ v7.0: Partnership UI labels (EN) — funding model MOVED to finance
     partners: {
       title: "Partnership (Consortium)",
       titleDesc: "Define the project partners, their roles, expertise, and person-month allocations.",
@@ -371,7 +379,7 @@ export const TEXT = {
       expertisePlaceholder: "e.g. AI research, public policy, SME manufacturing...",
       pmRate: "Average PM Rate (EUR)",
       pmRatePlaceholder: "e.g. 5700",
-      addPartner: "Add Partner",
+      addPartner: "+ Add Partner",
       removePartner: "Remove Partner",
       coordinator: "Coordinator (CO)",
       partnerType: "Partner Type",
@@ -398,23 +406,27 @@ export const TEXT = {
       totalHours: "Total Hours",
       totalPM: "Total PM",
       totalCost: "Total Cost",
+      generateAllocations: "Generate Partner Allocations with AI",
+      generateAllocationsDesc: "AI will analyse existing partners and tasks to suggest allocation and costs.",
+    },
+    // ★ v7.0: Finance UI labels (EN) — funding model HERE + indirect cost settings
+    finance: {
+      title: "Finance (Budget)",
+      titleDesc: "Define cost categories per task and partner.",
       fundingModel: "Funding Model",
       fundingModelDesc: "Choose the EU funding model for this project. This determines the available cost categories.",
       centralized: "Centralized",
       decentralized: "Decentralized",
-      maxPartners: "Maximum Number of Partners",
-      maxPartnersDesc: "Expected number of partners in the consortium (1–50). If not set, AI will suggest based on project complexity.",
-      maxPartnersPlaceholder: "e.g. 8",
-      suggestPartners: "Suggest Partner Types (AI)",
-    },
-    // ★ v6.0: Finance UI labels
-    finance: {
-      title: "Finance (Budget)",
-      titleDesc: "Define cost categories per task and partner. Costs are split into direct (open) and indirect (closed) categories.",
       directCosts: "Direct Costs",
       indirectCosts: "Indirect Costs",
-      directCostsDesc: "Open fields — enter name and amount in EUR for each cost item. These are directly attributable to the project.",
-      indirectCostsDesc: "Closed fields — fixed category names with a selectable percentage rate applied to chosen direct cost items or total direct costs.",
+      indirectCostsSettings: "Indirect Cost Settings",
+      indirectCostsSettingsDesc: "Set the indirect cost percentage and select which direct cost categories it applies to.",
+      indirectPercentage: "Indirect Cost Percentage (%)",
+      indirectPercentagePlaceholder: "e.g. 7, 15, 25",
+      indirectAppliesToLabel: "Applies to the following direct categories:",
+      indirectAppliesToDesc: "Check the direct cost categories that the indirect cost calculation applies to.",
+      directCostsDesc: "Direct costs directly attributable to the project.",
+      indirectCostsDesc: "Indirect costs are calculated as a % of selected direct costs.",
       costName: "Cost Name",
       costNamePlaceholder: "Enter cost category name...",
       amount: "Amount (EUR)",
@@ -646,12 +658,12 @@ export const TEXT = {
       euPolicies: "Politike EU",
       implementation: "Implementacija",
       organigram: "Organizacijska struktura",
-      partners: "Partnerstvo (Konzorcij)",                     // ★ v6.0 NEW
+      partners: "Partnerstvo (Konzorcij)",
       qualityEfficiency: "Kakovost in učinkovitost",
       workplan: "Načrt dela (WP)",
       ganttChart: "Gantt diagram",
       pertChart: "PERT diagram",
-      finance: "Finance (Proračun)",                           // ★ v6.0 NEW
+      finance: "Finance (Proračun)",
       riskMitigation: "Obvladovanje tveganj",
       outputs: "Kazalniki učinka (Outputs)",
       outcomes: "Rezultati (Outcomes)",
@@ -798,19 +810,19 @@ export const TEXT = {
       instructionsReset: "Pravila organizacije ponastavljena na globalne privzete vrednosti.",
       noInstructions: "Pravila po meri niso nastavljena. Veljajo globalna pravila.",
     },
-    // ★ v6.0: Partnership UI labels (SI)
+    // ★ v7.0: Partnership UI labels (SI) — ČM namesto OM, funding model PREMAKNJENO v finance
     partners: {
       title: "Partnerstvo (Konzorcij)",
-      titleDesc: "Opredelite projektne partnerje, njihove vloge, strokovno znanje in dodelitve osebnih mesecev.",
+      titleDesc: "Opredelite projektne  partnerje, njihove vloge, strokovno znanje in dodelitve človek/mesecev.",
       code: "Koda partnerja",
       codePlaceholder: "npr. CO, P2, P3...",
       partnerName: "Ime partnerja",
       partnerNamePlaceholder: "Vnesite ime partnerske organizacije...",
       expertise: "Kratek opis strokovnega znanja",
       expertisePlaceholder: "npr. raziskave UI, javna politika, MSP proizvodnja...",
-      pmRate: "Povprečna cena OM (EUR)",
+      pmRate: "Povprečna cena ČM (EUR)",
       pmRatePlaceholder: "npr. 5700",
-      addPartner: "Dodaj partnerja",
+      addPartner: "+ Dodaj partnerja",
       removePartner: "Odstrani partnerja",
       coordinator: "Koordinator (CO)",
       partnerType: "Tip partnerja",
@@ -826,66 +838,70 @@ export const TEXT = {
         other: "Drugo"
       },
       hours: "Ure",
-      pm: "Osebni meseci (OM)",
-      personMonths: "Osebni meseci",
-      hoursPerPM: "1 OM = 143 ur (EU standard)",
+      pm: "Človek/mesec (ČM)",
+      personMonths: "Človek/meseci",
+      hoursPerPM: "1 ČM = 143 ur (EU standard)",
       partnerAllocation: "Dodelitev partnerja",
       selectPartner: "Izberite partnerja...",
       noPartnersYet: "Partnerji še niso opredeljeni. Najprej dodajte partnerje v poglavju Partnerstvo.",
       wpSummary: "Povzetek partnerjev po DS",
-      projectSummary: "Povzetek partnerjev na ravni projekta",
-      totalHours: "Skupne ure",
-      totalPM: "Skupni OM",
+      projectSummary: "Skupni pregled partnerjev",
+      totalHours: "Skupaj ure",
+      totalPM: "Skupaj ČM",
       totalCost: "Skupni stroški",
-      fundingModel: "Model financiranja",
-      fundingModelDesc: "Izberite model EU financiranja za ta projekt. To določa razpoložljive stroškovne kategorije.",
-      centralized: "Centralizirani",
-      decentralized: "Decentralizirani",
-      maxPartners: "Predvideno število partnerjev",
-      maxPartnersDesc: "Pričakovano število partnerjev v konzorciju (1–50). Če ni nastavljeno, bo UI predlagal na podlagi zahtevnosti projekta.",
-      maxPartnersPlaceholder: "npr. 8",
-      suggestPartners: "Predlagaj tipe partnerjev (UI)",
+      generateAllocations: "Generiraj dodelitve partnerjev z UI",
+      generateAllocationsDesc: "UI bo analiziral obstoječe partnerje in naloge ter predvidel razporeditev in stroške.",
     },
-    // ★ v6.0: Finance UI labels (SI)
+    // ★ v7.0: Finance UI labels (SI) — funding model TUKAJ + nastavitve posrednih stroškov
     finance: {
       title: "Finance (Proračun)",
-      titleDesc: "Opredelite stroškovne kategorije po nalogah in partnerjih. Stroški so razdeljeni na neposredne (odprta polja) in posredne (zaprta polja).",
+      titleDesc: "Opredelite stroškovne kategorije po nalogah in partnerjih.",
+      fundingModel: "Model financiranja",
+      fundingModelDesc: "Izberite model financiranja EU za ta projekt. To določa razpoložljive stroškovne kategorije.",
+      centralized: "Centralizirano",
+      decentralized: "Decentralizirano",
       directCosts: "Neposredni stroški",
       indirectCosts: "Posredni stroški",
-      directCostsDesc: "Odprta polja — vnesite ime in znesek v EUR za vsako stroškovne postavko. Ti stroški so neposredno pripisljivi projektu.",
-      indirectCostsDesc: "Zaprta polja — fiksna imena kategorij z izbirnim odstotkom, ki se uporabi na izbrane neposredne stroške ali skupne neposredne stroške.",
+      indirectCostsSettings: "Nastavitve posrednih stroškov",
+      indirectCostsSettingsDesc: "Določite odstotek posrednih stroškov in na katere neposredne stroškovne kategorije se ta odstotek nanaša.",
+      indirectPercentage: "Odstotek posrednih stroškov (%)",
+      indirectPercentagePlaceholder: "npr. 7, 15, 25",
+      indirectAppliesToLabel: "Nanaša se na naslednje neposredne kategorije:",
+      indirectAppliesToDesc: "Odkljukajte kategorije neposrednih stroškov, na katere se izračun posrednih stroškov nanaša.",
+      directCostsDesc: "Neposredni stroški, ki so neposredno pripisljivi projektu.",
+      indirectCostsDesc: "Posredni stroški se izračunajo kot % izbranih neposrednih stroškov.",
       costName: "Ime stroška",
       costNamePlaceholder: "Vnesite ime stroškovne kategorije...",
       amount: "Znesek (EUR)",
       amountPlaceholder: "0,00",
       percentage: "Odstotek (%)",
       percentagePlaceholder: "npr. 7",
-      appliesTo: "Se nanaša na",
+      appliesTo: "Nanaša se na",
       appliesToDesc: "Izberite, na katere neposredne stroške se ta odstotek nanaša.",
       appliesToAll: "Vse neposredne stroške",
-      calculatedAmount: "Izračunani znesek",
-      totalDirectCosts: "Skupni neposredni stroški",
-      totalIndirectCosts: "Skupni posredni stroški",
-      grandTotal: "Skupaj",
+      calculatedAmount: "Izračunan znesek",
+      totalDirectCosts: "Skupaj neposredni stroški",
+      totalIndirectCosts: "Skupaj posredni stroški",
+      grandTotal: "Skupni znesek",
       addDirectCost: "Dodaj neposredni strošek",
       removeDirectCost: "Odstrani",
-      perTask: "Po nalogah",
-      perWP: "Po delovnih paketih",
+      perTask: "Po nalogi",
+      perWP: "Po delovnem sklopu",
       perProject: "Pregled projekta",
-      perPartner: "Po partnerjih",
+      perPartner: "Po partnerju",
       costBreakdown: "Razčlenitev stroškov",
-      noFinanceData: "Finančnih podatkov še ni. Dodajte partnerske dodelitve s stroški v nalogah načrta dela.",
+      noFinanceData: "Še ni finančnih podatkov. Dodajte dodelitve partnerjev s stroški v nalogah načrta dela.",
       filterByWP: "Filtriraj po DS",
       filterByPartner: "Filtriraj po partnerju",
       filterByTask: "Filtriraj po nalogi",
       centralizedModel: "Centralizirani model",
       decentralizedModel: "Decentralizirani model",
-      costModel: "Metoda obračunavanja stroškov",
+      costModel: "Metoda obračuna stroškov",
       actualCost: "Dejanski stroški",
       unitCost: "Stroški na enoto",
-      lumpSum: "Pavšalni znesek",
+      lumpSum: "Pavšal",
       flatRate: "Pavšalna stopnja",
-      exportBudget: "Izvozi proračunsko tabelo",
+      exportBudget: "Izvozi tabelo proračuna",
     },
   },
 };
