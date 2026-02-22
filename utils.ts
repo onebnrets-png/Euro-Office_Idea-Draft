@@ -128,8 +128,8 @@ export const createEmptyProjectData = () => {
     impacts: [{ title: '', description: '', indicator: '' }],
     risks: [{ id: 'RISK1', category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' }],
     kers: [{ id: 'KER1', title: '', description: '', exploitationStrategy: '' }],
-    partners: [],                    // ★ v5.0: Empty consortium
-    fundingModel: 'centralized',     // ★ v5.0: Default to centralized
+    partners: [],
+    fundingModel: 'centralized',
   };
 };
 
@@ -166,7 +166,6 @@ export const safeMerge = (importedData: any): any => {
     }));
   }
 
-  // ★ v5.0: Partners & funding model
   if (!Array.isArray(merged.partners)) merged.partners = [];
   if (!merged.fundingModel) merged.fundingModel = 'centralized';
 
@@ -187,15 +186,12 @@ export const isSubStepCompleted = (
     const checkArrayContent = (arr: any[]) => Array.isArray(arr) && arr.length > 0 && arr.some(item => hasText(item.title) || hasText(item.description));
 
     switch (subStepId) {
-      // ── Problem Analysis ──────────────────────────────────
       case 'core-problem':
         return hasText(projectData.problemAnalysis?.coreProblem?.title);
       case 'causes':
         return checkArrayContent(projectData.problemAnalysis?.causes);
       case 'consequences':
         return checkArrayContent(projectData.problemAnalysis?.consequences);
-
-      // ── Project Idea ──────────────────────────────────────
       case 'main-aim':
         return hasText(projectData.projectIdea?.mainAim);
       case 'state-of-the-art':
@@ -209,36 +205,22 @@ export const isSubStepCompleted = (
       }
       case 'eu-policies':
         return Array.isArray(projectData.projectIdea?.policies) && projectData.projectIdea.policies.some((p: any) => hasText(p.name));
-
-      // ── Activities: Implementation ────────────────────────
       case 'implementation':
         return hasText(projectData.projectManagement?.description);
-
-      // ── Activities: Organigram ────────────────────────────
       case 'organigram': {
         const struct = projectData.projectManagement?.structure;
         if (!struct) return false;
         return hasText(struct.coordinator) || hasText(struct.steeringCommittee) || hasText(struct.advisoryBoard);
       }
-
-      // ── Activities: Partners ──────────────────────────────  ★ v5.0
       case 'partners':
         return Array.isArray(projectData.partners) && projectData.partners.length > 0
           && projectData.partners.some((p: any) => hasText(p.name));
-
-      // ── Activities: Work Plan ─────────────────────────────
       case 'workplan':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) => hasText(wp.title) || (wp.tasks && wp.tasks.length > 0 && hasText(wp.tasks[0].title)));
-
-      // ── Activities: Gantt Chart ───────────────────────────
       case 'gantt-chart':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) => wp.tasks && wp.tasks.length > 0 && wp.tasks.some((t: any) => t.startDate && t.endDate));
-
-      // ── Activities: PERT Chart ────────────────────────────
       case 'pert-chart':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) => wp.tasks && wp.tasks.length > 0 && wp.tasks.some((t: any) => hasText(t.title)));
-
-      // ── Activities: Finance ───────────────────────────────  ★ v5.0
       case 'finance':
         return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) =>
           wp.tasks && wp.tasks.some((t: any) =>
@@ -248,12 +230,8 @@ export const isSubStepCompleted = (
             )
           )
         );
-
-      // ── Activities: Risk Mitigation ───────────────────────
       case 'risk-mitigation':
         return Array.isArray(projectData.risks) && projectData.risks.some((r: any) => hasText(r.title));
-
-      // ── Expected Results ──────────────────────────────────
       case 'outputs':
         return checkArrayContent(projectData.outputs);
       case 'outcomes':
@@ -262,7 +240,6 @@ export const isSubStepCompleted = (
         return checkArrayContent(projectData.impacts);
       case 'kers':
         return checkArrayContent(projectData.kers);
-
       default:
         return false;
     }
@@ -311,8 +288,6 @@ export const downloadBlob = (blob: Blob, fileName: string): void => {
 };
 
 // ─── CONSOLIDATED LANGUAGE DETECTION (v4.5, 2026-02-21) ─────────
-// ★ Single-string language detection — used across the entire project
-// ═══════════════════════════════════════════════════════════════════
 
 const SI_KEYWORDS = [
   'projekt', 'cilj', 'aktivnost', 'rezultat', 'tveganje', 'kazalnik',
@@ -342,10 +317,9 @@ export const detectTextLanguage = (text: string): 'en' | 'si' | 'unknown' => {
   const lower = text.toLowerCase();
   const words = lower.split(/\s+/);
 
-  // Slovenian-specific characters
   const siChars = (lower.match(/[čšžćđ]/g) || []).length;
 
-  let siScore = siChars * 3; // strong signal
+  let siScore = siChars * 3;
   let enScore = 0;
 
   for (const word of words) {
@@ -359,7 +333,6 @@ export const detectTextLanguage = (text: string): 'en' | 'si' | 'unknown' => {
   return siScore >= enScore ? 'si' : 'en';
 };
 
-// ★ v4.5: Now delegates to detectTextLanguage for consistency
 export const detectProjectLanguage = (data: any): 'en' | 'si' => {
   if (!data) return 'en';
 
