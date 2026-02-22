@@ -1,6 +1,13 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.0 — 2026-02-22 — FULL v7.0 ALIGNMENT
+//   - CHANGED: Partners post-processing includes partnerType validation
+//     via isValidPartnerType() from Instructions.ts
+//   - CHANGED: Partner code fallback: idx===0 → 'CO', else P{idx+1}
+//   - NEW: Import isValidPartnerType from Instructions.ts
+//   - All previous v5.0 / v4.2 changes preserved.
+//
 // v5.0 — 2026-02-22 — PARTNERS (CONSORTIUM) AI GENERATION
 //   - NEW: executeGeneration handles sectionKey='partners'
 //     → generates partner types, expertise, PM rates via AI
@@ -30,6 +37,8 @@ import { recalculateProjectSchedule, downloadBlob } from '../utils.ts';
 import { TEXT } from '../locales.ts';
 import { storageService } from '../services/storageService.ts';
 import { smartTranslateProject } from '../services/translationDiffService.ts';
+// ★ v7.0: Import partnerType validator from Instructions.ts
+import { isValidPartnerType } from '../services/Instructions.ts';
 
 interface UseGenerationProps {
   projectData: any;
@@ -378,7 +387,6 @@ export const useGeneration = ({
     },
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
-
   // ─── Check if other language has content FOR THIS SECTION (v3.5) ──
 
   const checkOtherLanguageHasContent = useCallback(
@@ -464,7 +472,9 @@ export const useGeneration = ({
       handleAIError,
     ]
   );
+
   // ─── Execute section generation ────────────────────────────────
+  // ★ v7.0: Partners post-processing includes partnerType validation
   // ★ v5.0: Added partners generation
   // ★ v4.2: Added sub-section support via SUB_SECTION_MAP
   // v3.9 FIX: Fill mode now uses generateActivitiesPerWP() with
@@ -492,7 +502,7 @@ export const useGeneration = ({
             mode
           );
 
-        // ★ v5.0: Partners (Consortium) generation
+        // ★ v5.0 / v7.0: Partners (Consortium) generation
         } else if (sectionKey === 'partners') {
           const existingPartners = projectData.partners || [];
 
@@ -542,13 +552,17 @@ export const useGeneration = ({
             }
           }
 
-          // Post-processing: ensure IDs and codes
+          // ★ v7.0: Post-processing — ensure IDs, codes, and validated partnerType
           if (Array.isArray(generatedData)) {
             generatedData = generatedData.map((p: any, idx: number) => ({
               ...p,
               id: p.id || `partner-${idx + 1}`,
-              code: p.code || `P${idx + 1}`,
+              code: p.code || (idx === 0 ? 'CO' : `P${idx + 1}`),
+              partnerType: (p.partnerType && isValidPartnerType(p.partnerType))
+                ? p.partnerType
+                : 'other',
             }));
+            console.log(`[useGeneration] Partners post-processed: ${generatedData.length} partners, types: ${generatedData.map((p: any) => p.partnerType).join(', ')}`);
           }
 
         // ★ v3.8/v3.9: Smart per-WP generation for activities
