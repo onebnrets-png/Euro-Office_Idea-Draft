@@ -41,7 +41,7 @@ export type PartnerType =
 // ★ v7.0: FIX "Potovalni stroški" → "Potni stroški"
 
 export const CENTRALIZED_DIRECT_COSTS = [
-  { key: 'labourCosts', en: 'Labour costs', si: 'Stroški dela' },
+  { key: 'labourCosts', en: 'Staff/Personnel costs', si: 'Stroški dela' },
   { key: 'subContractorCosts', en: 'Sub-contractor costs', si: 'Stroški podizvajalcev' },
   { key: 'travelCosts', en: 'Travel costs', si: 'Potni stroški' },
   { key: 'materials', en: 'Materials / Consumables', si: 'Material / Potrošni material' },
@@ -512,3 +512,4 @@ export interface OrganizationInstructions {
   updatedAt: string;
   updatedBy: string;
 }
+
