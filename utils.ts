@@ -162,6 +162,9 @@ export const safeMerge = (importedData: any): any => {
       tasks: Array.isArray(wp.tasks) ? wp.tasks : [],
       milestones: Array.isArray(wp.milestones) ? wp.milestones : [],
       deliverables: Array.isArray(wp.deliverables) ? wp.deliverables : []
+   // ★ v6.0: Partners & funding model
+  if (!Array.isArray(merged.partners)) merged.partners = [];
+  if (!merged.fundingModel) merged.fundingModel = 'centralized';
     }));
   }
 
