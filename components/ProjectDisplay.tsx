@@ -812,9 +812,11 @@ const renderPartners = (props) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ★ v7.0.1: Finance (Budget) renderer — BUGFIX
+// ★ v7.2: Finance (Budget) renderer
+//   - NEW: Combined Direct + Indirect cost categories table at top
+//   - NEW: Indirect % and applies-to in same row
+//   - NEW: European number formatting (1.234,56)
 //   - FIX: partners now uses Array.isArray guard
-//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderFinance = (props) => {
     const { projectData, onUpdateData, language } = props;
@@ -829,6 +831,12 @@ const renderFinance = (props) => {
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
     const lang = language === 'si' ? 'si' : 'en';
 
+    // ★ v7.2: European number formatting — 1.234,56
+    const fmtEur = (n: number): string => {
+        if (n === 0) return '€0';
+        return '€' + n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    };
+
     // ★ v7.0: Calculate indirect costs dynamically from settings
     const calcIndirectForAllocation = (alloc: any): number => {
         if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
@@ -836,7 +844,7 @@ const renderFinance = (props) => {
         if (applicableCategories.length === 0) return 0;
 
         const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            const catKey = dc.categoryKey || '';
             if (applicableCategories.includes(catKey)) {
                 return sum + (dc.amount || 0);
             }
@@ -885,28 +893,37 @@ const renderFinance = (props) => {
 
     const hasData = allAllocations.length > 0;
 
+    // ★ v7.2: Indirect cost reference categories for display
+    const indirectCostReferenceDefs = [
+        { key: 'rent', en: 'Rent', si: 'Najemnina' },
+        { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
+        { key: 'telecommunications', en: 'Telecommunications', si: 'Telekomunikacije' },
+        { key: 'smallConsumables', en: 'Small consumables', si: 'Drobni potrošni material' },
+        { key: 'administrativeCosts', en: 'Administrative costs', si: 'Administrativni stroški' },
+    ];
+
     return (
         <div id="finance" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
             <SectionHeader title={tf.title || 'Finance (Budget)'} />
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
 
-            {/* ★ v7.0: Funding Model Selector — NOW HERE (moved from Partners) */}
+            {/* ★ v7.2: Funding Model Selector */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tf.fundingModelDesc || ''}</p>
-                        <select
-                            value={fundingModel}
-                            onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                        >
-                            <option value="centralized">{tf.centralized || 'Centralized'}</option>
-                            <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
-                        </select>
-                    </div>
+                <div className="mb-4">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
+                    <p className="text-xs text-slate-400 mb-2">{tf.fundingModelDesc || ''}</p>
+                    <select
+                        value={fundingModel}
+                        onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
+                        className="w-full max-w-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                    >
+                        <option value="centralized">{tf.centralized || 'Centralized'}</option>
+                        <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
+                    </select>
+                </div>
 
-                    {/* ★ v7.0: Indirect Cost Settings — percentage */}
+                {/* ★ v7.2: Indirect % + Applies-to in SAME ROW */}
+                <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 pt-4 border-t border-slate-100">
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectPercentage || 'Indirect Cost Percentage (%)'}</label>
                         <p className="text-xs text-slate-400 mb-2">{tf.indirectCostsSettingsDesc || ''}</p>
@@ -921,66 +938,94 @@ const renderFinance = (props) => {
                             className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
                         />
                     </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectAppliesToLabel || 'Applies to the following direct categories:'}</label>
+                        <p className="text-xs text-slate-400 mb-3">{tf.indirectAppliesToDesc || ''}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                            {directCostDefs.map((cat) => {
+                                const isChecked = (indirectSettings.appliesToCategories || []).includes(cat.key);
+                                return (
+                                    <label
+                                        key={cat.key}
+                                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                                            isChecked
+                                                ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                                const current = indirectSettings.appliesToCategories || [];
+                                                const updated = e.target.checked
+                                                    ? [...current, cat.key]
+                                                    : current.filter((k: string) => k !== cat.key);
+                                                onUpdateData(['indirectCostSettings', 'appliesToCategories'], updated);
+                                            }}
+                                            className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                                        />
+                                        <span className="text-sm">{cat[lang]}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
 
-                {/* ★ v7.0: Indirect Cost — applies to which direct categories (checkboxes) */}
-                <div className="mt-6 pt-4 border-t border-slate-100">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectAppliesToLabel || 'Applies to the following direct categories:'}</label>
-                    <p className="text-xs text-slate-400 mb-3">{tf.indirectAppliesToDesc || ''}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {directCostDefs.map((cat) => {
-                            const isChecked = (indirectSettings.appliesToCategories || []).includes(cat.key);
-                            return (
-                                <label
-                                    key={cat.key}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                                        isChecked
-                                            ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
-                                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={(e) => {
-                                            const current = indirectSettings.appliesToCategories || [];
-                                            const updated = e.target.checked
-                                                ? [...current, cat.key]
-                                                : current.filter((k: string) => k !== cat.key);
-                                            onUpdateData(['indirectCostSettings', 'appliesToCategories'], updated);
-                                        }}
-                                        className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
-                                    />
-                                    <span className="text-sm">{cat[lang]}</span>
-                                </label>
-                            );
-                        })}
+                {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
+                    <div className="mt-4 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
+                        {language === 'si'
+                            ? `Posredni stroški: ${indirectSettings.percentage}% na ${(indirectSettings.appliesToCategories || []).length} izbranih kategorij neposrednih stroškov`
+                            : `Indirect costs: ${indirectSettings.percentage}% applied to ${(indirectSettings.appliesToCategories || []).length} selected direct cost categories`
+                        }
                     </div>
-                    {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
-                        <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
-                            {language === 'si'
-                                ? `Posredni stroški: ${indirectSettings.percentage}% na ${(indirectSettings.appliesToCategories || []).length} izbranih kategorij neposrednih stroškov`
-                                : `Indirect costs: ${indirectSettings.percentage}% applied to ${(indirectSettings.appliesToCategories || []).length} selected direct cost categories`
-                            }
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
 
-            {/* Available Direct Cost Categories (reference) */}
+            {/* ★ v7.2: Combined Direct + Indirect Cost Categories Table */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8">
-                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    {tf.directCosts || 'Direct Costs'} — {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
+                <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">
+                    {language === 'si' ? 'Stroškovne kategorije' : 'Cost Categories'} — {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
                 </h4>
-                <p className="text-xs text-slate-400 mb-3">{tf.directCostsDesc || ''}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                    {directCostDefs.map((cat, i) => (
-                        <div key={i} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
-                            <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
-                            <span className="text-slate-700">{cat[lang]}</span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* LEFT: Direct Costs */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span>
+                            <span className="text-sm font-bold text-green-800 uppercase tracking-wider">
+                                {tf.directCosts || 'Direct Costs'}
+                            </span>
                         </div>
-                    ))}
+                        <div className="space-y-1.5">
+                            {directCostDefs.map((cat, i) => (
+                                <div key={cat.key} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
+                                    <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
+                                    <span className="text-slate-700">{cat[lang]}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    {/* RIGHT: Indirect Costs */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></span>
+                            <span className="text-sm font-bold text-amber-800 uppercase tracking-wider">
+                                {tf.indirectCosts || 'Indirect Costs'}
+                            </span>
+                            {indirectSettings.percentage > 0 && (
+                                <span className="text-xs text-amber-600 font-mono ml-1">({indirectSettings.percentage}%)</span>
+                            )}
+                        </div>
+                        <div className="space-y-1.5">
+                            {indirectCostReferenceDefs.map((cat, i) => (
+                                <div key={cat.key} className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 rounded-lg border border-amber-100 text-sm">
+                                    <span className="font-mono text-amber-700 font-bold w-6">{i + 1}.</span>
+                                    <span className="text-slate-700">{cat[lang]}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -991,8 +1036,8 @@ const renderFinance = (props) => {
                     <p className="text-slate-500 font-medium">{tf.noFinanceData || 'No finance data yet.'}</p>
                     <p className="text-slate-400 text-sm mt-1">
                         {language === 'si'
-                            ? 'Dodajte partnerske dodelitve s stroški v nalogah načrta dela (Workplan).'
-                            : 'Add partner allocations with costs in the Workplan tasks.'}
+                            ? 'Generirajte partnerske alokacije z AI gumbom v delovnem načrtu.'
+                            : 'Generate partner allocations with the AI button in the Work Plan.'}
                     </p>
                 </div>
             ) : (
@@ -1001,18 +1046,18 @@ const renderFinance = (props) => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-green-600 font-semibold uppercase tracking-wider mb-1">{tf.totalDirectCosts || 'Total Direct'}</p>
-                            <p className="text-2xl font-bold text-green-800">€{grandDirectTotal.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-green-800">{fmtEur(grandDirectTotal)}</p>
                         </div>
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-1">{tf.totalIndirectCosts || 'Total Indirect'}</p>
-                            <p className="text-2xl font-bold text-amber-800">€{grandIndirectTotal.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-amber-800">{fmtEur(grandIndirectTotal)}</p>
                             {indirectSettings.percentage > 0 && (
                                 <p className="text-xs text-amber-500 mt-1">{indirectSettings.percentage}%</p>
                             )}
                         </div>
                         <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-sky-600 font-semibold uppercase tracking-wider mb-1">{tf.grandTotal || 'Grand Total'}</p>
-                            <p className="text-2xl font-bold text-sky-800">€{grandTotal.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-sky-800">{fmtEur(grandTotal)}</p>
                         </div>
                     </div>
 
@@ -1040,11 +1085,11 @@ const renderFinance = (props) => {
                                         return (
                                             <tr key={wpId} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                                 <td className="py-2 px-3 font-bold text-sky-700">{wpId}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-green-700">€{wpDirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-amber-700">€{wpIndirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold">€{(wpDirect + wpIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpPM.toFixed(1)}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-green-700">{fmtEur(wpDirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-amber-700">{fmtEur(wpIndirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono font-bold">{fmtEur(wpDirect + wpIndirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpHours.toLocaleString('de-DE')}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpPM.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
                                             </tr>
                                         );
                                     })}
@@ -1052,11 +1097,11 @@ const renderFinance = (props) => {
                                 <tfoot>
                                     <tr className="border-t-2 border-slate-300 font-bold">
                                         <td className="py-2 px-3">{tf.grandTotal || 'TOTAL'}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-green-800">{fmtEur(grandDirectTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-amber-800">{fmtEur(grandIndirectTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-sky-800">{fmtEur(grandTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString('de-DE')}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1087,11 +1132,11 @@ const renderFinance = (props) => {
                                         return (
                                             <tr key={code} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                                 <td className="py-2 px-3 font-bold text-sky-700">{code}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-green-700">€{pDirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-amber-700">€{pIndirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold">€{(pDirect + pIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pPM.toFixed(1)}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-green-700">{fmtEur(pDirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-amber-700">{fmtEur(pIndirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono font-bold">{fmtEur(pDirect + pIndirect)}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pHours.toLocaleString('de-DE')}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pPM.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
                                             </tr>
                                         );
                                     })}
@@ -1099,11 +1144,11 @@ const renderFinance = (props) => {
                                 <tfoot>
                                     <tr className="border-t-2 border-slate-300 font-bold">
                                         <td className="py-2 px-3">{tf.grandTotal || 'TOTAL'}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-green-800">{fmtEur(grandDirectTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-amber-800">{fmtEur(grandIndirectTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono text-sky-800">{fmtEur(grandTotal)}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString('de-DE')}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1114,7 +1159,6 @@ const renderFinance = (props) => {
         </div>
     );
 };
-
 // ═══════════════════════════════════════════════════════════════
 // ★ v7.0.1: renderActivities — BUGFIX
 //   - FIX: taskPartnersList now uses Array.isArray guard
