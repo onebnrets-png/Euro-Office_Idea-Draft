@@ -1,1638 +1,907 @@
-// components/ProjectDisplay.tsx
+// locales.ts
 // ═══════════════════════════════════════════════════════════════
-// v7.0 — 2026-02-22 — REFACTOR: Partners, Finance, Indirect Costs
-//   - renderPartners: removed funding model (moved to finance),
-//     added partnerType dropdown, auto-resize fields (textarea),
-//     responsive design
-//   - renderFinance: funding model HERE, indirect cost settings
-//     (percentage + checkbox categories), simplified display
-//   - Task allocations: indirect costs = single line (project-level %),
-//     "Generate Partner Allocations" button on tasks
-//   - Responsive design throughout
-//   - All previous v6.1 changes preserved.
+// UI text strings — English (en) & Slovenian (si)
+// v7.0 — 2026-02-22 — CHANGES:
+//   - ★ v7.0: Partners refactor:
+//     → SI: "Osebni meseci (OM)" → "Človek/mesec (ČM)" povsod
+//     → EN: PM labels unchanged (Person-Months)
+//     → Funding model REMOVED from partners → MOVED to finance
+//     → maxPartners, suggestPartners REMOVED from partners
+//     → NEW: generateAllocations key in partners (both languages)
+//   - ★ v7.0: Finance refactor:
+//     → Funding model ADDED here (moved from partners)
+//     → NEW: indirectCostsSettings, indirectPercentage,
+//       indirectAppliesToLabel, indirectAppliesToDesc
+//   - v6.0: Partners & Finance UI labels (base)
+//   - v5.0: organization section (EN + SI) for multi-tenant UI
+//   - All previous v4.6 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useRef, useEffect, useCallback } from 'react';
-import { ICONS, getReadinessLevelsDefinitions, getSteps } from '../constants.tsx';
-import { TEXT } from '../locales.ts';
-import GanttChart from './GanttChart.tsx';
-import PERTChart from './PERTChart.tsx';
-import Organigram from './Organigram.tsx';
-import { recalculateProjectSchedule } from '../utils.ts';
-import InlineChart from './InlineChart.tsx';
-import { stepColors } from '../design/theme.ts';
-import StepNavigationBar from './StepNavigationBar.tsx';
-import {
-    PM_HOURS_PER_MONTH,
-    CENTRALIZED_DIRECT_COSTS,
-    DECENTRALIZED_DIRECT_COSTS,
-} from '../types.ts';
-
-const FieldHeader = ({ title, description, id = '', accentColor = '' }) => (
-    <div className="mb-3 pt-5 animate-fadeIn" id={id}>
-        <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
-            {accentColor && <span style={{ width: 3, height: 20, borderRadius: 2, background: accentColor, flexShrink: 0 }} />}
-            {title}
-        </h3>
-        {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
-    </div>
-);
-
-const SectionHeader = ({ title, onAdd, addText, children, accentColor = '' }: { title: string; onAdd?: () => void; addText?: string; children?: React.ReactNode; accentColor?: string }) => (
-    <div
-        className={`flex justify-between items-end mb-4 pt-6 pb-2 animate-fadeIn ${!accentColor ? 'border-b border-slate-200' : ''}`}
-        style={accentColor ? { borderBottom: `2px solid ${accentColor}` } : undefined}
-    >
-        <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
-            {accentColor && <span style={{ width: 4, height: 22, borderRadius: 3, background: accentColor, flexShrink: 0 }} />}
-            {title}
-        </h3>
-        <div className="flex gap-2 items-center">
-            {children}
-            {onAdd && (
-                <button
-                    onClick={onAdd}
-                    className="px-3 py-1.5 text-sm font-semibold text-white rounded-lg shadow-sm transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
-                    style={{ background: accentColor || '#0284c7' }}
-                >
-                    <span className="text-base leading-none font-bold">+</span> {addText}
-                </button>
-            )}
-        </div>
-    </div>
-);
-
-const RemoveButton = ({ onClick, text }) => (
-    <button onClick={onClick} className="ml-2 px-2.5 py-1 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all border border-red-100 hover:border-red-200 active:scale-95">
-        {text}
-    </button>
-);
-
-const GenerateButton = ({ onClick, isLoading, isField = false, title, text = '', missingApiKey = false }) => (
-    <button
-        onClick={onClick}
-        disabled={!!isLoading}
-        className={`flex items-center justify-center font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95
-            ${isField 
-                ? (missingApiKey ? 'p-1.5 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100' : 'p-1.5 bg-white text-sky-600 border border-sky-200 hover:bg-sky-50 hover:shadow-md')
-                : (missingApiKey ? 'px-3 py-1.5 text-sm bg-amber-500 text-white hover:bg-amber-600' : 'px-3.5 py-1.5 text-sm bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 hover:shadow-md')
-            }`
+export const TEXT = {
+  en: {
+    appTitle: "EU Project Idea Draft",
+    subtitle: "10 Key Steps",
+    clickToStart: "Click on a module to start building your project proposal.",
+    projectActions: "Project Actions",
+    saveProject: "Save Project",
+    importProject: "Import Project",
+    exportDocx: "Export as DOCX",
+    exportSummary: "Export Summary",
+    print: "Print",
+    backToHome: "EU Project Idea Draft",
+    add: "Add Item",
+    remove: "Remove",
+    generateAI: "Generate with AI",
+    generateField: "Generate",
+    loading: "Loading...",
+    generating: "Generating",
+    error: "Error",
+    selectStep: "Select a step to begin.",
+    stepSubtitle: "Fill in the details for this section or use the AI to generate content.",
+    generateSection: "Generate entire section",
+    title: "Title",
+    description: "Description",
+    indicator: "Indicator",
+    startDate: "Start Date",
+    endDate: "End Date",
+    id: "ID",
+    dates: "Dates",
+    milestones: "Milestones",
+    deliverables: "Deliverables",
+    tasks: "Tasks",
+    projectTitle: "Project Title & Acronym",
+    projectTitleDesc: "The official name and acronym for your project.",
+    projectTitlePlaceholder: "Enter the official project title...",
+    projectAcronymPlaceholder: "Enter the project acronym (e.g., PROJ-AI)...",
+    projectStartDate: "Project Start Date",
+    projectStartDateDesc: "The date when the project execution is planned to begin.",
+    projectDuration: "Project Duration",
+    projectDurationDesc: "Total duration of the project in months. All activities, milestones, and deliverables must fit within this timeframe.",
+    projectEndDate: "Project End Date (calculated)",
+    months: "months",
+    acronym: "Acronym",
+    mainAim: "Main Aim",
+    mainAimDesc: "A single, comprehensive sentence that encapsulates the purpose of the project.",
+    mainAimPlaceholder: "Start with 'The main aim of the Project is to...'",
+    stateOfTheArt: "State of the Art",
+    stateOfTheArtDesc: "A review of existing projects, products, and services related to the problem.",
+    stateOfTheArtPlaceholder: "Describe existing solutions and the state of the art...",
+    proposedSolution: "Proposed Solution",
+    proposedSolutionDesc: "An in-depth description of the project idea, its innovation, phases, and work methods.",
+    proposedSolutionPlaceholder: "Describe your innovative solution, its phases, and methods...",
+    readinessLevels: "Readiness Levels",
+    readinessLevelsDesc: "Select the TRL, SRL, ORL, and LRL levels for your project.",
+    notSelected: "Not Selected",
+    justification: "Justification",
+    justificationPlaceholder: "Explain why this level was chosen...",
+    euPolicies: "Relevant EU Policies",
+    policyName: "Policy Name",
+    policyDesc: "Description of Relevance",
+    policyPlaceholder: "Enter the official EU policy name...",
+    policyDescPlaceholder: "Describe how the project aligns with this policy...",
+    coreProblem: "Core Problem",
+    coreProblemDesc: "Define the central issue your project will address.",
+    coreProblemTitlePlaceholder: "Enter the core problem title...",
+    coreProblemDescPlaceholder: "Describe the core problem in detail...",
+    causes: "Causes",
+    causeTitle: "Cause Title",
+    causePlaceholder: "Enter cause title...",
+    causeDescPlaceholder: "Describe the cause...",
+    consequences: "Consequences",
+    consequenceTitle: "Consequence Title",
+    consequencePlaceholder: "Enter consequence title...",
+    consequenceDescPlaceholder: "Describe the consequence...",
+    wpTitle: "WP Title",
+    wpTitlePlaceholder: "Enter Work Package title...",
+    taskTitle: "Task Title",
+    taskTitlePlaceholder: "Enter task title...",
+    taskDesc: "Task Description",
+    taskDescPlaceholder: "Describe the task...",
+    milestonePlaceholder: "Describe the milestone...",
+    deliverableDescPlaceholder: "Describe the deliverable...",
+    deliverableTitle: "Deliverable Title",
+    deliverableTitlePlaceholder: "Enter deliverable title...",
+    indicatorPlaceholder: "Enter a measurable indicator...",
+    enterTitle: "Enter title...",
+    enterDesc: "Enter description...",
+    generalObjectives: "General Objectives",
+    specificObjectives: "Specific Objectives",
+    outputs: "Outputs",
+    outcomes: "Outcomes",
+    impacts: "Impacts",
+    workPackages: "Work Packages",
+    ganttChart: "Gantt Chart",
+    ganttChartDesc: "Visual timeline of your project activities.",
+    pertChart: "PERT Chart",
+    pertChartDesc: "Network diagram visualizing task dependencies and flow.",
+    pertLegend: {
+        legend: "Legend",
+        dependency: "Dependency",
+        critical: "Critical Path",
+        incoming: "Incoming (Predecessor)",
+        outgoing: "Outgoing (Successor)"
+    },
+    noDates: "No dates defined",
+    duration: "Duration",
+    days: "days",
+    viewMode: "View",
+    exportXML: "Export XML",
+    dependencies: "Dependencies",
+    addDependency: "Add Dependency",
+    predecessor: "Predecessor Task",
+    depType: "Type",
+    depTypes: {
+      FS: "Finish to Start (FS)",
+      SS: "Start to Start (SS)",
+      FF: "Finish to Finish (FF)",
+      SF: "Start to Finish (SF)"
+    },
+    views: {
+      week: "Weeks",
+      month: "Months",
+      quarter: "Quarters",
+      semester: "Semesters",
+      year: "Years",
+      project: "Full Project"
+    },
+    risks: {
+        riskDescription: "Risk Description",
+        riskTitle: "Risk Title (Summary)",
+        riskId: "Risk ID",
+        category: "Category",
+        likelihood: "Likelihood",
+        impact: "Impact (Severity)",
+        mitigation: "Mitigation Measures",
+        levels: {
+            low: "Low",
+            medium: "Medium",
+            high: "High"
+        },
+        categories: {
+            technical: "Technical",
+            social: "Social",
+            economic: "Economic",
+            environmental: "Environmental"
+        },
+        descPlaceholder: "Describe the potential risk...",
+        titlePlaceholder: "Summary title (e.g. Low participation in survey)...",
+        mitigationPlaceholder: "Describe how to prevent or solve this risk..."
+    },
+    kers: {
+        kerId: "KER ID",
+        kerTitle: "KER Title",
+        kerDesc: "Detailed Description",
+        exploitationStrategy: "Exploitation Strategy",
+        titlePlaceholder: "Enter a specific title (e.g. Algorithm for...)",
+        descPlaceholder: "Deep and precise technical description of the result...",
+        strategyPlaceholder: "Professional, precise, and deep exploitation strategy..."
+    },
+    management: {
+        title: "Implementation",
+        implementation: "Implementation",
+        implementationDesc: "Describe the project management structure, decision-making processes, and quality assurance mechanisms.",
+        desc: "Describe the project management structure, decision-making processes, and quality assurance mechanisms.",
+        placeholder: "Describe how the project will be managed (e.g., Steering Committee, WP Leaders, conflict resolution, quality control)...",
+        organigram: "Organizational Structure (Organigram)",
+        roles: {
+            coordinator: "Project Coordinator",
+            steering: "Steering Committee",
+            advisory: "Advisory Board",
+            technical: "Technical/Quality Manager",
+            wps: "Work Packages"
         }
-        title={missingApiKey ? "Setup API Key" : title}
-    >
-        {isLoading ? (
-            <div className={`mr-1.5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin ${isField ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
-        ) : (
-            missingApiKey ? <ICONS.LOCK className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} /> : <ICONS.SPARKLES className={`mr-1.5 ${isField ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
-        )}
-        {isField ? '' : text}
-    </button>
-);
-
-const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeholder, rows = 5, generateTitle, missingApiKey, className = "mb-5 w-full group" }) => {
-    const enGen = TEXT.en.generating;
-    const siGen = TEXT.si.generating;
-    const fieldIsLoading = isLoading === `${enGen} ${String(path[path.length - 1])}...` || isLoading === `${siGen} ${String(path[path.length - 1])}...`;
-    
-    const textAreaRef = useRef(null);
-    
-    const adjustHeight = useCallback(() => {
-        const el = textAreaRef.current;
-        if (el) {
-            el.style.height = 'auto';
-            el.style.height = `${el.scrollHeight}px`;
+    },
+    steps: {
+      problemAnalysis: "Problem Analysis",
+      projectIdea: "Project Idea",
+      generalObjectives: "General Objectives",
+      specificObjectives: "Specific Objectives",
+      activities: "Activities",
+      expectedResults: "Expected Results",
+      outputs: "Outputs",
+      outcomes: "Outcomes",
+      impacts: "Impacts",
+      risks: "Risk Mitigation",
+      kers: "Key Exploitable Results (KER)",
+    },
+    subSteps: {
+      coreProblem: "Core Problem",
+      causes: "Causes",
+      consequences: "Consequences",
+      mainAim: "Main Aim",
+      stateOfTheArt: "State of the Art",
+      proposedSolution: "Proposed Solution",
+      readinessLevels: "Readiness Levels",
+      euPolicies: "EU Policies",
+      implementation: "Implementation",
+      organigram: "Organizational Structure",
+      partners: "Partnership (Consortium)",
+      qualityEfficiency: "Quality & Efficiency",
+      workplan: "Workplan",
+      ganttChart: "Gantt Chart",
+      pertChart: "PERT Chart",
+      finance: "Finance (Budget)",
+      riskMitigation: "Risk Mitigation",
+      outputs: "Outputs",
+      outcomes: "Outcomes",
+      impacts: "Impacts",
+      kers: "Key Exploitable Results (KER)",
+    },
+    rl: {
+      trl: "Technology Readiness Level (TRL)",
+      trlDesc: "Indicates the maturity of the technology.",
+      srl: "Societal Readiness Level (SRL)",
+      srlDesc: "Measures the readiness of society to accept and adopt the innovation.",
+      orl: "Organizational Readiness Level (ORL)",
+      orlDesc: "Assesses the readiness of an organization to implement a new technology or process.",
+      lrl: "Legal Readiness Level (LRL)",
+      lrlDesc: "Assesses the legal and ethical feasibility of the innovation.",
+    },
+    projects: {
+        myProjects: "My Projects",
+        currentProject: "Current Project",
+        switchProject: "Switch Project",
+        createNew: "Create New Project",
+        noProjects: "No projects found. Create your first one!",
+        untitled: "Untitled Project",
+        lastModified: "Last modified",
+        deleteConfirm: "Are you sure you want to delete this project? This action cannot be undone.",
+        delete: "Delete",
+        open: "Open",
+        create: "Create"
+    },
+    modals: {
+        missingTranslationTitle: "Translation Missing",
+        missingTranslationMsg: "Translation for this language does not exist yet. Do you want to use AI to translate current content, or just copy text without translation?",
+        translateBtn: "Translate with AI",
+        copyBtn: "Copy Text Only",
+        updateTranslationTitle: "Content Changed",
+        updateTranslationMsg: "Content in the current language has been modified. Do you want to re-translate these changes with AI, or switch to the old version (changes will be ignored)?",
+        updateBtn: "Update Translation (AI)",
+        switchBtn: "Switch without Update",
+        cancel: "Cancel",
+        summaryTitle: "Project Summary",
+        summaryDesc: "Here is a professional summary of your project generated by AI.",
+        downloadDocxBtn: "Download DOCX",
+        regenerateBtn: "Regenerate",
+        closeBtn: "Close",
+        generationChoiceTitle: "Content Exists",
+        generationChoiceMsg: "This section already contains some data. How would you like to proceed?",
+        enhanceExistingBtn: "Enhance Existing",
+        enhanceExistingDesc: "AI will professionally improve, deepen, and refine your existing content — adding citations, EU terminology, and analytical depth.",
+        fillMissingBtn: "Fill Missing",
+        fillMissingDesc: "AI will only generate content for empty fields. Your existing text remains completely untouched.",
+        regenerateAllBtn: "Regenerate All",
+        regenerateAllDesc: "AI will generate completely new content from scratch, replacing everything in this section."
+    },
+    auth: {
+      loginTitle: "Login",
+      registerTitle: "Create Account",
+      verifyTitle: "Verify Account",
+      username: "Username / Email",
+      password: "Password",
+      confirmPassword: "Confirm Password",
+      verificationCode: "Verification Code",
+      loginBtn: "Login",
+      registerBtn: "Register",
+      verifyBtn: "Verify",
+      resendBtn: "Resend Code",
+      switchMsg: "Don't have an account?",
+      switchAction: "Register here",
+      switchMsgLogin: "Already have an account?",
+      switchActionLogin: "Login",
+      errorAuth: "Invalid email or password",
+      errorMatch: "Passwords do not match",
+      errorExists: "Email already registered",
+      errorVerification: "Invalid 2FA code",
+      errorNotVerified: "Account not verified. Login to complete verification.",
+      verificationSent: "SIMULATION: Verification code sent to your device.",
+      verificationSuccess: "Account verified successfully! You can login.",
+      welcome: "Welcome,",
+      logout: "Logout",
+      settings: "Settings",
+      save: "Save Settings",
+      apiKeyLabel: "Google Gemini API Key",
+      apiKeyDesc: "Enter your valid Google Gemini API key (starts with 'AIza') to use AI features.",
+      apiKeyPlaceholder: "Paste API key here...",
+      apiKeySaved: "Settings saved successfully!",
+      noKeyWarning: "Missing API Key",
+      noKeyMessage: "Please enter your Gemini API key in settings to use AI features.",
+      manualModeBanner: " API key not detected. AI features are disabled.",
+      enterKeyAction: "ENTER API KEY",
+      projectSaved: "Project successfully saved!",
+      validating: "Validating Key...",
+      invalidKey: "Invalid API Key. Please enter a valid Gemini API key or leave empty to use without AI.",
+      modelLabel: "AI Model Name",
+      modelDesc: "Specify the Gemini model version (e.g., gemini-3-pro-preview). Leave empty for default.",
+      modelPlaceholder: "Default: gemini-3-pro-preview",
+      emailLabel: "E-mail Address",
+      displayNameLabel: "Display Name (User)",
+      displayNameDesc: "Unique name. If empty, email prefix is used.",
+      errorEmailFormat: "Invalid email format.",
+      errorPasswordWeak: "Password is not secure enough.",
+      errorUsernameTaken: "Display name is already taken.",
+      pwRuleChars: "8+ Characters",
+      pwRuleNumber: "Number (0-9)",
+      pwRuleSign: "Symbol (!@#)",
+      pwRuleLetters: "Letters (A-z)",
+      twoFactorTitle: "Two-Factor Authentication (2FA)",
+      twoFactorLabel: "Code from app",
+      setup2FADesc: "Scan this key in Google Authenticator or Microsoft Authenticator:",
+      cancel: "Cancel",
+      tabGeneral: "General & AI",
+      tabProfile: "Profile",
+      tabSecurity: "Security",
+      changePassword: "Change Password",
+      currentPassword: "Current Password",
+      newPassword: "New Password",
+      confirmNewPassword: "Confirm New Password",
+      passwordChanged: "Password changed successfully!",
+      passwordMismatch: "New passwords do not match.",
+      incorrectPassword: "Current password is incorrect.",
+      logoLabel: "Custom Organization Logo",
+      logoDesc: "Upload a logo (PNG/JPG) to replace the default branding.",
+      uploadLogo: "Upload Logo",
+      removeLogo: "Remove Logo",
+      logoUpdated: "Logo updated!"
+    },
+    organization: {
+      title: "Organization",
+      switchOrg: "Switch Organization",
+      members: "Members",
+      instructions: "Organization Instructions",
+      noOrg: "No Organization",
+      role: "Role",
+      owner: "Owner",
+      admin: "Admin",
+      member: "Member",
+      addMember: "Add Member",
+      removeMember: "Remove Member",
+      createOrg: "Create Organization",
+      orgName: "Organization Name",
+      orgSlug: "URL Slug",
+      deleteOrg: "Delete Organization",
+      confirmDelete: "Are you sure you want to delete this organization? This action cannot be undone.",
+      instructionsDesc: "Custom AI instructions for this organization. These override global instructions.",
+      instructionsSaved: "Organization instructions saved successfully.",
+      instructionsReset: "Organization instructions reset to global defaults.",
+      noInstructions: "No custom instructions set. Global instructions apply.",
+    },
+    // ★ v7.0: Partnership UI labels (EN) — funding model MOVED to finance
+    partners: {
+      title: "Partnership (Consortium)",
+      titleDesc: "Define the project partners, their roles, expertise, and person-month allocations.",
+      code: "Partner Code",
+      codePlaceholder: "e.g. CO, P2, P3...",
+      partnerName: "Partner Name",
+      partnerNamePlaceholder: "Enter partner organization name...",
+      expertise: "Short Expertise Description",
+      expertisePlaceholder: "e.g. AI research, public policy, SME manufacturing...",
+      pmRate: "Average PM Rate (EUR)",
+      pmRatePlaceholder: "e.g. 5700",
+      addPartner: "+ Add Partner",
+      removePartner: "Remove Partner",
+      coordinator: "Coordinator (CO)",
+      partnerType: "Partner Type",
+      partnerTypes: {
+        faculty: "Faculty / University",
+        researchInstitute: "Research Institute",
+        sme: "SME (Small & Medium Enterprise)",
+        publicAgency: "Public Agency",
+        internationalAssociation: "International Association",
+        ministry: "Ministry / Government Body",
+        ngo: "NGO / Non-Profit",
+        largeEnterprise: "Large Enterprise",
+        other: "Other"
+      },
+      hours: "Hours",
+      pm: "Person-Months (PM)",
+      personMonths: "Person-Months",
+      hoursPerPM: "1 PM = 143 hours (EU standard)",
+      partnerAllocation: "Partner Allocation",
+      selectPartner: "Select partner...",
+      noPartnersYet: "No partners defined yet. Add partners in the Partnership section first.",
+      wpSummary: "WP Partner Summary",
+      projectSummary: "Project Partner Summary",
+      totalHours: "Total Hours",
+      totalPM: "Total PM",
+      totalCost: "Total Cost",
+      generateAllocations: "Generate Partner Allocations with AI",
+      generateAllocationsDesc: "AI will analyse existing partners and tasks to suggest allocation and costs.",
+    },
+    // ★ v7.0: Finance UI labels (EN) — funding model HERE + indirect cost settings
+    finance: {
+      title: "Finance (Budget)",
+      titleDesc: "Define cost categories per task and partner.",
+      fundingModel: "Funding Model",
+      fundingModelDesc: "Choose the EU funding model for this project. This determines the available cost categories.",
+      centralized: "Centralized",
+      decentralized: "Decentralized",
+      directCosts: "Direct Costs",
+      indirectCosts: "Indirect Costs",
+      indirectCostsSettings: "Indirect Cost Settings",
+      indirectCostsSettingsDesc: "Set the indirect cost percentage and select which direct cost categories it applies to.",
+      indirectPercentage: "Indirect Cost Percentage (%)",
+      indirectPercentagePlaceholder: "e.g. 7, 15, 25",
+      indirectAppliesToLabel: "Applies to the following direct categories:",
+      indirectAppliesToDesc: "Check the direct cost categories that the indirect cost calculation applies to.",
+      directCostsDesc: "Direct costs directly attributable to the project.",
+      indirectCostsDesc: "Indirect costs are calculated as a % of selected direct costs.",
+      costName: "Cost Name",
+      costNamePlaceholder: "Enter cost category name...",
+      amount: "Amount (EUR)",
+      amountPlaceholder: "0.00",
+      percentage: "Percentage (%)",
+      percentagePlaceholder: "e.g. 7",
+      appliesTo: "Applies To",
+      appliesToDesc: "Select which direct cost items this percentage applies to.",
+      appliesToAll: "All direct costs",
+      calculatedAmount: "Calculated Amount",
+      totalDirectCosts: "Total Direct Costs",
+      totalIndirectCosts: "Total Indirect Costs",
+      grandTotal: "Grand Total",
+      addDirectCost: "Add Direct Cost",
+      removeDirectCost: "Remove",
+      perTask: "Per Task",
+      perWP: "Per Work Package",
+      perProject: "Project Overview",
+      perPartner: "Per Partner",
+      costBreakdown: "Cost Breakdown",
+      noFinanceData: "No finance data yet. Add partner allocations with costs in the Workplan tasks.",
+      filterByWP: "Filter by WP",
+      filterByPartner: "Filter by Partner",
+      filterByTask: "Filter by Task",
+      centralizedModel: "Centralized Model",
+      decentralizedModel: "Decentralized Model",
+      costModel: "Cost Calculation Method",
+      actualCost: "Actual Cost",
+      unitCost: "Unit Cost",
+      lumpSum: "Lump Sum",
+      flatRate: "Flat Rate",
+      exportBudget: "Export Budget Table",
+    },
+  },
+  si: {
+    appTitle: "Idejni osnutek projekta EU",
+    subtitle: "10 ključnih korakov",
+    clickToStart: "Kliknite na modul za začetek priprave projektnega predloga.",
+    projectActions: "Projektna dejanja",
+    saveProject: "Shrani projekt",
+    importProject: "Uvozi projekt",
+    exportDocx: "Izvozi kot DOCX",
+    exportSummary: "Izvozi povzetek",
+    print: "Natisni",
+    backToHome: "EU Pomočnik",
+    add: "Dodaj element",
+    remove: "Odstrani",
+    generateAI: "Generiraj z UI",
+    generateField: "Generiraj",
+    loading: "Nalaganje...",
+    generating: "Generiranje",
+    error: "Napaka",
+    selectStep: "Izberite korak za začetek.",
+    stepSubtitle: "Izpolnite podrobnosti za to poglavje ali uporabite UI za generiranje vsebine.",
+    generateSection: "Generiraj celotno poglavje",
+    title: "Naziv",
+    description: "Opis",
+    indicator: "Kazalnik",
+    startDate: "Datum začetka",
+    endDate: "Datum konca",
+    id: "ID",
+    dates: "Datumi",
+    milestones: "Mejniki",
+    deliverables: "Rezultati (Deliverables)",
+    tasks: "Naloge",
+    projectTitle: "Naziv projekta & akronim",
+    projectTitleDesc: "Uradni naziv in akronim vašega projekta.",
+    projectTitlePlaceholder: "Vnesite uradni naziv projekta...",
+    projectAcronymPlaceholder: "Vnesite akronim projekta (npr. PROJ-AI)...",
+    projectStartDate: "Datum začetka projekta",
+    projectStartDateDesc: "Datum, ko se načrtuje začetek izvajanja projekta.",
+    projectDuration: "Trajanje projekta",
+    projectDurationDesc: "Skupno trajanje projekta v mesecih. Vse aktivnosti, mejniki in rezultati morajo biti načrtovani znotraj tega časovnega okvira.",
+    projectEndDate: "Datum zaključka projekta (izračunan)",
+    months: "mesecev",
+    acronym: "Akronim",
+    mainAim: "Namen projekta / Glavni cilj",
+    mainAimDesc: "En sam, celovit stavek, ki zajema namen projekta.",
+    mainAimPlaceholder: "Začnite z 'Glavni namen projekta je...'",
+    stateOfTheArt: "Trenutno stanje (State of the Art)",
+    stateOfTheArtDesc: "Pregled obstoječih projektov, izdelkov in storitev, povezanih s problemom.",
+    stateOfTheArtPlaceholder: "Opišite obstoječe rešitve in trenutno stanje...",
+    proposedSolution: "Predlagana rešitev",
+    proposedSolutionDesc: "Poglobljen opis projektne ideje, njene inovativnosti, faz in metod dela.",
+    proposedSolutionPlaceholder: "Opišite svojo inovativno rešitev, njene faze in metode...",
+    readinessLevels: "Stopnje pripravljenosti",
+    readinessLevelsDesc: "Izberite stopnje TRL, SRL, ORL in LRL za vaš projekt.",
+    notSelected: "Ni izbrano",
+    justification: "Utemeljitev",
+    justificationPlaceholder: "Pojasnite, zakaj je bila izbrana ta stopnja...",
+    euPolicies: "Ustrezne politike EU",
+    policyName: "Ime politike",
+    policyDesc: "Opis ustreznosti",
+    policyPlaceholder: "Vnesite uradno ime politike EU...",
+    policyDescPlaceholder: "Opišite, kako se projekt usklajuje s to politiko...",
+    coreProblem: "Glavni problem",
+    coreProblemDesc: "Opredelite osrednji problem, ki ga bo vaš projekt reševal.",
+    coreProblemTitlePlaceholder: "Vnesite naziv glavnega problema...",
+    coreProblemDescPlaceholder: "Podrobno opišite glavni problem...",
+    causes: "Vzroki",
+    causeTitle: "Naziv vzroka",
+    causePlaceholder: "Vnesite naziv vzroka...",
+    causeDescPlaceholder: "Opišite vzrok...",
+    consequences: "Posledice",
+    consequenceTitle: "Naziv posledice",
+    consequencePlaceholder: "Vnesite naziv posledice...",
+    consequenceDescPlaceholder: "Opišite posledico...",
+    wpTitle: "Naziv WP",
+    wpTitlePlaceholder: "Vnesite naziv delovnega paketa...",
+    taskTitle: "Naziv naloge",
+    taskTitlePlaceholder: "Vnesite naziv naloge...",
+    taskDesc: "Opis naloge",
+    taskDescPlaceholder: "Opišite nalogo...",
+    milestonePlaceholder: "Opišite mejnik...",
+    deliverableDescPlaceholder: "Opišite rezultat...",
+    deliverableTitle: "Naslov rezultata",
+    deliverableTitlePlaceholder: "Vnesite naslov rezultata...",
+    indicatorPlaceholder: "Vnesite merljiv kazalnik...",
+    enterTitle: "Vnesite naziv...",
+    enterDesc: "Vnesite opis...",
+    generalObjectives: "Splošni cilji",
+    specificObjectives: "Specifični cilji",
+    outputs: "Kazalniki učinka (Outputs)",
+    outcomes: "Rezultati (Outcomes)",
+    impacts: "Dolgoročni učinki (Impacts)",
+    workPackages: "Delovni paketi",
+    ganttChart: "Gantt diagram",
+    ganttChartDesc: "Vizualna časovnica vaših projektnih aktivnosti.",
+    pertChart: "PERT diagram",
+    pertChartDesc: "Mrežni diagram, ki prikazuje odvisnosti in tok nalog.",
+    pertLegend: {
+        legend: "Legenda",
+        dependency: "Odvisnost",
+        critical: "Kritična pot",
+        incoming: "Vhodna (Predhodnik)",
+        outgoing: "Izhodna (Naslednik)"
+    },
+    noDates: "Datumi niso določeni",
+    duration: "Trajanje",
+    days: "dni",
+    viewMode: "Pogled",
+    exportXML: "Izvozi XML",
+    dependencies: "Odvisnosti",
+    addDependency: "Dodaj odvisnost",
+    predecessor: "Predhodna naloga",
+    depType: "Tip",
+    depTypes: {
+      FS: "Konec na začetek (FS)",
+      SS: "Začetek na začetek (SS)",
+      FF: "Konec na konec (FF)",
+      SF: "Začetek na konec (SF)"
+    },
+    views: {
+      week: "Tedni",
+      month: "Meseci",
+      quarter: "Četrtletja",
+      semester: "Polletja",
+      year: "Leta",
+      project: "Celoten projekt"
+    },
+    risks: {
+        riskDescription: "Opis tveganja",
+        riskTitle: "Naziv tveganja (Povzetek)",
+        riskId: "ID tveganja",
+        category: "Kategorija",
+        likelihood: "Verjetnost",
+        impact: "Vpliv (Resnost)",
+        mitigation: "Ukrepi za zmanjšanje",
+        levels: {
+            low: "Nizka",
+            medium: "Srednja",
+            high: "Visoka"
+        },
+        categories: {
+            technical: "Tehnično",
+            social: "Družbeno",
+            economic: "Ekonomsko",
+            environmental: "Okoljsko"
+        },
+        descPlaceholder: "Opišite potencialno tveganje...",
+        titlePlaceholder: "Povzetek naziva (npr. Nizka udeležba v anketi)...",
+        mitigationPlaceholder: "Opišite, kako preprečiti ali rešiti to tveganje..."
+    },
+    kers: {
+        kerId: "KER ID",
+        kerTitle: "Naziv KER",
+        kerDesc: "Podroben opis",
+        exploitationStrategy: "Strategija izkoriščanja",
+        titlePlaceholder: "Vnesite specifičen naziv (npr. Algoritem za...)",
+        descPlaceholder: "Poglobljen in natančen tehničen opis rezultata...",
+        strategyPlaceholder: "Strokovna, natančna in poglobljena strategija izkoriščanja..."
+    },
+    management: {
+        title: "Implementacija",
+        implementation: "Implementacija",
+        implementationDesc: "Opišite strukturo vodenja projekta, procese odločanja in mehanizme zagotavljanja kakovosti.",
+        desc: "Opišite strukturo vodenja projekta, procese odločanja in mehanizme zagotavljanja kakovosti.",
+        placeholder: "Opišite, kako bo projekt voden (npr. usmerjevalni odbor, vodje DS, reševanje konfliktov, nadzor kakovosti)...",
+        organigram: "Organizacijska struktura (Organigram)",
+        roles: {
+            coordinator: "Projektni koordinator",
+            steering: "Usmerjevalni odbor",
+            advisory: "Svetovalni odbor",
+            technical: "Tehnični vodja / Vodja kakovosti",
+            wps: "Delovni sklopi (WP)"
         }
-    }, []);
-    
-    useEffect(() => {
-        adjustHeight();
-        const rafId = requestAnimationFrame(() => {
-            adjustHeight();
-        });
-        return () => cancelAnimationFrame(rafId);
-    }, [value, adjustHeight]);
-
-    useEffect(() => {
-        const el = textAreaRef.current;
-        if (!el) return;
-        const observer = new ResizeObserver(() => {
-            adjustHeight();
-        });
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [adjustHeight]);
-
-    useEffect(() => {
-        const handleResize = () => adjustHeight();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [adjustHeight]);
-
-    return (
-        <div className={className}>
-            <label className="block text-sm font-semibold text-slate-600 mb-1.5 tracking-wide">{label}</label>
-            <div className="relative">
-                <textarea
-                    ref={textAreaRef}
-                    data-path={path.join(',')}
-                    value={value || ''}
-                    onChange={(e) => onUpdate(path, e.target.value)}
-                    onInput={adjustHeight}
-                    className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-10 resize-none overflow-hidden block text-base leading-relaxed shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
-                    rows={rows}
-                    placeholder={placeholder}
-                />
-                <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 focus-within:opacity-100">
-                     <GenerateButton onClick={() => onGenerate(path)} isLoading={fieldIsLoading} isField title={generateTitle} missingApiKey={missingApiKey} />
-                </div>
-            </div>
-        </div>
-    );
+    },
+    steps: {
+      problemAnalysis: "Problemska analiza",
+      projectIdea: "Projektna ideja",
+      generalObjectives: "Splošni cilji",
+      specificObjectives: "Specifični cilji",
+      activities: "Aktivnosti",
+      expectedResults: "Pričakovani rezultati",
+      outputs: "Kazalniki učinka (Outputs)",
+      outcomes: "Rezultati (Outcomes)",
+      impacts: "Dolgoročni učinki (Impacts)",
+      risks: "Obvladovanje tveganj",
+      kers: "Ključni rezultati (KER)",
+    },
+    subSteps: {
+      coreProblem: "Glavni problem",
+      causes: "Vzroki",
+      consequences: "Posledice",
+      mainAim: "Namen projekta (glavni cilj)",
+      stateOfTheArt: "Trenutno stanje razvoja",
+      proposedSolution: "Predlagana rešitev",
+      readinessLevels: "Stopnje pripravljenosti",
+      euPolicies: "Politike EU",
+      implementation: "Implementacija",
+      organigram: "Organizacijska struktura",
+      partners: "Partnerstvo (Konzorcij)",
+      qualityEfficiency: "Kakovost in učinkovitost",
+      workplan: "Načrt dela (WP)",
+      ganttChart: "Gantt diagram",
+      pertChart: "PERT diagram",
+      finance: "Finance (Proračun)",
+      riskMitigation: "Obvladovanje tveganj",
+      outputs: "Kazalniki učinka (Outputs)",
+      outcomes: "Rezultati (Outcomes)",
+      impacts: "Dolgoročni učinki / Vplivi (Impacts)",
+      kers: "Ključni rezultati (KER)",
+    },
+    rl: {
+      trl: "Stopnja tehnološke pripravljenosti (TRL)",
+      trlDesc: "Označuje zrelost tehnologije.",
+      srl: "Stopnja družbene pripravljenosti (SRL)",
+      srlDesc: "Meri pripravljenost družbe za sprejem in prevzem inovacije.",
+      orl: "Stopnja organizacijske pripravljenosti (ORL)",
+      orlDesc: "Ocenjuje pripravljenost organizacije za uvedbo nove tehnologije ali procesa.",
+      lrl: "Stopnja pravne pripravljenosti (LRL)",
+      lrlDesc: "Ocenjuje pravno in etično izvedljivost inovacije.",
+    },
+    projects: {
+        myProjects: "Moji projekti",
+        currentProject: "Trenutni projekt",
+        switchProject: "Zamenjaj projekt",
+        createNew: "Ustvari nov projekt",
+        noProjects: "Ni najdenih projektov. Ustvarite prvega!",
+        untitled: "Nenaslovljen projekt",
+        lastModified: "Zadnja sprememba",
+        deleteConfirm: "Ali ste prepričani, da želite izbrisati ta projekt? Tega dejanja ni mogoče razveljaviti.",
+        delete: "Izbriši",
+        open: "Odpri",
+        create: "Ustvari"
+    },
+    modals: {
+        missingTranslationTitle: "Prevod ne obstaja",
+        missingTranslationMsg: "Prevod za ta jezik še ne obstaja. Želite uporabiti UI za prevod trenutne vsebine, ali samo kopirati besedilo brez prevajanja?",
+        translateBtn: "Prevedi z UI",
+        copyBtn: "Samo kopiraj besedilo",
+        updateTranslationTitle: "Vsebina spremenjena",
+        updateTranslationMsg: "Vsebina v trenutnem jeziku je bila spremenjena. Želite s pomočjo UI ponovno prevesti te spremembe, ali preklopiti na staro verzijo (spremembe ne bodo upoštevane)?",
+        updateBtn: "Posodobi prevod (UI)",
+        switchBtn: "Preklopi brez posodobitve",
+        cancel: "Prekliči",
+        summaryTitle: "Povzetek projekta",
+        summaryDesc: "Tukaj je strokoven povzetek vašega projekta, ki ga je generirala UI.",
+        downloadDocxBtn: "Prenesi DOCX",
+        regenerateBtn: "Ponovno generiraj",
+        closeBtn: "Zapri",
+        generationChoiceTitle: "Vsebina že obstaja",
+        generationChoiceMsg: "To poglavje že vsebuje nekaj podatkov. Kako želite nadaljevati?",
+        enhanceExistingBtn: "Izboljšaj obstoječe",
+        enhanceExistingDesc: "UI bo strokovno izboljšal, poglobil in dodelal vašo obstoječo vsebino — dodal citate, EU terminologijo in analitično globino.",
+        fillMissingBtn: "Dopolni manjkajoče",
+        fillMissingDesc: "UI bo generiral vsebino samo za prazna polja. Obstoječe besedilo ostane popolnoma nedotaknjeno.",
+        regenerateAllBtn: "Generiraj znova vse",
+        regenerateAllDesc: "UI bo generiral popolnoma novo vsebino iz nič in zamenjal vse obstoječe podatke v tem razdelku."
+    },
+    auth: {
+      loginTitle: "Prijava",
+      registerTitle: "Ustvari račun",
+      verifyTitle: "Potrditev računa",
+      username: "Uporabniško ime / Email",
+      password: "Geslo",
+      confirmPassword: "Potrdi geslo",
+      verificationCode: "Verifikacijska koda",
+      loginBtn: "Prijavi se",
+      registerBtn: "Registracija",
+      verifyBtn: "Potrdi",
+      resendBtn: "Ponovno pošlji kodo",
+      switchMsg: "Še nimate računa?",
+      switchAction: "Registrirajte se tukaj",
+      switchMsgLogin: "Že imate račun?",
+      switchActionLogin: "Prijavite se",
+      errorAuth: "Napačen email ali geslo",
+      errorMatch: "Gesla se ne ujemata",
+      errorExists: "Email že obstaja",
+      errorVerification: "Napačna 2FA koda",
+      errorNotVerified: "Račun ni potrjen. Prijavite se za dokončanje potrditve.",
+      verificationSent: "SIMULACIJA: Koda za potrditev je bila poslana na vašo napravo.",
+      verificationSuccess: "Račun uspešno potrjen! Lahko se prijavite.",
+      welcome: "Pozdravljeni,",
+      logout: "Odjava",
+      settings: "Nastavitve",
+      save: "Shrani nastavitve",
+      apiKeyLabel: "Google Gemini API ključ",
+      apiKeyDesc: "Vnesite veljaven Google Gemini API ključ (začne se z 'AIza') za uporabo UI funkcij.",
+      apiKeyPlaceholder: "Prilepite API ključ tukaj...",
+      apiKeySaved: "Nastavitve uspešno shranjene!",
+      noKeyWarning: "Manjka API ključ",
+      noKeyMessage: "Prosimo, vnesite svoj Gemini API ključ v nastavitvah za uporabo UI funkcij.",
+      manualModeBanner: " API ključ ni zaznan. UI funkcije so onemogočene.",
+      enterKeyAction: "VNESI API KLJUČ",
+      projectSaved: "Projekt uspešno shranjen!",
+      validating: "Preverjanje ključa...",
+      invalidKey: "Neveljaven API ključ. Vnesite pravi ključ ali pustite prazno za delo brez UI.",
+      modelLabel: "Ime UI modela",
+      modelDesc: "Določite verzijo Gemini modela (npr. gemini-3-pro-preview). Pustite prazno za privzeto.",
+      modelPlaceholder: "Privzeto: gemini-3-pro-preview",
+      emailLabel: "E-poštni naslov",
+      displayNameLabel: "Prikazno ime (Uporabnik)",
+      displayNameDesc: "Unikatno ime. Če prazno, se uporabi e-pošta.",
+      errorEmailFormat: "Neveljaven format e-pošte.",
+      errorPasswordWeak: "Geslo ni dovolj varno.",
+      errorUsernameTaken: "Prikazno ime je zasedeno.",
+      pwRuleChars: "8+ znakov",
+      pwRuleNumber: "Številka (0-9)",
+      pwRuleSign: "Znak (!@#)",
+      pwRuleLetters: "Črke (A-z)",
+      twoFactorTitle: "Dvostopenjska potrditev (2FA)",
+      twoFactorLabel: "Koda iz aplikacije",
+      setup2FADesc: "Skenirajte ta ključ v Google Authenticator ali Microsoft Authenticator:",
+      cancel: "Prekliči",
+      tabGeneral: "Splošno & UI",
+      tabProfile: "Profil",
+      tabSecurity: "Varnost",
+      changePassword: "Spremeni geslo",
+      currentPassword: "Trenutno geslo",
+      newPassword: "Novo geslo",
+      confirmNewPassword: "Potrdi novo geslo",
+      passwordChanged: "Geslo uspešno spremenjeno!",
+      passwordMismatch: "Gesli se ne ujemata.",
+      incorrectPassword: "Trenutno geslo ni pravilno.",
+      logoLabel: "Logotip organizacije",
+      logoDesc: "Naložite logotip (PNG/JPG), ki bo nadomestil privzetega.",
+      uploadLogo: "Naloži logotip",
+      removeLogo: "Odstrani",
+      logoUpdated: "Logotip posodobljen!"
+    },
+    organization: {
+      title: "Organizacija",
+      switchOrg: "Zamenjaj organizacijo",
+      members: "Člani",
+      instructions: "Pravila organizacije",
+      noOrg: "Ni organizacije",
+      role: "Vloga",
+      owner: "Lastnik",
+      admin: "Administrator",
+      member: "Član",
+      addMember: "Dodaj člana",
+      removeMember: "Odstrani člana",
+      createOrg: "Ustvari organizacijo",
+      orgName: "Ime organizacije",
+      orgSlug: "URL oznaka",
+      deleteOrg: "Izbriši organizacijo",
+      confirmDelete: "Ali ste prepričani, da želite izbrisati to organizacijo? Tega dejanja ni mogoče razveljaviti.",
+      instructionsDesc: "Pravila umetne inteligence po meri za to organizacijo. Ta pravila nadomestijo globalna pravila.",
+      instructionsSaved: "Pravila organizacije uspešno shranjena.",
+      instructionsReset: "Pravila organizacije ponastavljena na globalne privzete vrednosti.",
+      noInstructions: "Pravila po meri niso nastavljena. Veljajo globalna pravila.",
+    },
+    // ★ v7.0: Partnership UI labels (SI) — ČM namesto OM, funding model PREMAKNJENO v finance
+    partners: {
+      title: "Partnerstvo (Konzorcij)",
+      titleDesc: "Opredelite projektne partnerje, njihove vloge, strokovno znanje in dodelitve človek/mesecev.",
+      code: "Koda partnerja",
+      codePlaceholder: "npr. CO, P2, P3...",
+      partnerName: "Ime partnerja",
+      partnerNamePlaceholder: "Vnesite ime partnerske organizacije...",
+      expertise: "Kratek opis strokovnega znanja",
+      expertisePlaceholder: "npr. raziskave UI, javna politika, MSP proizvodnja...",
+      pmRate: "Povprečna cena ČM (EUR)",
+      pmRatePlaceholder: "npr. 5700",
+      addPartner: "+ Dodaj partnerja",
+      removePartner: "Odstrani partnerja",
+      coordinator: "Koordinator (CO)",
+      partnerType: "Tip partnerja",
+      partnerTypes: {
+        faculty: "Fakulteta / Univerza",
+        researchInstitute: "Raziskovalni inštitut",
+        sme: "MSP (Malo in srednje podjetje)",
+        publicAgency: "Javna agencija",
+        internationalAssociation: "Mednarodno združenje",
+        ministry: "Ministrstvo / Vladni organ",
+        ngo: "NVO / Neprofitna organizacija",
+        largeEnterprise: "Veliko podjetje",
+        other: "Drugo"
+      },
+      hours: "Ure",
+      pm: "Človek/mesec (ČM)",
+      personMonths: "Človek/meseci",
+      hoursPerPM: "1 ČM = 143 ur (EU standard)",
+      partnerAllocation: "Dodelitev partnerja",
+      selectPartner: "Izberite partnerja...",
+      noPartnersYet: "Partnerji še niso opredeljeni. Najprej dodajte partnerje v poglavju Partnerstvo.",
+      wpSummary: "Povzetek partnerjev po DS",
+      projectSummary: "Skupni pregled partnerjev",
+      totalHours: "Skupaj ure",
+      totalPM: "Skupaj ČM",
+      totalCost: "Skupni stroški",
+      generateAllocations: "Generiraj dodelitve partnerjev z UI",
+      generateAllocationsDesc: "UI bo analiziral obstoječe partnerje in naloge ter predvidel razporeditev in stroške.",
+    },
+    // ★ v7.0: Finance UI labels (SI) — funding model TUKAJ + nastavitve posrednih stroškov
+    finance: {
+      title: "Finance (Proračun)",
+      titleDesc: "Opredelite stroškovne kategorije po nalogah in partnerjih.",
+      fundingModel: "Model financiranja",
+      fundingModelDesc: "Izberite model financiranja EU za ta projekt. To določa razpoložljive stroškovne kategorije.",
+      centralized: "Centralizirano",
+      decentralized: "Decentralizirano",
+      directCosts: "Neposredni stroški",
+      indirectCosts: "Posredni stroški",
+      indirectCostsSettings: "Nastavitve posrednih stroškov",
+      indirectCostsSettingsDesc: "Določite odstotek posrednih stroškov in na katere neposredne stroškovne kategorije se ta odstotek nanaša.",
+      indirectPercentage: "Odstotek posrednih stroškov (%)",
+      indirectPercentagePlaceholder: "npr. 7, 15, 25",
+      indirectAppliesToLabel: "Nanaša se na naslednje neposredne kategorije:",
+      indirectAppliesToDesc: "Odkljukajte kategorije neposrednih stroškov, na katere se izračun posrednih stroškov nanaša.",
+      directCostsDesc: "Neposredni stroški, ki so neposredno pripisljivi projektu.",
+      indirectCostsDesc: "Posredni stroški se izračunajo kot % izbranih neposrednih stroškov.",
+      costName: "Ime stroška",
+      costNamePlaceholder: "Vnesite ime stroškovne kategorije...",
+      amount: "Znesek (EUR)",
+      amountPlaceholder: "0,00",
+      percentage: "Odstotek (%)",
+      percentagePlaceholder: "npr. 7",
+      appliesTo: "Nanaša se na",
+      appliesToDesc: "Izberite, na katere neposredne stroške se ta odstotek nanaša.",
+      appliesToAll: "Vse neposredne stroške",
+      calculatedAmount: "Izračunan znesek",
+      totalDirectCosts: "Skupaj neposredni stroški",
+      totalIndirectCosts: "Skupaj posredni stroški",
+      grandTotal: "Skupni znesek",
+      addDirectCost: "Dodaj neposredni strošek",
+      removeDirectCost: "Odstrani",
+      perTask: "Po nalogi",
+      perWP: "Po delovnem sklopu",
+      perProject: "Pregled projekta",
+      perPartner: "Po partnerju",
+      costBreakdown: "Razčlenitev stroškov",
+      noFinanceData: "Še ni finančnih podatkov. Dodajte dodelitve partnerjev s stroški v nalogah načrta dela.",
+      filterByWP: "Filtriraj po DS",
+      filterByPartner: "Filtriraj po partnerju",
+      filterByTask: "Filtriraj po nalogi",
+      centralizedModel: "Centralizirani model",
+      decentralizedModel: "Decentralizirani model",
+      costModel: "Metoda obračuna stroškov",
+      actualCost: "Dejanski stroški",
+      unitCost: "Stroški na enoto",
+      lumpSum: "Pavšal",
+      flatRate: "Pavšalna stopnja",
+      exportBudget: "Izvozi tabelo proračuna",
+    },
+  },
 };
-
-// ★ v7.0: Auto-resize textarea helper for partner fields
-const AutoResizeTextarea = ({ value, onChange, placeholder, className = '', rows = 1 }) => {
-    const ref = useRef<HTMLTextAreaElement>(null);
-    const adjust = useCallback(() => {
-        const el = ref.current;
-        if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
-    }, []);
-    useEffect(() => { adjust(); }, [value, adjust]);
-    useEffect(() => {
-        const handleResize = () => adjust();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [adjust]);
-    return (
-        <textarea
-            ref={ref}
-            value={value || ''}
-            onChange={onChange}
-            onInput={adjust}
-            placeholder={placeholder}
-            rows={rows}
-            className={`w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base resize-none overflow-hidden ${className}`}
-        />
-    );
-};
-
-const ReadinessLevelSelector = ({ readinessLevels, onUpdateData, onGenerateField, onGenerateSection, isLoading, language, missingApiKey }) => {
-    const t = TEXT[language] || TEXT['en'];
-    const definitions = getReadinessLevelsDefinitions(language);
-
-    const handleLevelChange = (levelKey, value) => {
-        onUpdateData(['projectIdea', 'readinessLevels', levelKey, 'level'], value);
-    };
-
-    return (
-        <div id="readiness-levels" className="mt-8">
-            <div className="flex justify-between items-end mb-4 border-b border-slate-200 pb-2">
-                <div>
-                    <h3 className="text-lg font-bold text-slate-700">{t.readinessLevels}</h3>
-                    <p className="text-sm text-slate-500 mt-1">{t.readinessLevelsDesc}</p>
-                </div>
-                <GenerateButton 
-                    onClick={() => onGenerateSection('readinessLevels')} 
-                    isLoading={isLoading === `${t.generating} readinessLevels...`} 
-                    title={t.generateSection} 
-                    text={t.generateAI} 
-                    missingApiKey={missingApiKey} 
-                />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {Object.entries(definitions).map(([key, def]) => {
-                    const levelKey = key;
-                    const selectedLevelData = readinessLevels ? readinessLevels[levelKey] : { level: null, justification: '' };
-
-                    return (
-                        <div key={key} className="p-5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col hover:shadow-md transition-all card-hover animate-fadeIn">
-                            <div className="mb-3">
-                                <h4 className="font-bold text-slate-800 text-base">{def.name}</h4>
-                                <p className="text-xs text-slate-500 mt-1">{def.description}</p>
-                            </div>
-                            
-                            <select
-                                value={selectedLevelData?.level || ''}
-                                onChange={(e) => handleLevelChange(levelKey, e.target.value ? parseInt(e.target.value, 10) : null)}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg mb-4 text-base bg-slate-50 focus:bg-white transition-colors"
-                            >
-                                <option value="">{t.notSelected}</option>
-                                {def.levels.map(l => (
-                                    <option key={l.level} value={l.level}>
-                                        {`${key} ${l.level}: ${l.title}`}
-                                    </option>
-                                ))}
-                            </select>
-                            
-                            <div className="flex-grow flex flex-col">
-                                <TextArea
-                                    label={t.justification}
-                                    path={['projectIdea', 'readinessLevels', levelKey, 'justification']}
-                                    value={selectedLevelData?.justification || ''}
-                                    onUpdate={onUpdateData}
-                                    onGenerate={onGenerateField}
-                                    isLoading={isLoading}
-                                    rows={2}
-                                    placeholder={t.justificationPlaceholder}
-                                    generateTitle={`${t.generateField} ${t.justification}`}
-                                    missingApiKey={missingApiKey}
-                                />
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
-
-const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependency, language }) => {
-    const t = TEXT[language] || TEXT['en'];
-    const [selectedId, setSelectedId] = React.useState('');
-    const [selectedType, setSelectedType] = React.useState('FS');
-
-    const handleAdd = () => {
-        if (selectedId) {
-            onAddDependency({ predecessorId: selectedId, type: selectedType });
-            setSelectedId('');
-        }
-    };
-
-    const availableTasks = allTasks.filter(t => t.id !== task.id && !(task.dependencies || []).some(d => d.predecessorId === t.id));
-
-    return (
-        <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <h6 className="text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">{t.dependencies}</h6>
-            <div className="flex gap-2 mb-2">
-                <select 
-                    className="flex-1 text-sm p-1.5 rounded border border-slate-300 bg-white" 
-                    value={selectedId} 
-                    onChange={e => setSelectedId(e.target.value)}
-                >
-                    <option value="">{t.predecessor}...</option>
-                    {availableTasks.map(at => (
-                        <option key={at.id} value={at.id}>{at.id}: {at.title.substring(0, 30)}...</option>
-                    ))}
-                </select>
-                <select 
-                    className="w-24 text-sm p-1.5 rounded border border-slate-300 bg-white"
-                    value={selectedType}
-                    onChange={e => setSelectedType(e.target.value)}
-                >
-                    {Object.keys(t.depTypes).map(k => <option key={k} value={k}>{k}</option>)}
-                </select>
-                <button onClick={handleAdd} disabled={!selectedId} className="px-3 bg-sky-600 text-white rounded font-bold hover:bg-sky-700 disabled:opacity-50 transition-colors">+</button>
-            </div>
-            <div className="space-y-1.5">
-                {(task.dependencies || []).map((dep, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-white px-2 py-1.5 rounded border border-slate-200 text-xs shadow-sm">
-                        <span className="text-slate-700">{t.predecessor}: <strong className="text-sky-700">{dep.predecessorId}</strong> <span className="text-slate-400">({dep.type})</span></span>
-                        <button onClick={() => onRemoveDependency(idx)} className="text-red-400 hover:text-red-600 font-bold ml-2 px-1">✕</button>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// --- Section Renderers ---
-const renderProblemAnalysis = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const { coreProblem, causes, consequences } = projectData.problemAnalysis;
-    const path = ['problemAnalysis'];
-    const t = TEXT[language] || TEXT['en'];
-
-    return (
-        <>
-            <div id="core-problem">
-                <SectionHeader title={t.coreProblem}>
-                    <GenerateButton onClick={() => onGenerateSection('coreProblem')} isLoading={isLoading === `${t.generating} coreProblem...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                <p className="text-sm text-slate-500 mb-3 -mt-2">{t.coreProblemDesc}</p>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.title} path={[...path, 'coreProblem', 'title']} value={coreProblem.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.coreProblemTitlePlaceholder} generateTitle={`${t.generateField} ${t.coreProblem}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[...path, 'coreProblem', 'description']} value={coreProblem.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.coreProblemDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={coreProblem.description || ''} fieldContext="coreProblem" language={language} />
-                </div>
-            </div>
-
-            <div id="causes" className="mt-8">
-                <SectionHeader title={t.causes} onAdd={() => onAddItem([...path, 'causes'], { id: null, title: '', description: '' })} addText={t.add}>
-                    <GenerateButton onClick={() => onGenerateSection('causes')} isLoading={isLoading === `${t.generating} causes...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                {(causes || []).map((cause, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
-                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'causes'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.causeTitle} #${index + 1}`} path={[...path, 'causes', index, 'title']} value={cause.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.causePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.description} path={[...path, 'causes', index, 'description']} value={cause.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.causeDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                        <InlineChart text={cause.description || ''} fieldContext={`cause_${index}`} language={language} />
-                    </div>
-                ))}
-            </div>
-
-            <div id="consequences" className="mt-8">
-                <SectionHeader title={t.consequences} onAdd={() => onAddItem([...path, 'consequences'], { id: null, title: '', description: '' })} addText={t.add}>
-                    <GenerateButton onClick={() => onGenerateSection('consequences')} isLoading={isLoading === `${t.generating} consequences...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                {(consequences || []).map((consequence, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
-                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'consequences'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.consequenceTitle} #${index + 1}`} path={[...path, 'consequences', index, 'title']} value={consequence.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.consequencePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.description} path={[...path, 'consequences', index, 'description']} value={consequence.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.consequenceDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                        <InlineChart text={consequence.description || ''} fieldContext={`consequence_${index}`} language={language} />
-                    </div>
-                ))}
-            </div>
-        </>
-    );
-};
-
-const renderProjectIdea = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const { mainAim, stateOfTheArt, proposedSolution, policies, readinessLevels, projectTitle, projectAcronym, startDate } = projectData.projectIdea;
-    const path = ['projectIdea'];
-    const t = TEXT[language] || TEXT['en'];
-    
-    const isCoreProblemFilled = projectData.problemAnalysis.coreProblem.title.trim() !== '';
-    const isMainAimFilled = mainAim.trim() !== '';
-    const canEditTitle = isCoreProblemFilled && isMainAimFilled;
-
-    return (
-        <>
-            <div className={`mb-8 p-6 border border-slate-200 rounded-xl bg-gradient-to-br from-white to-slate-50 shadow-sm transition-all duration-300 ${!canEditTitle ? 'filter blur-sm opacity-60 pointer-events-none' : ''}`}>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-slate-800">{t.projectTitle}</h3>
-                    <GenerateButton onClick={() => onGenerateSection('projectTitleAcronym')} isLoading={isLoading === `${t.generating} projectTitleAcronym...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TextArea label={t.projectTitle} path={[...path, 'projectTitle']} value={projectTitle} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectTitlePlaceholder} generateTitle={`${t.generateField} ${t.projectTitle}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.acronym} path={[...path, 'projectAcronym']} value={projectAcronym} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectAcronymPlaceholder} generateTitle={`${t.generateField} ${t.acronym}`} missingApiKey={missingApiKey} />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.projectStartDate}</label>
-                        <input type="date" value={startDate || ''} onChange={(e) => onUpdateData([...path, 'startDate'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm text-base" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.projectDuration}</label>
-                        <select className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm text-base bg-white" value={projectData.projectIdea?.durationMonths || 24} onChange={(e) => onUpdateData(['projectIdea', 'durationMonths'], parseInt(e.target.value))}>
-                            {[6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 42, 48, 54, 60].map(m => (
-                                <option key={m} value={m}>{m} {t.months}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.projectEndDate}</label>
-                        <div className="p-2.5 border border-slate-200 rounded-lg bg-slate-50 text-base font-bold text-sky-700 shadow-sm">
-                            {projectData.projectIdea?.startDate ? (() => {
-                                const start = new Date(projectData.projectIdea.startDate);
-                                const months = projectData.projectIdea?.durationMonths || 24;
-                                const end = new Date(start);
-                                end.setMonth(end.getMonth() + months);
-                                end.setDate(end.getDate() - 1);
-                                return end.toISOString().split('T')[0];
-                            })() : '—'}
-                        </div>
-                    </div>
-                </div>
-                <p className="text-xs text-slate-400 mt-2">{t.projectDurationDesc}</p>
-            </div>
-
-            <div id="main-aim">
-                <SectionHeader title={t.mainAim}>
-                    <GenerateButton onClick={() => onGenerateSection('mainAim')} isLoading={isLoading === `${t.generating} mainAim...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                <p className="text-sm text-slate-500 mb-3 -mt-2">{t.mainAimDesc}</p>
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.mainAim} path={[...path, 'mainAim']} value={mainAim} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.mainAimPlaceholder} generateTitle={`${t.generateField} ${t.mainAim}`} missingApiKey={missingApiKey} />
-                </div>
-            </div>
-
-            <div id="state-of-the-art" className="mt-6">
-                <SectionHeader title={t.stateOfTheArt}>
-                    <GenerateButton onClick={() => onGenerateSection('stateOfTheArt')} isLoading={isLoading === `${t.generating} stateOfTheArt...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                <p className="text-sm text-slate-500 mb-3 -mt-2">{t.stateOfTheArtDesc}</p>
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.stateOfTheArt} path={[...path, 'stateOfTheArt']} value={stateOfTheArt} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.stateOfTheArtPlaceholder} generateTitle={`${t.generateField} ${t.stateOfTheArt}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={stateOfTheArt || ''} fieldContext="stateOfTheArt" language={language} />
-                </div>
-            </div>
-
-            <div id="proposed-solution" className="mt-6">
-                <SectionHeader title={t.proposedSolution}>
-                    <GenerateButton onClick={() => onGenerateSection('proposedSolution')} isLoading={isLoading === `${t.generating} proposedSolution...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                <p className="text-sm text-slate-500 mb-3 -mt-2">{t.proposedSolutionDesc}</p>
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.proposedSolution} path={[...path, 'proposedSolution']} value={proposedSolution} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.proposedSolutionPlaceholder} generateTitle={`${t.generateField} ${t.proposedSolution}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={proposedSolution || ''} fieldContext="proposedSolution" language={language} />
-                </div>
-            </div>
-            
-            <ReadinessLevelSelector readinessLevels={readinessLevels} onUpdateData={onUpdateData} onGenerateField={onGenerateField} onGenerateSection={onGenerateSection} isLoading={isLoading} language={language} missingApiKey={missingApiKey} />
-
-            <div id="eu-policies" className="mt-8">
-                 <SectionHeader title={t.euPolicies} onAdd={() => onAddItem([...path, 'policies'], { id: null, name: '', description: '' })} addText={t.add}>
-                    <GenerateButton onClick={() => onGenerateSection('policies')} isLoading={isLoading === `${t.generating} policies...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                 </SectionHeader>
-                 {(policies || []).map((policy, index) => (
-                    <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'policies'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.policyName} #${index + 1}`} path={[...path, 'policies', index, 'name']} value={policy.name} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.policyPlaceholder} generateTitle={`${t.generateField} ${t.policyName}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.policyDesc} path={[...path, 'policies', index, 'description']} value={policy.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.policyDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    </div>
-                ))}
-            </div>
-        </>
-    );
-};
-
-const renderGenericResults = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const items = projectData[sectionKey];
-    const t = TEXT[language] || TEXT['en'];
-    const title = t[sectionKey];
-    const getPrefix = (key) => { switch (key) { case 'outputs': return 'D'; case 'outcomes': return 'R'; case 'impacts': return 'I'; } };
-    const prefix = getPrefix(sectionKey);
-
-    return (
-        <div id={sectionKey} className="mt-8">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add}>
-                <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-             </SectionHeader>
-             {(items || []).map((item, index) => (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
-                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={item.description || ''} fieldContext={`${sectionKey}_${index}`} language={language} />
-                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
-                </div>
-            ))}
-        </div>
-    );
-};
-
-const renderObjectives = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const items = projectData[sectionKey];
-    const t = TEXT[language] || TEXT['en'];
-    const title = sectionKey === 'generalObjectives' ? t.generalObjectives : t.specificObjectives;
-    const prefix = sectionKey === 'generalObjectives' ? 'GO' : 'SO';
-    
-    return (
-        <div className="mt-2">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add}>
-                <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-             </SectionHeader>
-             {(items || []).map((item, index) => (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
-                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
-                </div>
-            ))}
-        </div>
-    );
-};
-
-const renderProjectManagement = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, isLoading, language, missingApiKey } = props;
-    const { projectManagement } = projectData;
-    const t = TEXT[language] || TEXT['en'];
-    const pmPath = ['projectManagement'];
-
-    return (
-        <div id="implementation" className="mb-10 pb-8">
-            <SectionHeader title={t.management.title}>
-                <GenerateButton onClick={() => onGenerateSection('projectManagement')} isLoading={isLoading === `${t.generating} projectManagement...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-            </SectionHeader>
-            <p className="text-sm text-slate-500 mb-6 -mt-2">{t.management.desc}</p>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
-                <TextArea label={t.description} path={[...pmPath, 'description']} value={projectManagement?.description || ''} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.management.placeholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-            </div>
-            <div id="organigram">
-                <div className="mb-3 border-b border-slate-200 pb-2">
-                    <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
-                </div>
-                <div className="chart-container-white overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <Organigram structure={projectManagement?.structure} activities={projectData.activities} language={language} id="organigram-interactive" />
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const renderRisks = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const { risks } = projectData;
-    const path = ['risks'];
-    const t = TEXT[language] || TEXT['en'];
-    const trafficColors = { low: 'bg-green-100 border-green-300 text-green-800', medium: 'bg-yellow-100 border-yellow-300 text-yellow-800', high: 'bg-red-100 border-red-300 text-red-800' };
-    const getTrafficColor = (value) => { if (!value) return trafficColors.low; return trafficColors[value.toLowerCase()] || trafficColors.low; };
-    
-    return (
-        <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${risks.length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
-                <GenerateButton onClick={() => onGenerateSection('risks')} isLoading={isLoading === `${t.generating} risks...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-            </SectionHeader>
-            {(risks || []).map((risk, index) => {
-                const likelihoodLoading = isLoading === `${t.generating} likelihood...`;
-                const impactLoading = isLoading === `${t.generating} impact...`;
-                return (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem(path, index)} text={t.remove} /></div>
-                    <div className="flex flex-wrap gap-4 mb-4">
-                        <div className="w-28">
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.riskId}</label>
-                            <input type="text" value={risk.id || ''} onChange={(e) => onUpdateData([...path, index, 'id'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-bold bg-slate-50 text-base" />
-                        </div>
-                        <div className="w-48">
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.category}</label>
-                            <select value={risk.category || 'technical'} onChange={(e) => onUpdateData([...path, index, 'category'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-base">
-                                <option value="technical">{t.risks.categories.technical}</option>
-                                <option value="social">{t.risks.categories.social}</option>
-                                <option value="economic">{t.risks.categories.economic}</option>
-                                <option value="environmental">{t.risks.categories.environmental}</option>
-                            </select>
-                        </div>
-                        <div className="flex-1 min-w-[200px]">
-                             <TextArea label={t.risks.riskTitle} path={[...path, index, 'title']} value={risk.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.risks.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" />
-                        </div>
-                    </div>
-                    <TextArea label={t.risks.riskDescription} path={[...path, index, 'description']} value={risk.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.likelihood}</label>
-                            <div className="relative">
-                                <select value={risk.likelihood} onChange={(e) => onUpdateData([...path, index, 'likelihood'], e.target.value)} className={`w-full p-2.5 border rounded-lg font-bold ${getTrafficColor(risk.likelihood)} pr-10 appearance-none transition-colors cursor-pointer text-base`}>
-                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
-                                </select>
-                                <div className="absolute top-1.5 right-1.5"><GenerateButton onClick={() => onGenerateField([...path, index, 'likelihood'])} isLoading={likelihoodLoading} isField title={t.generateAI} missingApiKey={missingApiKey} /></div>
-                            </div>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.impact}</label>
-                             <div className="relative">
-                                <select value={risk.impact} onChange={(e) => onUpdateData([...path, index, 'impact'], e.target.value)} className={`w-full p-2.5 border rounded-lg font-bold ${getTrafficColor(risk.impact)} pr-10 appearance-none transition-colors cursor-pointer text-base`}>
-                                    <option value="low" className="bg-white text-slate-800">{t.risks.levels.low}</option>
-                                    <option value="medium" className="bg-white text-slate-800">{t.risks.levels.medium}</option>
-                                    <option value="high" className="bg-white text-slate-800">{t.risks.levels.high}</option>
-                                </select>
-                                <div className="absolute top-1.5 right-1.5"><GenerateButton onClick={() => onGenerateField([...path, index, 'impact'])} isLoading={impactLoading} isField title={t.generateAI} missingApiKey={missingApiKey} /></div>
-                            </div>
-                        </div>
-                    </div>
-                    <TextArea label={t.risks.mitigation} path={[...path, index, 'mitigation']} value={risk.mitigation} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.mitigationPlaceholder} generateTitle={`${t.generateField} ${t.risks.mitigation}`} missingApiKey={missingApiKey} />
-                </div>
-            )})}
-        </div>
-    );
-};
-
-const renderKERs = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const { kers } = projectData;
-    const path = ['kers'];
-    const t = TEXT[language] || TEXT['en'];
-
-    return (
-        <div id="kers" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${kers.length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
-                <GenerateButton onClick={() => onGenerateSection('kers')} isLoading={isLoading === `${t.generating} kers...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-            </SectionHeader>
-            {(kers || []).map((ker, index) => (
-                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem(path, index)} text={t.remove} /></div>
-                     <div className="flex flex-wrap gap-4 mb-4">
-                        <div className="w-28">
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.kers.kerId}</label>
-                            <input type="text" value={ker.id || ''} onChange={(e) => onUpdateData([...path, index, 'id'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-bold bg-slate-50 text-base" />
-                        </div>
-                        <div className="flex-1 min-w-[200px]">
-                             <TextArea label={t.kers.kerTitle} path={[...path, index, 'title']} value={ker.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.kers.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" />
-                        </div>
-                     </div>
-                     <TextArea label={t.kers.kerDesc} path={[...path, index, 'description']} value={ker.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                     <TextArea label={t.kers.exploitationStrategy} path={[...path, index, 'exploitationStrategy']} value={ker.exploitationStrategy} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.strategyPlaceholder} generateTitle={`${t.generateField} ${t.kers.exploitationStrategy}`} missingApiKey={missingApiKey} />
-                </div>
-            ))}
-        </div>
-    );
-};
-// ═══════════════════════════════════════════════════════════════
-// ★ v7.0: Partnership (Consortium) renderer — REFACTORED
-//   - REMOVED: funding model selector (moved to renderFinance)
-//   - REMOVED: maxPartners field
-//   - ADDED: partnerType dropdown with localized labels
-//   - ADDED: AutoResizeTextarea for name + expertise (no shrinking)
-//   - ADDED: "Generate Partner Allocations" button
-//   - Responsive grid layout
-// ═══════════════════════════════════════════════════════════════
-const renderPartners = (props) => {
-    const { projectData, onUpdateData, onAddItem, onRemoveItem, onGenerateSection, isLoading, language, missingApiKey } = props;
-    const t = TEXT[language] || TEXT['en'];
-    const tp = t.partners || {};
-    const partners = projectData.partners || [];
-
-    return (
-        <div id="partners" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={tp.title || 'Partnership (Consortium)'}>
-                <GenerateButton
-                    onClick={() => onGenerateSection('partners')}
-                    isLoading={isLoading === `${t.generating} partners...`}
-                    title={t.generateSection}
-                    text={t.generateAI}
-                    missingApiKey={missingApiKey}
-                />
-            </SectionHeader>
-            <p className="text-sm text-slate-500 mb-6 -mt-2">{tp.titleDesc || ''}</p>
-
-            {/* Partner List Header + Add Button */}
-            <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">{tp.partnerName || 'Partners'}</h4>
-                <div className="flex gap-2">
-                    {/* Generate Partner Allocations Button */}
-                    {partners.length > 0 && (projectData.activities || []).length > 0 && (
-                        <button
-                            onClick={() => onGenerateSection('partnerAllocations')}
-                            disabled={!!isLoading}
-                            className="px-3 py-1.5 text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 hover:shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-                        >
-                            <ICONS.SPARKLES className="h-4 w-4" />
-                            {tp.generateAllocations || 'Generate Partner Allocations with AI'}
-                        </button>
-                    )}
-                    <button
-                        onClick={() => {
-                            const nextIndex = partners.length;
-                            const code = nextIndex === 0 ? 'CO' : `P${nextIndex + 1}`;
-                            onAddItem(['partners'], {
-                                id: `partner-${Date.now()}`,
-                                code: code,
-                                name: '',
-                                expertise: '',
-                                pmRate: 0,
-                                partnerType: undefined
-                            });
-                        }}
-                        className="px-3 py-1.5 text-sm font-semibold text-white bg-sky-600 rounded-lg shadow-sm hover:bg-sky-700 hover:shadow-md transition-all flex items-center gap-1.5 active:scale-95"
-                    >
-                        <span className="text-base leading-none font-bold">+</span> {tp.addPartner || t.add}
-                    </button>
-                </div>
-            </div>
-
-            {partners.length === 0 && (
-                <div className="text-center py-8 text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                    {tp.noPartnersYet || 'No partners defined yet.'}
-                </div>
-            )}
-
-            {partners.map((partner, index) => (
-                <div key={partner.id || index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <RemoveButton onClick={() => onRemoveItem(['partners'], index)} text={tp.removePartner || t.remove} />
-                    </div>
-
-                    {/* Badge: Code + Coordinator label */}
-                    <div className="flex items-center gap-3 mb-4">
-                        <span className={`px-3 py-1 rounded-lg text-sm font-bold ${index === 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-sky-100 text-sky-800 border border-sky-200'}`}>
-                            {partner.code || (index === 0 ? 'CO' : `P${index + 1}`)}
-                        </span>
-                        {index === 0 && <span className="text-xs text-amber-600 font-semibold">{tp.coordinator || 'Coordinator'}</span>}
-                        {/* Partner Type Badge (if set) */}
-                        {partner.partnerType && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                                {(tp.partnerTypes || {})[partner.partnerType] || partner.partnerType}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Row 1: Code + Partner Type */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.code || 'Code'}</label>
-                            <input
-                                type="text"
-                                value={partner.code || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'code'], e.target.value)}
-                                placeholder={tp.codePlaceholder || 'CO, P2, P3...'}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-bold"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerType || 'Partner Type'}</label>
-                            <select
-                                value={partner.partnerType || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'partnerType'], e.target.value || undefined)}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                            >
-                                <option value="">—</option>
-                                {Object.entries(tp.partnerTypes || {}).map(([key, label]) => (
-                                    <option key={key} value={key}>{label as string}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.pmRate || 'PM Rate (EUR)'}</label>
-                            <input
-                                type="number"
-                                min={0}
-                                value={partner.pmRate || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'pmRate'], e.target.value ? parseFloat(e.target.value) : 0)}
-                                placeholder={tp.pmRatePlaceholder || '5700'}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Row 2: Name (auto-resize) */}
-                    <div className="mb-4">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerName || 'Name'}</label>
-                        <AutoResizeTextarea
-                            value={partner.name || ''}
-                            onChange={(e) => onUpdateData(['partners', index, 'name'], e.target.value)}
-                            placeholder={tp.partnerNamePlaceholder || 'Organization name...'}
-                            rows={1}
-                        />
-                    </div>
-
-                    {/* Row 3: Expertise (auto-resize) */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.expertise || 'Expertise'}</label>
-                        <AutoResizeTextarea
-                            value={partner.expertise || ''}
-                            onChange={(e) => onUpdateData(['partners', index, 'expertise'], e.target.value)}
-                            placeholder={tp.expertisePlaceholder || 'Short expertise description...'}
-                            rows={1}
-                        />
-                    </div>
-                </div>
-            ))}
-
-            {/* Summary Table */}
-            {partners.length > 0 && (
-                <div className="mt-6 bg-slate-50 rounded-xl border border-slate-200 p-4">
-                    <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">{tp.projectSummary || 'Project Partner Summary'}</h4>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-300">
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.code || 'Code'}</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.partnerType || 'Type'}</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.partnerName || 'Name'}</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600 hidden lg:table-cell">{tp.expertise || 'Expertise'}</th>
-                                    <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.pmRate || 'PM Rate'}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {partners.map((p, i) => (
-                                    <tr key={i} className="border-b border-slate-100 hover:bg-white transition-colors">
-                                        <td className="py-2 px-3 font-bold text-sky-700">{p.code}</td>
-                                        <td className="py-2 px-3 text-slate-500 text-xs">
-                                            {p.partnerType ? (
-                                                <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100">
-                                                    {(tp.partnerTypes || {})[p.partnerType] || p.partnerType}
-                                                </span>
-                                            ) : '—'}
-                                        </td>
-                                        <td className="py-2 px-3">{p.name || '—'}</td>
-                                        <td className="py-2 px-3 text-slate-500 text-xs hidden lg:table-cell">{p.expertise || '—'}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{p.pmRate ? `€${p.pmRate.toLocaleString()}` : '—'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// ═══════════════════════════════════════════════════════════════
-// ★ v7.0: Finance (Budget) renderer — REFACTORED
-//   - ADDED: Funding Model selector at TOP (moved from Partners)
-//   - ADDED: Indirect Cost Settings (percentage + checkbox categories)
-//   - Indirect costs on tasks = single calculated line
-//   - Responsive design
-// ═══════════════════════════════════════════════════════════════
-const renderFinance = (props) => {
-    const { projectData, onUpdateData, language } = props;
-    const t = TEXT[language] || TEXT['en'];
-    const tf = t.finance || {};
-    const tp = t.partners || {};
-    const fundingModel = projectData.fundingModel || 'centralized';
-    const partners = projectData.partners || [];
-    const activities = Array.isArray(projectData.activities) ? projectData.activities : [];
-    const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
-
-    const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
-    const lang = language === 'si' ? 'si' : 'en';
-
-    // ★ v7.0: Calculate indirect costs dynamically from settings
-    const calcIndirectForAllocation = (alloc: any): number => {
-        if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
-        const applicableCategories = indirectSettings.appliesToCategories || [];
-        if (applicableCategories.length === 0) return 0;
-
-        const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            // Check if this direct cost's category is in the applicable list
-            const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
-            if (applicableCategories.includes(catKey)) {
-                return sum + (dc.amount || 0);
-            }
-            return sum;
-        }, 0);
-
-        return Math.round(applicableDirectSum * (indirectSettings.percentage / 100));
-    };
-
-    // Collect all partner allocations from all tasks
-    const allAllocations: any[] = [];
-    activities.forEach((wp: any) => {
-        (wp.tasks || []).forEach((task: any) => {
-            (task.partnerAllocations || []).forEach((alloc: any) => {
-                const partner = partners.find((p: any) => p.id === alloc.partnerId);
-                const directTotal = (alloc.directCosts || []).reduce((sum: number, dc: any) => sum + (dc.amount || 0), 0);
-                const indirectTotal = calcIndirectForAllocation(alloc);
-                allAllocations.push({
-                    wpId: wp.id, wpTitle: wp.title || '',
-                    taskId: task.id, taskTitle: task.title || '',
-                    partnerId: alloc.partnerId, partnerCode: partner?.code || '?',
-                    hours: alloc.hours || 0, pm: alloc.pm || 0,
-                    directTotal, indirectTotal, total: directTotal + indirectTotal,
-                });
-            });
-        });
-    });
-
-    const grandDirectTotal = allAllocations.reduce((s, a) => s + a.directTotal, 0);
-    const grandIndirectTotal = allAllocations.reduce((s, a) => s + a.indirectTotal, 0);
-    const grandTotal = grandDirectTotal + grandIndirectTotal;
-
-    // Group by WP
-    const wpGroups: Record<string, any[]> = {};
-    allAllocations.forEach(a => {
-        if (!wpGroups[a.wpId]) wpGroups[a.wpId] = [];
-        wpGroups[a.wpId].push(a);
-    });
-
-    // Group by Partner
-    const partnerGroups: Record<string, any[]> = {};
-    allAllocations.forEach(a => {
-        if (!partnerGroups[a.partnerCode]) partnerGroups[a.partnerCode] = [];
-        partnerGroups[a.partnerCode].push(a);
-    });
-
-    const hasData = allAllocations.length > 0;
-
-    return (
-        <div id="finance" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={tf.title || 'Finance (Budget)'} />
-            <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
-
-            {/* ★ v7.0: Funding Model Selector — NOW HERE (moved from Partners) */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tf.fundingModelDesc || ''}</p>
-                        <select
-                            value={fundingModel}
-                            onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                        >
-                            <option value="centralized">{tf.centralized || 'Centralized'}</option>
-                            <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
-                        </select>
-                    </div>
-
-                    {/* ★ v7.0: Indirect Cost Settings — percentage */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectPercentage || 'Indirect Cost Percentage (%)'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tf.indirectCostsSettingsDesc || ''}</p>
-                        <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={0.5}
-                            value={indirectSettings.percentage || ''}
-                            onChange={(e) => onUpdateData(['indirectCostSettings', 'percentage'], e.target.value ? parseFloat(e.target.value) : 0)}
-                            placeholder={tf.indirectPercentagePlaceholder || 'e.g. 7, 15, 25'}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
-                        />
-                    </div>
-                </div>
-
-                {/* ★ v7.0: Indirect Cost — applies to which direct categories (checkboxes) */}
-                <div className="mt-6 pt-4 border-t border-slate-100">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectAppliesToLabel || 'Applies to the following direct categories:'}</label>
-                    <p className="text-xs text-slate-400 mb-3">{tf.indirectAppliesToDesc || ''}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {directCostDefs.map((cat) => {
-                            const isChecked = (indirectSettings.appliesToCategories || []).includes(cat.key);
-                            return (
-                                <label
-                                    key={cat.key}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                                        isChecked
-                                            ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
-                                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={(e) => {
-                                            const current = indirectSettings.appliesToCategories || [];
-                                            const updated = e.target.checked
-                                                ? [...current, cat.key]
-                                                : current.filter((k: string) => k !== cat.key);
-                                            onUpdateData(['indirectCostSettings', 'appliesToCategories'], updated);
-                                        }}
-                                        className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
-                                    />
-                                    <span className="text-sm">{cat[lang]}</span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                    {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
-                        <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
-                            {language === 'si'
-                                ? `Posredni stroški: ${indirectSettings.percentage}% na ${(indirectSettings.appliesToCategories || []).length} izbranih kategorij neposrednih stroškov`
-                                : `Indirect costs: ${indirectSettings.percentage}% applied to ${(indirectSettings.appliesToCategories || []).length} selected direct cost categories`
-                            }
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Available Direct Cost Categories (reference) */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8">
-                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    {tf.directCosts || 'Direct Costs'} — {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
-                </h4>
-                <p className="text-xs text-slate-400 mb-3">{tf.directCostsDesc || ''}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                    {directCostDefs.map((cat, i) => (
-                        <div key={i} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
-                            <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
-                            <span className="text-slate-700">{cat[lang]}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Budget Overview */}
-            {!hasData ? (
-                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                    <div className="text-slate-400 text-4xl mb-3">📊</div>
-                    <p className="text-slate-500 font-medium">{tf.noFinanceData || 'No finance data yet.'}</p>
-                    <p className="text-slate-400 text-sm mt-1">
-                        {language === 'si'
-                            ? 'Dodajte partnerske dodelitve s stroški v nalogah načrta dela (Workplan).'
-                            : 'Add partner allocations with costs in the Workplan tasks.'}
-                    </p>
-                </div>
-            ) : (
-                <>
-                    {/* Grand Totals */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                            <p className="text-xs text-green-600 font-semibold uppercase tracking-wider mb-1">{tf.totalDirectCosts || 'Total Direct'}</p>
-                            <p className="text-2xl font-bold text-green-800">€{grandDirectTotal.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-                            <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-1">{tf.totalIndirectCosts || 'Total Indirect'}</p>
-                            <p className="text-2xl font-bold text-amber-800">€{grandIndirectTotal.toLocaleString()}</p>
-                            {indirectSettings.percentage > 0 && (
-                                <p className="text-xs text-amber-500 mt-1">{indirectSettings.percentage}%</p>
-                            )}
-                        </div>
-                        <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
-                            <p className="text-xs text-sky-600 font-semibold uppercase tracking-wider mb-1">{tf.grandTotal || 'Grand Total'}</p>
-                            <p className="text-2xl font-bold text-sky-800">€{grandTotal.toLocaleString()}</p>
-                        </div>
-                    </div>
-
-                    {/* By WP */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
-                        <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">{tf.perWP || 'Per Work Package'}</h4>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b-2 border-slate-200">
-                                        <th className="text-left py-2 px-3 font-semibold text-slate-600">WP</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-green-600">{tf.directCosts || 'Direct'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-amber-600">{tf.indirectCosts || 'Indirect'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-sky-600">{tf.grandTotal || 'Total'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalHours || 'Hours'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalPM || 'PM'}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Object.entries(wpGroups).map(([wpId, items]) => {
-                                        const wpDirect = items.reduce((s, a) => s + a.directTotal, 0);
-                                        const wpIndirect = items.reduce((s, a) => s + a.indirectTotal, 0);
-                                        const wpHours = items.reduce((s, a) => s + a.hours, 0);
-                                        const wpPM = items.reduce((s, a) => s + a.pm, 0);
-                                        return (
-                                            <tr key={wpId} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                                <td className="py-2 px-3 font-bold text-sky-700">{wpId}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-green-700">€{wpDirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-amber-700">€{wpIndirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold">€{(wpDirect + wpIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpPM.toFixed(1)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-slate-300 font-bold">
-                                        <td className="py-2 px-3">{tf.grandTotal || 'TOTAL'}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* By Partner */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                        <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">{tf.perPartner || 'Per Partner'}</h4>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b-2 border-slate-200">
-                                        <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.code || 'Partner'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-green-600">{tf.directCosts || 'Direct'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-amber-600">{tf.indirectCosts || 'Indirect'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-sky-600">{tf.grandTotal || 'Total'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalHours || 'Hours'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalPM || 'PM'}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Object.entries(partnerGroups).map(([code, items]) => {
-                                        const pDirect = items.reduce((s, a) => s + a.directTotal, 0);
-                                        const pIndirect = items.reduce((s, a) => s + a.indirectTotal, 0);
-                                        const pHours = items.reduce((s, a) => s + a.hours, 0);
-                                        const pPM = items.reduce((s, a) => s + a.pm, 0);
-                                        return (
-                                            <tr key={code} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                                <td className="py-2 px-3 font-bold text-sky-700">{code}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-green-700">€{pDirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono text-amber-700">€{pIndirect.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono font-bold">€{(pDirect + pIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pPM.toFixed(1)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-slate-300 font-bold">
-                                        <td className="py-2 px-3">{tf.grandTotal || 'TOTAL'}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </>
-            )}
-        </div>
-    );
-};
-
-// ═══════════════════════════════════════════════════════════════
-// ★ v7.0: renderActivities — REFACTORED task-level allocations
-//   - Indirect costs = single auto-calculated line from project settings
-//   - REMOVED: per-task indirect cost category selectors
-//   - ADDED: "Generate Partner Allocations" button per task
-//   - Direct cost categories now store categoryKey (not categoryIndex)
-//   - Responsive design
-// ═══════════════════════════════════════════════════════════════
-const renderActivities = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
-    const path = ['activities'];
-    const t = TEXT[language] || TEXT['en'];
-
-    const rawActivities = projectData.activities;
-    const activities = Array.isArray(rawActivities)
-        ? rawActivities
-        : (rawActivities && Array.isArray(rawActivities.activities))
-            ? rawActivities.activities
-            : (rawActivities && typeof rawActivities === 'object' && rawActivities.id)
-                ? [rawActivities]
-                : [];
-
-    const allTasks = activities.flatMap(wp => wp.tasks || []);
-
-    const handleTaskUpdate = (itemPath, value) => {
-        if (itemPath.includes('tasks')) {
-            const tempProjectData = JSON.parse(JSON.stringify(projectData));
-            let current = tempProjectData;
-            for(let i=0; i<itemPath.length-1; i++) {
-                current = current[itemPath[i]];
-            }
-            current[itemPath[itemPath.length-1]] = value;
-            const scheduledProjectData = recalculateProjectSchedule(tempProjectData);
-            onUpdateData(['activities'], scheduledProjectData.activities);
-        } else {
-            onUpdateData(itemPath, value);
-        }
-    };
-
-    // v7.0 helper variables
-    const taskPartnersList = projectData.partners || [];
-    const fundingModel = projectData.fundingModel || 'centralized';
-    const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
-    const lang = language === 'si' ? 'si' : 'en';
-    const tp = t.partners || {};
-    const tf = t.finance || {};
-    const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
-
-    // ★ v7.0: Calculate indirect cost for a single allocation
-    const calcIndirectForAlloc = (alloc: any): number => {
-        if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
-        const applicableCats = indirectSettings.appliesToCategories || [];
-        if (applicableCats.length === 0) return 0;
-        const applicableSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
-            return applicableCats.includes(catKey) ? sum + (dc.amount || 0) : sum;
-        }, 0);
-        return Math.round(applicableSum * (indirectSettings.percentage / 100));
-    };
-
-    return (
-        <>
-            {renderProjectManagement(props)}
-
-            {/* ★ v7.0: Partnership section (no funding model here anymore) */}
-            {renderPartners(props)}
-
-            <div id="workplan">
-                <SectionHeader title={t.subSteps.workplan} onAdd={() => onAddItem(path, { id: `WP${activities.length + 1}`, title: '', tasks: [], milestones: [], deliverables: [] })} addText={t.add}>
-                    <GenerateButton onClick={() => onGenerateSection('activities')} isLoading={isLoading === `${t.generating} activities...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                </SectionHeader>
-                
-                {(activities || []).map((wp, wpIndex) => (
-                    <div key={wpIndex} className="p-6 border border-slate-200 rounded-xl mb-8 bg-white shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-                            <h4 className="text-lg font-bold text-sky-800 flex items-center gap-2">
-                                <span className="bg-sky-100 text-sky-800 px-2 py-0.5 rounded text-sm">{wp.id}</span> 
-                                <span className="truncate">{wp.title || t.untitled}</span>
-                            </h4>
-                            <RemoveButton onClick={() => onRemoveItem(path, wpIndex)} text={t.remove} />
-                        </div>
-                        <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        
-                        {/* ═══ TASKS ═══ */}
-                        <div className="mt-6 pl-4 border-l-4 border-sky-100">
-                            <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
-                            {(wp.tasks || []).map((task, taskIndex) => (
-                                <div key={taskIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-slate-50 relative group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'tasks'], taskIndex)} text={t.remove} /></div>
-                                    <h5 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                        <span className="bg-white border border-slate-200 px-2 py-0.5 rounded text-xs text-slate-500">{task.id}</span>
-                                        {task.title || t.untitled}
-                                    </h5>
-                                    <TextArea label={t.taskTitle} path={[...path, wpIndex, 'tasks', taskIndex, 'title']} value={task.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.taskTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.taskDesc} path={[...path, wpIndex, 'tasks', taskIndex, 'description']} value={task.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.taskDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                                        <div>
-                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.startDate}</label>
-                                            <input type="date" value={task.startDate || ''} onChange={(e) => handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'startDate'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.endDate}</label>
-                                            <input type="date" value={task.endDate || ''} onChange={(e) => handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'endDate'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base" />
-                                        </div>
-                                    </div>
-                                    <DependencySelector task={task} allTasks={allTasks} language={language}
-                                        onAddDependency={(dep) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], [...deps, dep]); }}
-                                        onRemoveDependency={(depIdx) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx)); }}
-                                    />
-
-                                    {/* ★ v7.0: Partner Allocations per Task — SIMPLIFIED */}
-                                    {(() => {
-                                        const taskAllocations = task.partnerAllocations || [];
-                                        const allocPath = [...path, wpIndex, 'tasks', taskIndex, 'partnerAllocations'];
-
-                                        if (taskPartnersList.length === 0) return (
-                                            <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-dashed border-slate-300 text-center text-sm text-slate-400 italic">
-                                                {tp.noPartnersYet || 'No partners defined yet.'}
-                                            </div>
-                                        );
-
-                                        return (
-                                            <div className="mt-4 pt-4 border-t border-slate-200">
-                                                <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
-                                                    <h6 className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
-                                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                                                        {tp.partnerAllocation || 'Partner Allocations'}
-                                                    </h6>
-                                                    <div className="flex gap-2">
-                                                        {/* Generate allocations for THIS task */}
-                                                        <button
-                                                            onClick={() => onGenerateSection('partnerAllocations')}
-                                                            disabled={!!isLoading}
-                                                            className="px-2 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        >
-                                                            <ICONS.SPARKLES className="h-3 w-3" />
-                                                            AI
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                const usedIds = taskAllocations.map(a => a.partnerId);
-                                                                const available = taskPartnersList.filter(p => !usedIds.includes(p.id));
-                                                                if (available.length === 0) return;
-                                                                onAddItem(allocPath, {
-                                                                    partnerId: available[0].id,
-                                                                    hours: 0,
-                                                                    pm: 0,
-                                                                    directCosts: [],
-                                                                    totalDirectCost: 0,
-                                                                    totalCost: 0
-                                                                });
-                                                            }}
-                                                            disabled={taskAllocations.length >= taskPartnersList.length}
-                                                            className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        >
-                                                            + {language === 'si' ? 'Dodaj' : 'Add'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-1.5 mb-3 text-xs text-sky-700 font-medium">
-                                                    {tp.hoursPerPM || `1 PM = ${PM_HOURS_PER_MONTH} hours (EU standard)`}
-                                                </div>
-
-                                                {taskAllocations.map((alloc, allocIdx) => {
-                                                    const partner = taskPartnersList.find(p => p.id === alloc.partnerId);
-                                                    const usedIds = taskAllocations.map(a => a.partnerId);
-                                                    const availableForSwitch = taskPartnersList.filter(p => p.id === alloc.partnerId || !usedIds.includes(p.id));
-                                                    const directTotal = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
-                                                    const indirectTotal = calcIndirectForAlloc(alloc);
-
-                                                    return (
-                                                        <div key={allocIdx} className="p-3 mb-3 bg-white rounded-lg border border-emerald-100 shadow-sm relative group/alloc hover:shadow-md transition-all">
-                                                            <div className="absolute top-2 right-2 opacity-0 group-hover/alloc:opacity-100 transition-opacity">
-                                                                <RemoveButton onClick={() => onRemoveItem(allocPath, allocIdx)} text={t.remove} />
-                                                            </div>
-
-                                                            {/* Partner selector + hours/PM */}
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-                                                                <div className="sm:col-span-2">
-                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.partnerName || 'Partner'}</label>
-                                                                    <select
-                                                                        value={alloc.partnerId || ''}
-                                                                        onChange={(e) => onUpdateData([...allocPath, allocIdx, 'partnerId'], e.target.value)}
-                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white"
-                                                                    >
-                                                                        <option value="">{tp.selectPartner || 'Select partner...'}</option>
-                                                                        {availableForSwitch.map(p => (
-                                                                            <option key={p.id} value={p.id}>
-                                                                                {p.code} — {p.name || '?'}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.hours || 'Hours'}</label>
-                                                                    <input
-                                                                        type="number" min={0}
-                                                                        value={alloc.hours || ''}
-                                                                        onChange={(e) => {
-                                                                            const hrs = e.target.value ? parseFloat(e.target.value) : 0;
-                                                                            onUpdateData([...allocPath, allocIdx, 'hours'], hrs);
-                                                                            onUpdateData([...allocPath, allocIdx, 'pm'], parseFloat((hrs / PM_HOURS_PER_MONTH).toFixed(2)));
-                                                                        }}
-                                                                        placeholder="0"
-                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono"
-                                                                    />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.pm || 'PM'}</label>
-                                                                    <input
-                                                                        type="number" min={0} step={0.01}
-                                                                        value={alloc.pm || ''}
-                                                                        onChange={(e) => {
-                                                                            const pm = e.target.value ? parseFloat(e.target.value) : 0;
-                                                                            onUpdateData([...allocPath, allocIdx, 'pm'], pm);
-                                                                            onUpdateData([...allocPath, allocIdx, 'hours'], Math.round(pm * PM_HOURS_PER_MONTH));
-                                                                        }}
-                                                                        placeholder="0.00"
-                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono"
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Direct Costs */}
-                                                            <div className="mb-3">
-                                                                <div className="flex justify-between items-center mb-2">
-                                                                    <span className="text-xs font-bold text-green-700 uppercase tracking-wider flex items-center gap-1.5">
-                                                                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                                                        {tf.directCosts || 'Direct Costs'}
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const firstCat = directCostDefs[0];
-                                                                            onAddItem([...allocPath, allocIdx, 'directCosts'], {
-                                                                                id: `dc-${Date.now()}`,
-                                                                                categoryKey: firstCat?.key || '',
-                                                                                name: firstCat?.[lang] || '',
-                                                                                amount: 0
-                                                                            });
-                                                                        }}
-                                                                        className="px-2 py-0.5 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition-all"
-                                                                    >
-                                                                        + {tf.addDirectCost || 'Add'}
-                                                                    </button>
-                                                                </div>
-                                                                {(alloc.directCosts || []).map((dc, dcIdx) => (
-                                                                    <div key={dcIdx} className="flex gap-2 mb-1.5 items-end">
-                                                                        <div className="flex-1">
-                                                                            <select
-                                                                                value={dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || ''}
-                                                                                onChange={(e) => {
-                                                                                    const selectedKey = e.target.value;
-                                                                                    const cat = directCostDefs.find(c => c.key === selectedKey);
-                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'categoryKey'], selectedKey);
-                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'name'], cat?.[lang] || selectedKey);
-                                                                                }}
-                                                                                className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
-                                                                            >
-                                                                                {directCostDefs.map((cat) => (
-                                                                                    <option key={cat.key} value={cat.key}>{cat[lang]}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </div>
-                                                                        <div className="w-28">
-                                                                            <input
-                                                                                type="number" min={0}
-                                                                                value={dc.amount || ''}
-                                                                                onChange={(e) => onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'amount'], e.target.value ? parseFloat(e.target.value) : 0)}
-                                                                                placeholder="€ 0"
-                                                                                className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-right"
-                                                                            />
-                                                                        </div>
-                                                                        <button onClick={() => onRemoveItem([...allocPath, allocIdx, 'directCosts'], dcIdx)} className="text-red-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
-                                                                    </div>
-                                                                ))}
-                                                                {(alloc.directCosts || []).length > 0 && (
-                                                                    <div className="text-right text-xs font-bold text-green-800 mt-1 pr-8">
-                                                                        Σ €{directTotal.toLocaleString()}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            {/* ★ v7.0: Indirect Costs — SINGLE AUTO-CALCULATED LINE */}
-                                                            {indirectSettings.percentage > 0 && directTotal > 0 && (
-                                                                <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-                                                                    <div className="flex justify-between items-center">
-                                                                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
-                                                                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                                                            {tf.indirectCosts || 'Indirect Costs'} ({indirectSettings.percentage}%)
-                                                                        </span>
-                                                                        <span className="text-sm font-bold text-amber-800 font-mono">
-                                                                            €{indirectTotal.toLocaleString()}
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="text-xs text-amber-600 mt-1">
-                                                                        {language === 'si'
-                                                                            ? `${indirectSettings.percentage}% na izbranih neposrednih stroških (nastavljeno v Finance)`
-                                                                            : `${indirectSettings.percentage}% of selected direct costs (configured in Finance)`
-                                                                        }
-                                                                    </p>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Allocation Total */}
-                                                            {directTotal > 0 && (
-                                                                <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
-                                                                    <span className="text-xs font-semibold text-slate-500">
-                                                                        {partner?.code || '?'} — {tp.totalCost || 'Total'}:
-                                                                    </span>
-                                                                    <span className="text-sm font-bold text-sky-800">
-                                                                        €{(directTotal + indirectTotal).toLocaleString()}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* ═══ MILESTONES ═══ */}
-                        <div className="mt-6 pl-4 border-l-4 border-amber-100">
-                            <SectionHeader title={t.milestones} onAdd={() => onAddItem([...path, wpIndex, 'milestones'], { id: `M${wpIndex + 1}.${(wp.milestones || []).length + 1}`, description: '', date: '' })} addText={t.add} />
-                            {(wp.milestones || []).map((milestone, msIndex) => {
-                                const enGen = TEXT.en.generating;
-                                const siGen = TEXT.si.generating;
-                                const dateLoading = isLoading === `${enGen} date...` || isLoading === `${siGen} date...`;
-                                return (
-                                    <div key={msIndex} className="relative mb-3 bg-amber-50/50 p-4 rounded-lg border border-amber-100 group">
-                                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
-                                        <div className="flex flex-col md:flex-row gap-4">
-                                            <div className="flex-1">
-                                                <TextArea label={`Milestone ${milestone.id}`} path={[...path, wpIndex, 'milestones', msIndex, 'description']} value={milestone.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.milestonePlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} className="w-full group" />
-                                            </div>
-                                            <div className="w-full md:w-48">
-                                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.dates}</label>
-                                                <div className="flex gap-1 items-end">
-                                                    <input type="date" value={milestone.date || ''} onChange={(e) => onUpdateData([...path, wpIndex, 'milestones', msIndex, 'date'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base flex-1" />
-                                                    <GenerateButton onClick={() => onGenerateField([...path, wpIndex, 'milestones', msIndex, 'date'])} isLoading={dateLoading} isField title={t.generateAI} missingApiKey={missingApiKey} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* ═══ DELIVERABLES ═══ */}
-                        <div className="mt-6 pl-4 border-l-4 border-indigo-100">
-                            <SectionHeader title={t.deliverables} onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, title: '', description: '', indicator: '' })} addText={t.add} />
-                            {(wp.deliverables || []).map((deliverable, dIndex) => (
-                                <div key={dIndex} className="relative mb-4 bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], dIndex)} text={t.remove} /></div>
-                                    <h5 className="font-semibold text-slate-700 mb-3">{deliverable.id}</h5>
-                                    <TextArea label={t.deliverableTitle || 'Deliverable Title'} path={[...path, wpIndex, 'deliverables', dIndex, 'title']} value={deliverable.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.deliverableTitlePlaceholder || 'Enter deliverable title...'} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.description} path={[...path, wpIndex, 'deliverables', dIndex, 'description']} value={deliverable.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.deliverableDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.indicator} path={[...path, wpIndex, 'deliverables', dIndex, 'indicator']} value={deliverable.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
-                <div className="chart-container-white bg-white rounded-xl">
-                    <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
-                </div>
-            </div>
-
-            <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
-                <div className="chart-container-white bg-white rounded-xl">
-                    <PERTChart activities={activities} language={language} />
-                </div>
-            </div>
-
-            {/* ★ v7.0: Finance section (now with funding model + indirect settings) */}
-            {renderFinance(props)}
-
-            {renderRisks(props)}
-        </>
-    );
-};
-
-const renderExpectedResults = (props) => {
-    return (
-        <>
-            {renderGenericResults(props, 'outputs')}
-            {renderGenericResults(props, 'outcomes')}
-            {renderGenericResults(props, 'impacts')}
-            {renderKERs(props)}
-        </>
-    );
-};
-
-// ═══════════════════════════════════════════════════════════════
-// MAIN COMPONENT — unchanged from v6.1
-// ═══════════════════════════════════════════════════════════════
-const ProjectDisplay = (props) => {
-    const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey, completedStepsStatus, onStepClick } = props;
-    const STEPS = getSteps(language);
-    const activeStep = STEPS.find(step => step.id === activeStepId);
-    const t = TEXT[language] || TEXT['en'];
-
-    if (!activeStep) return <div className="p-8 text-center text-red-500">Error: Invalid Step Selected</div>;
-
-    const sectionKey = activeStep.key;
-
-    const stepColorMap: Record<string, string> = {
-        problemAnalysis: '#EF4444',
-        projectIdea: '#6366F1',
-        generalObjectives: '#06B6D4',
-        specificObjectives: '#8B5CF6',
-        activities: '#F59E0B',
-        expectedResults: '#10B981',
-    };
-
-    const renderContent = () => {
-        switch (sectionKey) {
-            case 'problemAnalysis': return renderProblemAnalysis(props);
-            case 'projectIdea': return renderProjectIdea(props);
-            case 'generalObjectives': return renderObjectives(props, 'generalObjectives');
-            case 'specificObjectives': return renderObjectives(props, 'specificObjectives');
-            case 'activities': return renderActivities(props);
-            case 'expectedResults': return renderExpectedResults(props);
-            default: return <div className="p-8 text-center text-slate-500">{t.selectStep}</div>;
-        }
-    };
-
-    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
-
-    return (
-        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-            <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
-                <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
-                    <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ minWidth: 0 }}>
-                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
-                        <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
-                    </div>
-                </div>
-
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
-                    <StepNavigationBar
-                        language={language}
-                        currentStepId={activeStepId}
-                        completedStepsStatus={completedStepsStatus || []}
-                        onStepClick={onStepClick || (() => {})}
-                        isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
-                    />
-                </div>
-
-                <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
-                    {showGenerateButton && (
-                        sectionKey === 'expectedResults'
-                            ? <GenerateButton onClick={() => props.onGenerateCompositeSection('expectedResults')} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                            : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                    )}
-                </div>
-            </header>
-
-            {error && (() => {
-                const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
-                return (
-                    <div
-                        className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
-                            isWarning
-                                ? 'bg-amber-50 border-amber-200 text-amber-800'
-                                : 'bg-red-50 border-red-200 text-red-800'
-                        }`}
-                        role="alert"
-                    >
-                        <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold mb-0.5">
-                                {isWarning
-                                    ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
-                                    : 'Error'}
-                            </p>
-                            <p className="text-sm leading-relaxed">{error}</p>
-                        </div>
-                    </div>
-                );
-            })()}
-            
-            {isLoading && <div className="p-4 m-6 text-center text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">{typeof isLoading === 'string' ? isLoading : t.loading}</div>}
-
-            <div 
-                id="main-scroll-container" 
-                className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
-                style={{
-                    '--step-card-bg': stepColors[sectionKey as keyof typeof stepColors]?.light || '#FFFFFF',
-                    '--step-card-border': stepColors[sectionKey as keyof typeof stepColors]?.border || '#E2E8F0',
-                } as React.CSSProperties}
-            >
-                <div className="max-w-5xl mx-auto pb-20">
-                    <div className="animate-fadeIn" key={activeStepId}>
-                        {renderContent()}
-                    </div>
-                </div>
-            </div>
-        </main>
-    );
-};
-
-export default ProjectDisplay;
