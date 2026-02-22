@@ -655,12 +655,7 @@ const renderPartners = (props) => {
                 </div>
             </div>
 
-            {/* Info: 1 PM = 143 hours */}
-            <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-2 mb-6 text-sm text-sky-700 font-medium">
-                {tp.hoursPerPM || `1 PM = ${PM_HOURS_PER_MONTH} hours (EU standard)`}
-            </div>
-
-            {/* Partner List Header */}
+           {/* Partner List Header */}
             <div className="mb-4">
                 <SectionHeader
                     title={tp.partnerName || 'Partners'}
