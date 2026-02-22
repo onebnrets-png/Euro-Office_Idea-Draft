@@ -300,7 +300,22 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
     ]
+  },
+  partners: {
+    en: [
+      'P1 is designated as Lead Partner / Coordinator with strong management capacity',
+      'Every partner name is a TYPE DESCRIPTION (e.g., "Research University in X"), NEVER a real organisation name',
+      'Expertise descriptions are 2-4 substantive sentences linking to specific WPs',
+      'PM rates are realistic for each organisation type (2500-7000 EUR range)',
+      'The consortium covers all competences required by the work packages',
+      'At least one research/academic partner is included if the project has R&D components',
+      'At least one practice/implementation partner (public authority, SME, NGO) is included',
+      'Geographic diversity is reflected where the project scope requires it',
+      'Partner count is appropriate for the project complexity (not too few, not too many)',
+      'No markdown formatting, no banned AI phrases',
+    ]
   }
+
 };
 
 // ───────────────────────────────────────────────────────────────
