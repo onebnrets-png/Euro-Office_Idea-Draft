@@ -1,10 +1,15 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v6.1 — 2026-02-22 — Phase 3: Partner Allocations on Task level
-//   - Tasks now include partner allocation UI (hours, PM, costs)
-//   - Finance tables auto-populate from task allocations
-//   - 1 PM = 143h info banner moved to task level
-//   - All previous v6.0 changes preserved.
+// v7.0 — 2026-02-22 — REFACTOR: Partners, Finance, Indirect Costs
+//   - renderPartners: removed funding model (moved to finance),
+//     added partnerType dropdown, auto-resize fields (textarea),
+//     responsive design
+//   - renderFinance: funding model HERE, indirect cost settings
+//     (percentage + checkbox categories), simplified display
+//   - Task allocations: indirect costs = single line (project-level %),
+//     "Generate Partner Allocations" button on tasks
+//   - Responsive design throughout
+//   - All previous v6.1 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -20,9 +25,7 @@ import StepNavigationBar from './StepNavigationBar.tsx';
 import {
     PM_HOURS_PER_MONTH,
     CENTRALIZED_DIRECT_COSTS,
-    CENTRALIZED_INDIRECT_COSTS,
     DECENTRALIZED_DIRECT_COSTS,
-    DECENTRALIZED_INDIRECT_COSTS
 } from '../types.ts';
 
 const FieldHeader = ({ title, description, id = '', accentColor = '' }) => (
@@ -144,6 +147,32 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
                 </div>
             </div>
         </div>
+    );
+};
+
+// ★ v7.0: Auto-resize textarea helper for partner fields
+const AutoResizeTextarea = ({ value, onChange, placeholder, className = '', rows = 1 }) => {
+    const ref = useRef<HTMLTextAreaElement>(null);
+    const adjust = useCallback(() => {
+        const el = ref.current;
+        if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+    }, []);
+    useEffect(() => { adjust(); }, [value, adjust]);
+    useEffect(() => {
+        const handleResize = () => adjust();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [adjust]);
+    return (
+        <textarea
+            ref={ref}
+            value={value || ''}
+            onChange={onChange}
+            onInput={adjust}
+            placeholder={placeholder}
+            rows={rows}
+            className={`w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base resize-none overflow-hidden ${className}`}
+        />
     );
 };
 
@@ -596,13 +625,20 @@ const renderKERs = (props) => {
         </div>
     );
 };
-// ★ v6.0: Partnership (Consortium) renderer
+// ═══════════════════════════════════════════════════════════════
+// ★ v7.0: Partnership (Consortium) renderer — REFACTORED
+//   - REMOVED: funding model selector (moved to renderFinance)
+//   - REMOVED: maxPartners field
+//   - ADDED: partnerType dropdown with localized labels
+//   - ADDED: AutoResizeTextarea for name + expertise (no shrinking)
+//   - ADDED: "Generate Partner Allocations" button
+//   - Responsive grid layout
+// ═══════════════════════════════════════════════════════════════
 const renderPartners = (props) => {
     const { projectData, onUpdateData, onAddItem, onRemoveItem, onGenerateSection, isLoading, language, missingApiKey } = props;
     const t = TEXT[language] || TEXT['en'];
     const tp = t.partners || {};
     const partners = projectData.partners || [];
-    const fundingModel = projectData.fundingModel || 'centralized';
 
     return (
         <div id="partners" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
@@ -611,82 +647,75 @@ const renderPartners = (props) => {
                     onClick={() => onGenerateSection('partners')}
                     isLoading={isLoading === `${t.generating} partners...`}
                     title={t.generateSection}
-                    text={tp.suggestPartners || t.generateAI}
+                    text={t.generateAI}
                     missingApiKey={missingApiKey}
                 />
             </SectionHeader>
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tp.titleDesc || ''}</p>
 
-            {/* Funding Model Selector */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tp.fundingModel || 'Funding Model'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tp.fundingModelDesc || ''}</p>
-                        <select
-                            value={fundingModel}
-                            onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+            {/* Partner List Header + Add Button */}
+            <div className="flex justify-between items-center mb-4">
+                <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">{tp.partnerName || 'Partners'}</h4>
+                <div className="flex gap-2">
+                    {/* Generate Partner Allocations Button */}
+                    {partners.length > 0 && (projectData.activities || []).length > 0 && (
+                        <button
+                            onClick={() => onGenerateSection('partnerAllocations')}
+                            disabled={!!isLoading}
+                            className="px-3 py-1.5 text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 hover:shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                         >
-                            <option value="centralized">{tp.centralized || 'Centralized'}</option>
-                            <option value="decentralized">{tp.decentralized || 'Decentralized'}</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tp.maxPartners || 'Max Partners'}</label>
-                        <p className="text-xs text-slate-400 mb-2">{tp.maxPartnersDesc || ''}</p>
-                        <input
-                            type="number"
-                            min={1}
-                            max={50}
-                            value={projectData.maxPartners || ''}
-                            onChange={(e) => onUpdateData(['maxPartners'], e.target.value ? parseInt(e.target.value) : undefined)}
-                            placeholder={tp.maxPartnersPlaceholder || 'e.g. 8'}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                        />
-                    </div>
+                            <ICONS.SPARKLES className="h-4 w-4" />
+                            {tp.generateAllocations || 'Generate Partner Allocations with AI'}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            const nextIndex = partners.length;
+                            const code = nextIndex === 0 ? 'CO' : `P${nextIndex + 1}`;
+                            onAddItem(['partners'], {
+                                id: `partner-${Date.now()}`,
+                                code: code,
+                                name: '',
+                                expertise: '',
+                                pmRate: 0,
+                                partnerType: undefined
+                            });
+                        }}
+                        className="px-3 py-1.5 text-sm font-semibold text-white bg-sky-600 rounded-lg shadow-sm hover:bg-sky-700 hover:shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                    >
+                        <span className="text-base leading-none font-bold">+</span> {tp.addPartner || t.add}
+                    </button>
                 </div>
             </div>
 
-            {/* Partner List Header */}
-            <div className="mb-4">
-                <SectionHeader
-                    title={tp.partnerName || 'Partners'}
-                    onAdd={() => {
-                        const nextIndex = partners.length;
-                        const code = nextIndex === 0 ? 'CO' : `P${nextIndex + 1}`;
-                        onAddItem(['partners'], {
-                            id: `partner-${Date.now()}`,
-                            code: code,
-                            name: '',
-                            expertise: '',
-                            pmRate: 0
-                        });
-                    }}
-                    addText={tp.addPartner || t.add}
-                />
-            </div>
-
             {partners.length === 0 && (
-                <div className="text-center py-8 text-slate-400 italic">
+                <div className="text-center py-8 text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-300">
                     {tp.noPartnersYet || 'No partners defined yet.'}
                 </div>
             )}
 
             {partners.map((partner, index) => (
-                <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
+                <div key={partner.id || index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <RemoveButton onClick={() => onRemoveItem(['partners'], index)} text={tp.removePartner || t.remove} />
                     </div>
 
+                    {/* Badge: Code + Coordinator label */}
                     <div className="flex items-center gap-3 mb-4">
                         <span className={`px-3 py-1 rounded-lg text-sm font-bold ${index === 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-sky-100 text-sky-800 border border-sky-200'}`}>
                             {partner.code || (index === 0 ? 'CO' : `P${index + 1}`)}
                         </span>
                         {index === 0 && <span className="text-xs text-amber-600 font-semibold">{tp.coordinator || 'Coordinator'}</span>}
+                        {/* Partner Type Badge (if set) */}
+                        {partner.partnerType && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+                                {(tp.partnerTypes || {})[partner.partnerType] || partner.partnerType}
+                            </span>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Row 1: Code + Partner Type */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.code || 'Code'}</label>
                             <input
@@ -698,27 +727,17 @@ const renderPartners = (props) => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerName || 'Name'}</label>
-                            <input
-                                type="text"
-                                value={partner.name || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'name'], e.target.value)}
-                                placeholder={tp.partnerNamePlaceholder || 'Organization name...'}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.expertise || 'Expertise'}</label>
-                            <input
-                                type="text"
-                                value={partner.expertise || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'expertise'], e.target.value)}
-                                placeholder={tp.expertisePlaceholder || 'Short expertise description...'}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base"
-                            />
+                            <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerType || 'Partner Type'}</label>
+                            <select
+                                value={partner.partnerType || ''}
+                                onChange={(e) => onUpdateData(['partners', index, 'partnerType'], e.target.value || undefined)}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                            >
+                                <option value="">—</option>
+                                {Object.entries(tp.partnerTypes || {}).map(([key, label]) => (
+                                    <option key={key} value={key}>{label as string}</option>
+                                ))}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.pmRate || 'PM Rate (EUR)'}</label>
@@ -728,24 +747,31 @@ const renderPartners = (props) => {
                                 value={partner.pmRate || ''}
                                 onChange={(e) => onUpdateData(['partners', index, 'pmRate'], e.target.value ? parseFloat(e.target.value) : 0)}
                                 placeholder={tp.pmRatePlaceholder || '5700'}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base"
+                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
                             />
                         </div>
                     </div>
 
-                    {/* Partner Type Selector */}
-                    <div className="mt-4">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerType || 'Partner Type'}</label>
-                        <select
-                            value={(partner as any).partnerType || ''}
-                            onChange={(e) => onUpdateData(['partners', index, 'partnerType'], e.target.value)}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
-                        >
-                            <option value="">—</option>
-                            {Object.entries(tp.partnerTypes || {}).map(([key, label]) => (
-                                <option key={key} value={key}>{label as string}</option>
-                            ))}
-                        </select>
+                    {/* Row 2: Name (auto-resize) */}
+                    <div className="mb-4">
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerName || 'Name'}</label>
+                        <AutoResizeTextarea
+                            value={partner.name || ''}
+                            onChange={(e) => onUpdateData(['partners', index, 'name'], e.target.value)}
+                            placeholder={tp.partnerNamePlaceholder || 'Organization name...'}
+                            rows={1}
+                        />
+                    </div>
+
+                    {/* Row 3: Expertise (auto-resize) */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.expertise || 'Expertise'}</label>
+                        <AutoResizeTextarea
+                            value={partner.expertise || ''}
+                            onChange={(e) => onUpdateData(['partners', index, 'expertise'], e.target.value)}
+                            placeholder={tp.expertisePlaceholder || 'Short expertise description...'}
+                            rows={1}
+                        />
                     </div>
                 </div>
             ))}
@@ -759,9 +785,9 @@ const renderPartners = (props) => {
                             <thead>
                                 <tr className="border-b border-slate-300">
                                     <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.code || 'Code'}</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.partnerName || 'Name'}</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.expertise || 'Expertise'}</th>
                                     <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.partnerType || 'Type'}</th>
+                                    <th className="text-left py-2 px-3 font-semibold text-slate-600">{tp.partnerName || 'Name'}</th>
+                                    <th className="text-left py-2 px-3 font-semibold text-slate-600 hidden lg:table-cell">{tp.expertise || 'Expertise'}</th>
                                     <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.pmRate || 'PM Rate'}</th>
                                 </tr>
                             </thead>
@@ -769,9 +795,15 @@ const renderPartners = (props) => {
                                 {partners.map((p, i) => (
                                     <tr key={i} className="border-b border-slate-100 hover:bg-white transition-colors">
                                         <td className="py-2 px-3 font-bold text-sky-700">{p.code}</td>
+                                        <td className="py-2 px-3 text-slate-500 text-xs">
+                                            {p.partnerType ? (
+                                                <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100">
+                                                    {(tp.partnerTypes || {})[p.partnerType] || p.partnerType}
+                                                </span>
+                                            ) : '—'}
+                                        </td>
                                         <td className="py-2 px-3">{p.name || '—'}</td>
-                                        <td className="py-2 px-3 text-slate-500 text-xs">{p.expertise || '—'}</td>
-                                        <td className="py-2 px-3 text-slate-500">{(tp.partnerTypes || {})[(p as any).partnerType] || '—'}</td>
+                                        <td className="py-2 px-3 text-slate-500 text-xs hidden lg:table-cell">{p.expertise || '—'}</td>
                                         <td className="py-2 px-3 text-right font-mono">{p.pmRate ? `€${p.pmRate.toLocaleString()}` : '—'}</td>
                                     </tr>
                                 ))}
@@ -784,19 +816,43 @@ const renderPartners = (props) => {
     );
 };
 
-// ★ v6.0: Finance (Budget) renderer
+// ═══════════════════════════════════════════════════════════════
+// ★ v7.0: Finance (Budget) renderer — REFACTORED
+//   - ADDED: Funding Model selector at TOP (moved from Partners)
+//   - ADDED: Indirect Cost Settings (percentage + checkbox categories)
+//   - Indirect costs on tasks = single calculated line
+//   - Responsive design
+// ═══════════════════════════════════════════════════════════════
 const renderFinance = (props) => {
-    const { projectData, language } = props;
+    const { projectData, onUpdateData, language } = props;
     const t = TEXT[language] || TEXT['en'];
     const tf = t.finance || {};
     const tp = t.partners || {};
     const fundingModel = projectData.fundingModel || 'centralized';
     const partners = projectData.partners || [];
     const activities = Array.isArray(projectData.activities) ? projectData.activities : [];
+    const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
 
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
-    const indirectCostDefs = fundingModel === 'centralized' ? CENTRALIZED_INDIRECT_COSTS : DECENTRALIZED_INDIRECT_COSTS;
     const lang = language === 'si' ? 'si' : 'en';
+
+    // ★ v7.0: Calculate indirect costs dynamically from settings
+    const calcIndirectForAllocation = (alloc: any): number => {
+        if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
+        const applicableCategories = indirectSettings.appliesToCategories || [];
+        if (applicableCategories.length === 0) return 0;
+
+        const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
+            // Check if this direct cost's category is in the applicable list
+            const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            if (applicableCategories.includes(catKey)) {
+                return sum + (dc.amount || 0);
+            }
+            return sum;
+        }, 0);
+
+        return Math.round(applicableDirectSum * (indirectSettings.percentage / 100));
+    };
 
     // Collect all partner allocations from all tasks
     const allAllocations: any[] = [];
@@ -805,10 +861,7 @@ const renderFinance = (props) => {
             (task.partnerAllocations || []).forEach((alloc: any) => {
                 const partner = partners.find((p: any) => p.id === alloc.partnerId);
                 const directTotal = (alloc.directCosts || []).reduce((sum: number, dc: any) => sum + (dc.amount || 0), 0);
-                const indirectTotal = (alloc.indirectCosts || []).reduce((sum: number, ic: any) => {
-                    const dSum = (alloc.directCosts || []).reduce((s: number, dc: any) => s + (dc.amount || 0), 0);
-                    return sum + Math.round(dSum * ((ic.percentage || 0) / 100));
-                }, 0);
+                const indirectTotal = calcIndirectForAllocation(alloc);
                 allAllocations.push({
                     wpId: wp.id, wpTitle: wp.title || '',
                     taskId: task.id, taskTitle: task.title || '',
@@ -845,56 +898,97 @@ const renderFinance = (props) => {
             <SectionHeader title={tf.title || 'Finance (Budget)'} />
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
 
-            {/* Current Funding Model Info */}
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-600">{tf.costModel || 'Model'}:</span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${fundingModel === 'centralized' ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}`}>
-                            {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
-                        </span>
+            {/* ★ v7.0: Funding Model Selector — NOW HERE (moved from Partners) */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.fundingModel || 'Funding Model'}</label>
+                        <p className="text-xs text-slate-400 mb-2">{tf.fundingModelDesc || ''}</p>
+                        <select
+                            value={fundingModel}
+                            onChange={(e) => onUpdateData(['fundingModel'], e.target.value)}
+                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                        >
+                            <option value="centralized">{tf.centralized || 'Centralized'}</option>
+                            <option value="decentralized">{tf.decentralized || 'Decentralized'}</option>
+                        </select>
                     </div>
-                    <span className="text-xs text-slate-400">
-                        ({language === 'si' ? 'spremeni v poglavju Partnerstvo' : 'change in Partnership section'})
-                    </span>
+
+                    {/* ★ v7.0: Indirect Cost Settings — percentage */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectPercentage || 'Indirect Cost Percentage (%)'}</label>
+                        <p className="text-xs text-slate-400 mb-2">{tf.indirectCostsSettingsDesc || ''}</p>
+                        <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            value={indirectSettings.percentage || ''}
+                            onChange={(e) => onUpdateData(['indirectCostSettings', 'percentage'], e.target.value ? parseFloat(e.target.value) : 0)}
+                            placeholder={tf.indirectPercentagePlaceholder || 'e.g. 7, 15, 25'}
+                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base font-mono"
+                        />
+                    </div>
+                </div>
+
+                {/* ★ v7.0: Indirect Cost — applies to which direct categories (checkboxes) */}
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{tf.indirectAppliesToLabel || 'Applies to the following direct categories:'}</label>
+                    <p className="text-xs text-slate-400 mb-3">{tf.indirectAppliesToDesc || ''}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {directCostDefs.map((cat) => {
+                            const isChecked = (indirectSettings.appliesToCategories || []).includes(cat.key);
+                            return (
+                                <label
+                                    key={cat.key}
+                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                                        isChecked
+                                            ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm'
+                                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                            const current = indirectSettings.appliesToCategories || [];
+                                            const updated = e.target.checked
+                                                ? [...current, cat.key]
+                                                : current.filter((k: string) => k !== cat.key);
+                                            onUpdateData(['indirectCostSettings', 'appliesToCategories'], updated);
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                                    />
+                                    <span className="text-sm">{cat[lang]}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
+                        <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
+                            {language === 'si'
+                                ? `Posredni stroški: ${indirectSettings.percentage}% na ${(indirectSettings.appliesToCategories || []).length} izbranih kategorij neposrednih stroškov`
+                                : `Indirect costs: ${indirectSettings.percentage}% applied to ${(indirectSettings.appliesToCategories || []).length} selected direct cost categories`
+                            }
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Available Cost Categories */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Direct Costs */}
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                        {tf.directCosts || 'Direct Costs'}
-                    </h4>
-                    <p className="text-xs text-slate-400 mb-3">{tf.directCostsDesc || ''}</p>
-                    <div className="space-y-1.5">
-                        {directCostDefs.map((cat, i) => (
-                            <div key={i} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
-                                <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
-                                <span className="text-slate-700">{cat[lang]}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Indirect Costs */}
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-                        {tf.indirectCosts || 'Indirect Costs'}
-                    </h4>
-                    <p className="text-xs text-slate-400 mb-3">{tf.indirectCostsDesc || ''}</p>
-                    <div className="space-y-1.5">
-                        {indirectCostDefs.map((cat, i) => (
-                            <div key={i} className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 rounded-lg border border-amber-100 text-sm">
-                                <span className="font-mono text-amber-700 font-bold w-6">{i + 1}.</span>
-                                <span className="text-slate-700">{cat[lang]}</span>
-                                <span className="ml-auto text-xs text-amber-500 font-semibold">% {tf.flatRate || 'flat rate'}</span>
-                            </div>
-                        ))}
-                    </div>
+            {/* Available Direct Cost Categories (reference) */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8">
+                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                    {tf.directCosts || 'Direct Costs'} — {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
+                </h4>
+                <p className="text-xs text-slate-400 mb-3">{tf.directCostsDesc || ''}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                    {directCostDefs.map((cat, i) => (
+                        <div key={i} className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg border border-green-100 text-sm">
+                            <span className="font-mono text-green-700 font-bold w-6">{i + 1}.</span>
+                            <span className="text-slate-700">{cat[lang]}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -920,6 +1014,9 @@ const renderFinance = (props) => {
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-1">{tf.totalIndirectCosts || 'Total Indirect'}</p>
                             <p className="text-2xl font-bold text-amber-800">€{grandIndirectTotal.toLocaleString()}</p>
+                            {indirectSettings.percentage > 0 && (
+                                <p className="text-xs text-amber-500 mt-1">{indirectSettings.percentage}%</p>
+                            )}
                         </div>
                         <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-sky-600 font-semibold uppercase tracking-wider mb-1">{tf.grandTotal || 'Grand Total'}</p>
@@ -938,8 +1035,8 @@ const renderFinance = (props) => {
                                         <th className="text-right py-2 px-3 font-semibold text-green-600">{tf.directCosts || 'Direct'}</th>
                                         <th className="text-right py-2 px-3 font-semibold text-amber-600">{tf.indirectCosts || 'Indirect'}</th>
                                         <th className="text-right py-2 px-3 font-semibold text-sky-600">{tf.grandTotal || 'Total'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.totalHours || 'Hours'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.totalPM || 'PM'}</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalHours || 'Hours'}</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalPM || 'PM'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -954,8 +1051,8 @@ const renderFinance = (props) => {
                                                 <td className="py-2 px-3 text-right font-mono text-green-700">€{wpDirect.toLocaleString()}</td>
                                                 <td className="py-2 px-3 text-right font-mono text-amber-700">€{wpIndirect.toLocaleString()}</td>
                                                 <td className="py-2 px-3 text-right font-mono font-bold">€{(wpDirect + wpIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono">{wpHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono">{wpPM.toFixed(1)}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpHours.toLocaleString()}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{wpPM.toFixed(1)}</td>
                                             </tr>
                                         );
                                     })}
@@ -966,8 +1063,8 @@ const renderFinance = (props) => {
                                         <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
                                         <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
                                         <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -985,8 +1082,8 @@ const renderFinance = (props) => {
                                         <th className="text-right py-2 px-3 font-semibold text-green-600">{tf.directCosts || 'Direct'}</th>
                                         <th className="text-right py-2 px-3 font-semibold text-amber-600">{tf.indirectCosts || 'Indirect'}</th>
                                         <th className="text-right py-2 px-3 font-semibold text-sky-600">{tf.grandTotal || 'Total'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.totalHours || 'Hours'}</th>
-                                        <th className="text-right py-2 px-3 font-semibold text-slate-600">{tp.totalPM || 'PM'}</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalHours || 'Hours'}</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-600 hidden sm:table-cell">{tp.totalPM || 'PM'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1001,8 +1098,8 @@ const renderFinance = (props) => {
                                                 <td className="py-2 px-3 text-right font-mono text-green-700">€{pDirect.toLocaleString()}</td>
                                                 <td className="py-2 px-3 text-right font-mono text-amber-700">€{pIndirect.toLocaleString()}</td>
                                                 <td className="py-2 px-3 text-right font-mono font-bold">€{(pDirect + pIndirect).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono">{pHours.toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-right font-mono">{pPM.toFixed(1)}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pHours.toLocaleString()}</td>
+                                                <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{pPM.toFixed(1)}</td>
                                             </tr>
                                         );
                                     })}
@@ -1013,8 +1110,8 @@ const renderFinance = (props) => {
                                         <td className="py-2 px-3 text-right font-mono text-green-800">€{grandDirectTotal.toLocaleString()}</td>
                                         <td className="py-2 px-3 text-right font-mono text-amber-800">€{grandIndirectTotal.toLocaleString()}</td>
                                         <td className="py-2 px-3 text-right font-mono text-sky-800">€{grandTotal.toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.hours, 0).toLocaleString()}</td>
+                                        <td className="py-2 px-3 text-right font-mono hidden sm:table-cell">{allAllocations.reduce((s, a) => s + a.pm, 0).toFixed(1)}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1026,7 +1123,14 @@ const renderFinance = (props) => {
     );
 };
 
-// ★ v6.1: renderActivities — now with Phase 3 partner allocations on each task
+// ═══════════════════════════════════════════════════════════════
+// ★ v7.0: renderActivities — REFACTORED task-level allocations
+//   - Indirect costs = single auto-calculated line from project settings
+//   - REMOVED: per-task indirect cost category selectors
+//   - ADDED: "Generate Partner Allocations" button per task
+//   - Direct cost categories now store categoryKey (not categoryIndex)
+//   - Responsive design
+// ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const path = ['activities'];
@@ -1058,20 +1162,32 @@ const renderActivities = (props) => {
         }
     };
 
-    // Phase 3 helper variables
+    // v7.0 helper variables
     const taskPartnersList = projectData.partners || [];
     const fundingModel = projectData.fundingModel || 'centralized';
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
-    const indirectCostDefs = fundingModel === 'centralized' ? CENTRALIZED_INDIRECT_COSTS : DECENTRALIZED_INDIRECT_COSTS;
     const lang = language === 'si' ? 'si' : 'en';
     const tp = t.partners || {};
     const tf = t.finance || {};
+    const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
+
+    // ★ v7.0: Calculate indirect cost for a single allocation
+    const calcIndirectForAlloc = (alloc: any): number => {
+        if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
+        const applicableCats = indirectSettings.appliesToCategories || [];
+        if (applicableCats.length === 0) return 0;
+        const applicableSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
+            const catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            return applicableCats.includes(catKey) ? sum + (dc.amount || 0) : sum;
+        }, 0);
+        return Math.round(applicableSum * (indirectSettings.percentage / 100));
+    };
 
     return (
         <>
             {renderProjectManagement(props)}
 
-            {/* ★ v6.0: Partnership section */}
+            {/* ★ v7.0: Partnership section (no funding model here anymore) */}
             {renderPartners(props)}
 
             <div id="workplan">
@@ -1102,7 +1218,7 @@ const renderActivities = (props) => {
                                     </h5>
                                     <TextArea label={t.taskTitle} path={[...path, wpIndex, 'tasks', taskIndex, 'title']} value={task.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.taskTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                                     <TextArea label={t.taskDesc} path={[...path, wpIndex, 'tasks', taskIndex, 'description']} value={task.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.taskDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <div className="grid grid-cols-2 gap-4 mt-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.startDate}</label>
                                             <input type="date" value={task.startDate || ''} onChange={(e) => handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'startDate'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base" />
@@ -1117,7 +1233,7 @@ const renderActivities = (props) => {
                                         onRemoveDependency={(depIdx) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx)); }}
                                     />
 
-                                    {/* ★ Phase 3: Partner Allocations per Task */}
+                                    {/* ★ v7.0: Partner Allocations per Task — SIMPLIFIED */}
                                     {(() => {
                                         const taskAllocations = task.partnerAllocations || [];
                                         const allocPath = [...path, wpIndex, 'tasks', taskIndex, 'partnerAllocations'];
@@ -1130,29 +1246,41 @@ const renderActivities = (props) => {
 
                                         return (
                                             <div className="mt-4 pt-4 border-t border-slate-200">
-                                                <div className="flex justify-between items-center mb-3">
+                                                <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
                                                     <h6 className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
                                                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                                                         {tp.partnerAllocation || 'Partner Allocations'}
                                                     </h6>
-                                                    <button
-                                                        onClick={() => {
-                                                            const usedIds = taskAllocations.map(a => a.partnerId);
-                                                            const available = taskPartnersList.filter(p => !usedIds.includes(p.id));
-                                                            if (available.length === 0) return;
-                                                            onAddItem(allocPath, {
-                                                                partnerId: available[0].id,
-                                                                hours: 0,
-                                                                pm: 0,
-                                                                directCosts: [],
-                                                                indirectCosts: []
-                                                            });
-                                                        }}
-                                                        disabled={taskAllocations.length >= taskPartnersList.length}
-                                                        className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                                    >
-                                                        + {tp.partnerAllocation || 'Add Allocation'}
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        {/* Generate allocations for THIS task */}
+                                                        <button
+                                                            onClick={() => onGenerateSection('partnerAllocations')}
+                                                            disabled={!!isLoading}
+                                                            className="px-2 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        >
+                                                            <ICONS.SPARKLES className="h-3 w-3" />
+                                                            AI
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                const usedIds = taskAllocations.map(a => a.partnerId);
+                                                                const available = taskPartnersList.filter(p => !usedIds.includes(p.id));
+                                                                if (available.length === 0) return;
+                                                                onAddItem(allocPath, {
+                                                                    partnerId: available[0].id,
+                                                                    hours: 0,
+                                                                    pm: 0,
+                                                                    directCosts: [],
+                                                                    totalDirectCost: 0,
+                                                                    totalCost: 0
+                                                                });
+                                                            }}
+                                                            disabled={taskAllocations.length >= taskPartnersList.length}
+                                                            className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        >
+                                                            + {language === 'si' ? 'Dodaj' : 'Add'}
+                                                        </button>
+                                                    </div>
                                                 </div>
 
                                                 <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-1.5 mb-3 text-xs text-sky-700 font-medium">
@@ -1163,6 +1291,8 @@ const renderActivities = (props) => {
                                                     const partner = taskPartnersList.find(p => p.id === alloc.partnerId);
                                                     const usedIds = taskAllocations.map(a => a.partnerId);
                                                     const availableForSwitch = taskPartnersList.filter(p => p.id === alloc.partnerId || !usedIds.includes(p.id));
+                                                    const directTotal = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
+                                                    const indirectTotal = calcIndirectForAlloc(alloc);
 
                                                     return (
                                                         <div key={allocIdx} className="p-3 mb-3 bg-white rounded-lg border border-emerald-100 shadow-sm relative group/alloc hover:shadow-md transition-all">
@@ -1171,8 +1301,8 @@ const renderActivities = (props) => {
                                                             </div>
 
                                                             {/* Partner selector + hours/PM */}
-                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                                                                <div className="md:col-span-2">
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                                                                <div className="sm:col-span-2">
                                                                     <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.partnerName || 'Partner'}</label>
                                                                     <select
                                                                         value={alloc.partnerId || ''}
@@ -1225,7 +1355,15 @@ const renderActivities = (props) => {
                                                                         {tf.directCosts || 'Direct Costs'}
                                                                     </span>
                                                                     <button
-                                                                        onClick={() => onAddItem([...allocPath, allocIdx, 'directCosts'], { categoryIndex: 0, name: directCostDefs[0]?.[lang] || '', amount: 0 })}
+                                                                        onClick={() => {
+                                                                            const firstCat = directCostDefs[0];
+                                                                            onAddItem([...allocPath, allocIdx, 'directCosts'], {
+                                                                                id: `dc-${Date.now()}`,
+                                                                                categoryKey: firstCat?.key || '',
+                                                                                name: firstCat?.[lang] || '',
+                                                                                amount: 0
+                                                                            });
+                                                                        }}
                                                                         className="px-2 py-0.5 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition-all"
                                                                     >
                                                                         + {tf.addDirectCost || 'Add'}
@@ -1235,16 +1373,17 @@ const renderActivities = (props) => {
                                                                     <div key={dcIdx} className="flex gap-2 mb-1.5 items-end">
                                                                         <div className="flex-1">
                                                                             <select
-                                                                                value={dc.categoryIndex ?? 0}
+                                                                                value={dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || ''}
                                                                                 onChange={(e) => {
-                                                                                    const ci = parseInt(e.target.value);
-                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'categoryIndex'], ci);
-                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'name'], directCostDefs[ci]?.[lang] || '');
+                                                                                    const selectedKey = e.target.value;
+                                                                                    const cat = directCostDefs.find(c => c.key === selectedKey);
+                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'categoryKey'], selectedKey);
+                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'name'], cat?.[lang] || selectedKey);
                                                                                 }}
                                                                                 className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
                                                                             >
-                                                                                {directCostDefs.map((cat, ci) => (
-                                                                                    <option key={ci} value={ci}>{cat[lang]}</option>
+                                                                                {directCostDefs.map((cat) => (
+                                                                                    <option key={cat.key} value={cat.key}>{cat[lang]}</option>
                                                                                 ))}
                                                                             </select>
                                                                         </div>
@@ -1262,92 +1401,43 @@ const renderActivities = (props) => {
                                                                 ))}
                                                                 {(alloc.directCosts || []).length > 0 && (
                                                                     <div className="text-right text-xs font-bold text-green-800 mt-1 pr-8">
-                                                                        Σ €{(alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0).toLocaleString()}
+                                                                        Σ €{directTotal.toLocaleString()}
                                                                     </div>
                                                                 )}
                                                             </div>
 
-                                                            {/* Indirect Costs */}
-                                                            <div>
-                                                                <div className="flex justify-between items-center mb-2">
-                                                                    <span className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
-                                                                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                                                        {tf.indirectCosts || 'Indirect Costs'}
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={() => onAddItem([...allocPath, allocIdx, 'indirectCosts'], { categoryIndex: 0, name: indirectCostDefs[0]?.[lang] || '', percentage: 0, calculatedAmount: 0 })}
-                                                                        className="px-2 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 transition-all"
-                                                                    >
-                                                                        + {t.add || 'Add'}
-                                                                    </button>
-                                                                </div>
-                                                                {(alloc.indirectCosts || []).map((ic, icIdx) => {
-                                                                    const directSum = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
-                                                                    const calcAmount = Math.round(directSum * ((ic.percentage || 0) / 100));
-                                                                    return (
-                                                                        <div key={icIdx} className="flex gap-2 mb-1.5 items-end">
-                                                                            <div className="flex-1">
-                                                                                <select
-                                                                                    value={ic.categoryIndex ?? 0}
-                                                                                    onChange={(e) => {
-                                                                                        const ci = parseInt(e.target.value);
-                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'categoryIndex'], ci);
-                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'name'], indirectCostDefs[ci]?.[lang] || '');
-                                                                                    }}
-                                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
-                                                                                >
-                                                                                    {indirectCostDefs.map((cat, ci) => (
-                                                                                        <option key={ci} value={ci}>{cat[lang]}</option>
-                                                                                    ))}
-                                                                                </select>
-                                                                            </div>
-                                                                            <div className="w-16">
-                                                                                <input
-                                                                                    type="number" min={0} max={100}
-                                                                                    value={ic.percentage || ''}
-                                                                                    onChange={(e) => {
-                                                                                        const pct = e.target.value ? parseFloat(e.target.value) : 0;
-                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'percentage'], pct);
-                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'calculatedAmount'], Math.round((alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0) * (pct / 100)));
-                                                                                    }}
-                                                                                    placeholder="%"
-                                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-right"
-                                                                                />
-                                                                            </div>
-                                                                            <div className="w-24 p-1.5 bg-amber-50 border border-amber-200 rounded text-xs font-mono text-right text-amber-800">
-                                                                                €{calcAmount.toLocaleString()}
-                                                                            </div>
-                                                                            <button onClick={() => onRemoveItem([...allocPath, allocIdx, 'indirectCosts'], icIdx)} className="text-red-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                                {(alloc.indirectCosts || []).length > 0 && (
-                                                                    <div className="text-right text-xs font-bold text-amber-800 mt-1 pr-8">
-                                                                        Σ €{(alloc.indirectCosts || []).reduce((s, ic) => {
-                                                                            const dSum = (alloc.directCosts || []).reduce((ss, dc) => ss + (dc.amount || 0), 0);
-                                                                            return s + Math.round(dSum * ((ic.percentage || 0) / 100));
-                                                                        }, 0).toLocaleString()}
+                                                            {/* ★ v7.0: Indirect Costs — SINGLE AUTO-CALCULATED LINE */}
+                                                            {indirectSettings.percentage > 0 && directTotal > 0 && (
+                                                                <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                                                                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                                            {tf.indirectCosts || 'Indirect Costs'} ({indirectSettings.percentage}%)
+                                                                        </span>
+                                                                        <span className="text-sm font-bold text-amber-800 font-mono">
+                                                                            €{indirectTotal.toLocaleString()}
+                                                                        </span>
                                                                     </div>
-                                                                )}
-                                                            </div>
+                                                                    <p className="text-xs text-amber-600 mt-1">
+                                                                        {language === 'si'
+                                                                            ? `${indirectSettings.percentage}% na izbranih neposrednih stroških (nastavljeno v Finance)`
+                                                                            : `${indirectSettings.percentage}% of selected direct costs (configured in Finance)`
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            )}
 
                                                             {/* Allocation Total */}
-                                                            {((alloc.directCosts || []).length > 0 || (alloc.indirectCosts || []).length > 0) && (() => {
-                                                                const dTotal = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
-                                                                const iTotal = (alloc.indirectCosts || []).reduce((s, ic) => {
-                                                                    return s + Math.round(dTotal * ((ic.percentage || 0) / 100));
-                                                                }, 0);
-                                                                return (
-                                                                    <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
-                                                                        <span className="text-xs font-semibold text-slate-500">
-                                                                            {partner?.code || '?'} — {tp.totalCost || 'Total'}:
-                                                                        </span>
-                                                                        <span className="text-sm font-bold text-sky-800">
-                                                                            €{(dTotal + iTotal).toLocaleString()}
-                                                                        </span>
-                                                                    </div>
-                                                                );
-                                                            })()}
+                                                            {directTotal > 0 && (
+                                                                <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
+                                                                    <span className="text-xs font-semibold text-slate-500">
+                                                                        {partner?.code || '?'} — {tp.totalCost || 'Total'}:
+                                                                    </span>
+                                                                    <span className="text-sm font-bold text-sky-800">
+                                                                        €{(directTotal + indirectTotal).toLocaleString()}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -1416,13 +1506,14 @@ const renderActivities = (props) => {
                 </div>
             </div>
 
-            {/* ★ v6.0: Finance section */}
+            {/* ★ v7.0: Finance section (now with funding model + indirect settings) */}
             {renderFinance(props)}
 
             {renderRisks(props)}
         </>
     );
 };
+
 const renderExpectedResults = (props) => {
     return (
         <>
@@ -1434,6 +1525,9 @@ const renderExpectedResults = (props) => {
     );
 };
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT — unchanged from v6.1
+// ═══════════════════════════════════════════════════════════════
 const ProjectDisplay = (props) => {
     const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey, completedStepsStatus, onStepClick } = props;
     const STEPS = getSteps(language);
@@ -1470,7 +1564,6 @@ const ProjectDisplay = (props) => {
     return (
         <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
             <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
-                {/* Left: Step title + description */}
                 <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
                     <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
                     <div style={{ minWidth: 0 }}>
@@ -1479,7 +1572,6 @@ const ProjectDisplay = (props) => {
                     </div>
                 </div>
 
-                {/* Center: Step Navigation Circles */}
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
                     <StepNavigationBar
                         language={language}
@@ -1490,7 +1582,6 @@ const ProjectDisplay = (props) => {
                     />
                 </div>
 
-                {/* Right: Generate button */}
                 <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
                     {showGenerateButton && (
                         sectionKey === 'expectedResults'
