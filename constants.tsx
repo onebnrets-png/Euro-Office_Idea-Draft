@@ -1,8 +1,11 @@
 // constants.tsx
 // ═══════════════════════════════════════════════════════════════
 // UI assets, step definitions, readiness-level definitions.
-// v4.5 — 2026-02-18 — CHANGES:
-//   - ★ v4.5: BRAND_ASSETS.logoText → hardcoded EURO-OFFICE logo
+// v5.0 — 2026-02-22 — CHANGES:
+//   - ★ v5.0: NEW sub-steps under 'activities':
+//     → 'partners' (Partnership / Consortium) between organigram and workplan
+//     → 'finance' (Finance / Budget) between pert-chart and risk-mitigation
+//   - v4.5: BRAND_ASSETS.logoText → hardcoded EURO-OFFICE logo
 //   - v4.4: Fixed crash (removed non-existent TEXT[lang].rl.*)
 //   - Readiness level names/descriptions are inline strings
 //   - Fixed all Slovene diacritics
@@ -86,6 +89,7 @@ export const getSteps = (lang = 'en') => [
 export const STEPS = getSteps('en');
 
 // ─── SUB-STEP DEFINITIONS ───────────────────────────────────────
+// ★ v5.0: Added 'partners' and 'finance' sub-steps under activities
 
 export const getSubSteps = (lang = 'en') => ({
   problemAnalysis: [
@@ -105,9 +109,11 @@ export const getSubSteps = (lang = 'en') => ({
   activities: [
     { id: 'implementation', key: 'implementation', title: TEXT[lang].subSteps.implementation },
     { id: 'organigram', key: 'organigram', title: TEXT[lang].subSteps.organigram },
+    { id: 'partners', key: 'partners', title: TEXT[lang].subSteps.partners },              // ★ v5.0 NEW
     { id: 'workplan', key: 'workplan', title: TEXT[lang].subSteps.workplan },
     { id: 'gantt-chart', key: 'ganttChart', title: TEXT[lang].subSteps.ganttChart },
     { id: 'pert-chart', key: 'pertChart', title: TEXT[lang].subSteps.pertChart },
+    { id: 'finance', key: 'finance', title: TEXT[lang].subSteps.finance },                  // ★ v5.0 NEW
     { id: 'risk-mitigation', key: 'riskMitigation', title: TEXT[lang].subSteps.riskMitigation },
   ],
   expectedResults: [
