@@ -31,6 +31,7 @@ import {
   generateTargetedFill,
   generateActivitiesPerWP,
   generateObjectFill,
+  generatePartnerAllocations,  // ★ v7.1: NEW
 } from '../services/geminiService.ts';
 import { generateSummaryDocx } from '../services/docxGenerator.ts';
 import { recalculateProjectSchedule, downloadBlob } from '../utils.ts';
