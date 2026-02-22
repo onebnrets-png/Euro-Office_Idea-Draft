@@ -1,194 +1,485 @@
-// constants.tsx
+// types.ts
 // ═══════════════════════════════════════════════════════════════
-// UI assets, step definitions, readiness-level definitions.
-// v5.0 — 2026-02-22 — CHANGES:
-//   - ★ v5.0: NEW sub-steps under 'activities':
-//     → 'partners' (Partnership / Consortium) between organigram and workplan
-//     → 'finance' (Finance / Budget) between pert-chart and risk-mitigation
-//   - v4.5: BRAND_ASSETS.logoText → hardcoded EURO-OFFICE logo
-//   - v4.4: Fixed crash (removed non-existent TEXT[lang].rl.*)
-//   - Readiness level names/descriptions are inline strings
-//   - Fixed all Slovene diacritics
-//   - Sub-steps: 'implementation' + 'organigram' (no 'quality-efficiency')
+// TypeScript type definitions for the EU Project Idea Draft app.
+// v6.0 — 2026-02-22 — CHANGES:
+//   - ★ v6.0: Partnership & Finance data model
+//     → PM_HOURS_PER_MONTH = 143 (EU standard)
+//     → FundingModel, CostModelType types
+//     → ProjectPartner, DirectCostItem, IndirectCostItem,
+//       TaskPartnerAllocation interfaces
+//     → CENTRALIZED_DIRECT_COSTS, CENTRALIZED_INDIRECT_COSTS,
+//       DECENTRALIZED_DIRECT_COSTS, DECENTRALIZED_INDIRECT_COSTS constants
+//     → Task extended with optional partnerAllocations
+//     → ProjectData extended with partners[], fundingModel, maxPartners
+//   - v5.1: Multi-tenant organization types
+//   - v5.0: Chart image data, admin logs, extraction types
 // ═══════════════════════════════════════════════════════════════
 
-import React from 'react';
-import { TEXT } from './locales.ts';
+// ─── EU STANDARD: PERSON-MONTH ───────────────────────────────────
+export const PM_HOURS_PER_MONTH = 143;
 
-// --- BRANDING ASSETS ---
-// ★ v4.5: Hardcoded EURO-OFFICE logo — NOT changeable by regular users
-// Copy "design/logo Euro-Office.png" to "public/euro-office-logo.png"
-export const BRAND_ASSETS = {
-  logoText: "/euro-office-logo.png"
-};
+// ─── FUNDING MODEL ───────────────────────────────────────────────
+export type FundingModel = 'centralized' | 'decentralized';
+export type CostModelType = 'actual' | 'unit' | 'lumpSum' | 'flatRate';
 
-export const ICONS = {
-  CHECK: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  ),
-  CIRCLE_CHECK: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" {...props}>
-      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd" />
-    </svg>
-  ),
-  CIRCLE_X: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  ),
-  SPARKLES: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
-    </svg>
-  ),
-  SAVE: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-  ),
-  IMPORT: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-    </svg>
-  ),
-  DOCX: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-    </svg>
-  ),
-  PRINT: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0c1.253 1.464 2.405 3.06 2.405 4.872A3.375 3.375 0 0 1 18.25 24H5.75A3.375 3.375 0 0 1 2.25 20.622c0-1.812 1.152-3.408 2.405-4.872M8.25 6h7.5v2.25h-7.5V6ZM12 10.5h.008v.008H12v-.008Z" />
-    </svg>
-  ),
-  SUMMARY: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-    </svg>
-  ),
-  LOCK: (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0V10.5m-1.5 0h12a1.5 1.5 0 0 1 1.5 1.5v7.5a1.5 1.5 0 0 1-1.5 1.5h-12a1.5 1.5 0 0 1-1.5-1.5v-7.5a1.5 1.5 0 0 1 1.5-1.5Z" />
-    </svg>
-  )
-};
+// ─── COST CATEGORY CONSTANTS ─────────────────────────────────────
 
-// ─── STEP DEFINITIONS ────────────────────────────────────────────
-
-export const getSteps = (lang = 'en') => [
-  { id: 1, key: 'problemAnalysis', title: TEXT[lang].steps.problemAnalysis, color: 'bg-red-500' },
-  { id: 2, key: 'projectIdea', title: TEXT[lang].steps.projectIdea, color: 'bg-orange-500' },
-  { id: 3, key: 'generalObjectives', title: TEXT[lang].steps.generalObjectives, color: 'bg-amber-500' },
-  { id: 4, key: 'specificObjectives', title: TEXT[lang].steps.specificObjectives, color: 'bg-yellow-500' },
-  { id: 5, key: 'activities', title: TEXT[lang].steps.activities, color: 'bg-lime-500' },
-  { id: 6, key: 'expectedResults', title: TEXT[lang].steps.expectedResults, color: 'bg-cyan-500' },
+export const CENTRALIZED_DIRECT_COSTS = [
+  { key: 'labourCosts', en: 'Labour costs', si: 'Stroški dela' },
+  { key: 'subContractorCosts', en: 'Sub-contractor costs', si: 'Stroški podizvajalcev' },
+  { key: 'travelCosts', en: 'Travel costs', si: 'Potovalni stroški' },
+  { key: 'materials', en: 'Materials / Consumables', si: 'Material / Potrošni material' },
+  { key: 'depreciationEquipment', en: 'Depreciation of equipment', si: 'Amortizacija opreme' },
+  { key: 'otherProjectCosts', en: 'Other project costs', si: 'Drugi projektni stroški' },
+  { key: 'investmentCosts', en: 'Investment costs', si: 'Investicijski stroški' },
 ];
 
-export const STEPS = getSteps('en');
+export const CENTRALIZED_INDIRECT_COSTS = [
+  { key: 'rent', en: 'Rent', si: 'Najemnina' },
+  { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
+  { key: 'telecommunications', en: 'Telecommunications', si: 'Telekomunikacije' },
+  { key: 'smallConsumables', en: 'Small consumables', si: 'Drobni potrošni material' },
+  { key: 'administrativeCosts', en: 'Administrative costs', si: 'Administrativni stroški' },
+];
 
-// ─── SUB-STEP DEFINITIONS ───────────────────────────────────────
-// ★ v5.0: Added 'partners' and 'finance' sub-steps under activities
+export const DECENTRALIZED_DIRECT_COSTS = [
+  { key: 'salariesReimbursements', en: 'Salaries and work-related reimbursements', si: 'Stroški plač in povračila stroškov v zvezi z delom' },
+  { key: 'externalServiceCosts', en: 'External service provider costs', si: 'Stroški zunanjih izvajalcev storitev' },
+  { key: 'vat', en: 'VAT', si: 'DDV' },
+  { key: 'intangibleAssetInvestment', en: 'Investments in intangible assets', si: 'Investicije v neopredmetena sredstva' },
+  { key: 'depreciationBasicAssets', en: 'Depreciation of basic assets', si: 'Amortizacija osnovnih sredstev' },
+  { key: 'infoCommunication', en: 'Information & communication costs', si: 'Stroški informiranja in komuniciranja' },
+  { key: 'tangibleAssetInvestment', en: 'Investments in tangible assets', si: 'Investicije v opredmetena osnovna sredstva' },
+];
 
-export const getSubSteps = (lang = 'en') => ({
-  problemAnalysis: [
-    { id: 'core-problem', key: 'coreProblem', title: TEXT[lang].subSteps.coreProblem },
-    { id: 'causes', key: 'causes', title: TEXT[lang].subSteps.causes },
-    { id: 'consequences', key: 'consequences', title: TEXT[lang].subSteps.consequences },
-  ],
-  projectIdea: [
-    { id: 'main-aim', key: 'mainAim', title: TEXT[lang].subSteps.mainAim },
-    { id: 'state-of-the-art', key: 'stateOfTheArt', title: TEXT[lang].subSteps.stateOfTheArt },
-    { id: 'proposed-solution', key: 'proposedSolution', title: TEXT[lang].subSteps.proposedSolution },
-    { id: 'readiness-levels', key: 'readinessLevels', title: TEXT[lang].subSteps.readinessLevels },
-    { id: 'eu-policies', key: 'euPolicies', title: TEXT[lang].subSteps.euPolicies },
-  ],
-  generalObjectives: [],
-  specificObjectives: [],
-  activities: [
-    { id: 'implementation', key: 'implementation', title: TEXT[lang].subSteps.implementation },
-    { id: 'organigram', key: 'organigram', title: TEXT[lang].subSteps.organigram },
-    { id: 'partners', key: 'partners', title: TEXT[lang].subSteps.partners },              // ★ v5.0 NEW
-    { id: 'workplan', key: 'workplan', title: TEXT[lang].subSteps.workplan },
-    { id: 'gantt-chart', key: 'ganttChart', title: TEXT[lang].subSteps.ganttChart },
-    { id: 'pert-chart', key: 'pertChart', title: TEXT[lang].subSteps.pertChart },
-    { id: 'finance', key: 'finance', title: TEXT[lang].subSteps.finance },                  // ★ v5.0 NEW
-    { id: 'risk-mitigation', key: 'riskMitigation', title: TEXT[lang].subSteps.riskMitigation },
-  ],
-  expectedResults: [
-    { id: 'outputs', key: 'outputs', title: TEXT[lang].subSteps.outputs },
-    { id: 'outcomes', key: 'outcomes', title: TEXT[lang].subSteps.outcomes },
-    { id: 'impacts', key: 'impacts', title: TEXT[lang].subSteps.impacts },
-    { id: 'kers', key: 'kers', title: TEXT[lang].subSteps.kers },
-  ],
-});
+export const DECENTRALIZED_INDIRECT_COSTS = [
+  { key: 'rent', en: 'Rent', si: 'Najemnina' },
+  { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
+  { key: 'telecommunications', en: 'Telecommunications', si: 'Telekomunikacije' },
+  { key: 'smallConsumables', en: 'Small consumables', si: 'Drobni potrošni material' },
+  { key: 'administrativeCosts', en: 'Administrative costs', si: 'Administrativni stroški' },
+];
 
-export const SUB_STEPS = getSubSteps('en');
+// ─── PROBLEM ANALYSIS ────────────────────────────────────────────
 
-// ─── READINESS LEVELS DEFINITIONS ────────────────────────────────
+export interface ProblemItem {
+  title: string;
+  description: string;
+}
 
-export const getReadinessLevelsDefinitions = (lang = 'en') => ({
-  TRL: {
-    name: lang === 'si' ? "Stopnja tehnološke pripravljenosti (TRL)" : "Technology Readiness Level (TRL)",
-    description: lang === 'si' ? "Ocena zrelosti tehnologije od osnovnih načel do dokazanega sistema." : "Assessment of technology maturity from basic principles to proven system.",
-    levels: [
-      { level: 1, title: lang === 'si' ? "Opažena so osnovna načela" : "Basic principles observed" },
-      { level: 2, title: lang === 'si' ? "Oblikovan koncept tehnologije" : "Technology concept formulated" },
-      { level: 3, title: lang === 'si' ? "Eksperimentalni dokaz koncepta" : "Experimental proof of concept" },
-      { level: 4, title: lang === 'si' ? "Tehnologija potrjena v laboratoriju" : "Technology validated in lab" },
-      { level: 5, title: lang === 'si' ? "Tehnologija potrjena v ustreznem okolju" : "Technology validated in relevant environment" },
-      { level: 6, title: lang === 'si' ? "Tehnologija prikazana v ustreznem okolju" : "Technology demonstrated in relevant environment" },
-      { level: 7, title: lang === 'si' ? "Prikaz prototipa sistema v operativnem okolju" : "System prototype demonstration in operational environment" },
-      { level: 8, title: lang === 'si' ? "Sistem popoln in kvalificiran" : "System complete and qualified" },
-      { level: 9, title: lang === 'si' ? "Dejanski sistem dokazan v operativnem okolju" : "Actual system proven in operational environment" },
-    ],
-  },
-  SRL: {
-    name: lang === 'si' ? "Stopnja družbene pripravljenosti (SRL)" : "Societal Readiness Level (SRL)",
-    description: lang === 'si' ? "Ocena družbene sprejemljivosti in vključenosti deležnikov." : "Assessment of societal acceptance and stakeholder engagement.",
-    levels: [
-      { level: 1, title: lang === 'si' ? "Problem identificiran" : "Problem identified" },
-      { level: 2, title: lang === 'si' ? "Družbena potreba oblikovana" : "Societal need formulated" },
-      { level: 3, title: lang === 'si' ? "Začetno vključevanje deležnikov" : "Initial stakeholder engagement" },
-      { level: 4, title: lang === 'si' ? "Vzpostavljena mreža deležnikov" : "Stakeholder network established" },
-      { level: 5, title: lang === 'si' ? "Soustvarjanje z deležniki" : "Co-creation with stakeholders" },
-      { level: 6, title: lang === 'si' ? "Družbena sprejemljivost dokazana" : "Societal acceptance demonstrated" },
-      { level: 7, title: lang === 'si' ? "Rešitev prikazana v družbenem kontekstu" : "Solution demonstrated in societal context" },
-      { level: 8, title: lang === 'si' ? "Rešitev pripravljena za družbeno implementacijo" : "Solution ready for societal implementation" },
-      { level: 9, title: lang === 'si' ? "Rešitev dokazana v družbi" : "Solution proven in society" },
-    ],
-  },
-  ORL: {
-    name: lang === 'si' ? "Stopnja organizacijske pripravljenosti (ORL)" : "Organisational Readiness Level (ORL)",
-    description: lang === 'si' ? "Ocena pripravljenosti organizacije za sprejetje sprememb." : "Assessment of organizational readiness to adopt changes.",
-    levels: [
-      { level: 1, title: lang === 'si' ? "Zavedanje o potrebi po spremembi" : "Awareness of the need for change" },
-      { level: 2, title: lang === 'si' ? "Konceptualizacija potrebne organizacijske spremembe" : "Conceptualization of the required organizational change" },
-      { level: 3, title: lang === 'si' ? "Začetna ocena organizacijskega vpliva" : "Initial assessment of organizational impact" },
-      { level: 4, title: lang === 'si' ? "Razvit načrt za upravljanje sprememb" : "Change management plan developed" },
-      { level: 5, title: lang === 'si' ? "Viri za spremembe dodeljeni" : "Resources for change allocated" },
-      { level: 6, title: lang === 'si' ? "Organizacijske strukture prilagojene" : "Organizational structures adapted" },
-      { level: 7, title: lang === 'si' ? "Pilotna implementacija znotraj organizacije" : "Pilot implementation within the organization" },
-      { level: 8, title: lang === 'si' ? "Implementacija v polnem obsegu in usposabljanje" : "Full-scale implementation and training" },
-      { level: 9, title: lang === 'si' ? "Novi procesi popolnoma integrirani in optimizirani" : "New processes fully integrated and optimized" },
-    ]
-  },
-  LRL: {
-    name: lang === 'si' ? "Stopnja pravne/etične pripravljenosti (LRL)" : "Legal/Ethical Readiness Level (LRL)",
-    description: lang === 'si' ? "Ocena pravne in etične skladnosti rešitve." : "Assessment of legal and ethical compliance of the solution.",
-    levels: [
-      { level: 1, title: lang === 'si' ? "Začetna identifikacija potencialnih pravnih/etičnih vprašanj" : "Initial identification of potential legal/ethical issues" },
-      { level: 2, title: lang === 'si' ? "Osnovne raziskave ustreznih pravnih okvirov" : "Basic research on relevant legal frameworks" },
-      { level: 3, title: lang === 'si' ? "Predhodna pravna in etična analiza" : "Preliminary legal and ethical analysis" },
-      { level: 4, title: lang === 'si' ? "Podrobna analiza pravnega/etičnega okvira" : "Detailed legal/ethical framework analysis" },
-      { level: 5, title: lang === 'si' ? "Razvita strategija za pravno/etično skladnost" : "Strategy for legal/ethical compliance developed" },
-      { level: 6, title: lang === 'si' ? "Ukrepi skladnosti dokazani" : "Compliance measures demonstrated" },
-      { level: 7, title: lang === 'si' ? "Etična/pravna odobritev pridobljena (če je primerno)" : "Ethical/legal approval obtained (if applicable)" },
-      { level: 8, title: lang === 'si' ? "Pravni okvir popolnoma naslovljen" : "Legal framework fully addressed" },
-      { level: 9, title: lang === 'si' ? "Neprekinjeno spremljanje skladnosti vzpostavljeno" : "Continuous compliance monitoring in place" },
-    ]
-  }
-});
+export interface CoreProblem {
+  title: string;
+  description: string;
+}
 
-export const READINESS_LEVELS_DEFINITIONS = getReadinessLevelsDefinitions('en');
+export interface ProblemAnalysis {
+  coreProblem: CoreProblem;
+  causes: ProblemItem[];
+  consequences: ProblemItem[];
+}
+
+// ─── POLICIES ────────────────────────────────────────────────────
+
+export interface PolicyItem {
+  name: string;
+  description: string;
+}
+
+// ─── OBJECTIVES ──────────────────────────────────────────────────
+
+export interface ObjectiveItem {
+  title: string;
+  description: string;
+  indicator: string;
+}
+
+// ─── READINESS LEVELS ────────────────────────────────────────────
+
+export interface ReadinessLevel {
+  level: number | null;
+  justification: string;
+}
+
+export interface ReadinessLevels {
+  TRL: ReadinessLevel;
+  SRL: ReadinessLevel;
+  ORL: ReadinessLevel;
+  LRL: ReadinessLevel;
+}
+
+// ─── PARTNERSHIP ─────────────────────────────────────────────────
+
+export interface ProjectPartner {
+  id: string;
+  code: string;
+  name: string;
+  expertise: string;
+  pmRate: number;
+}
+
+// ─── FINANCE: COST ITEMS ─────────────────────────────────────────
+
+export interface DirectCostItem {
+  id: string;
+  categoryKey: string;
+  name: string;
+  amount: number;
+  costModel?: CostModelType;
+}
+
+export interface IndirectCostItem {
+  id: string;
+  categoryKey: string;
+  name: string;
+  percentage: number;
+  appliesTo: string[];
+  calculatedAmount: number;
+}
+
+// ─── TASK-LEVEL PARTNER ALLOCATION ───────────────────────────────
+
+export interface TaskPartnerAllocation {
+  partnerId: string;
+  hours: number;
+  pm: number;
+  directCosts: DirectCostItem[];
+  indirectCosts: IndirectCostItem[];
+  totalCost: number;
+}
+
+// ─── TASKS, WPs ──────────────────────────────────────────────────
+
+export interface TaskDependency {
+  predecessorId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  dependencies: TaskDependency[];
+  partnerAllocations?: TaskPartnerAllocation[];
+}
+
+export interface Milestone {
+  id: string;
+  description: string;
+  date: string;
+}
+
+export interface Deliverable {
+  id: string;
+  title: string;
+  description: string;
+  indicator: string;
+}
+
+export interface WorkPackage {
+  id: string;
+  title: string;
+  tasks: Task[];
+  milestones: Milestone[];
+  deliverables: Deliverable[];
+}
+
+// ─── RISK ────────────────────────────────────────────────────────
+
+export interface RiskItem {
+  id: string;
+  category: 'technical' | 'social' | 'economic' | 'environmental';
+  title: string;
+  description: string;
+  likelihood: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  mitigation: string;
+}
+
+// ─── KER ─────────────────────────────────────────────────────────
+
+export interface KERItem {
+  id: string;
+  title: string;
+  description: string;
+  exploitationStrategy: string;
+}
+
+// ─── RESULT ITEMS ────────────────────────────────────────────────
+
+export interface ResultItem {
+  title: string;
+  description: string;
+  indicator: string;
+}
+
+// ─── PROJECT MANAGEMENT ──────────────────────────────────────────
+
+export interface ProjectManagementStructure {
+  coordinator: string;
+  steeringCommittee: string;
+  advisoryBoard: string;
+  wpLeaders: string;
+}
+
+export interface ProjectManagement {
+  description: string;
+  structure: ProjectManagementStructure;
+}
+
+// ─── PROJECT IDEA ────────────────────────────────────────────────
+
+export interface ProjectIdea {
+  projectTitle: string;
+  projectAcronym: string;
+  startDate: string;
+  durationMonths: number;
+  mainAim: string;
+  proposedSolution: string;
+  stateOfTheArt: string;
+  readinessLevels: ReadinessLevels;
+  policies: PolicyItem[];
+}
+
+// ─── FULL PROJECT DATA ───────────────────────────────────────────
+
+export interface ProjectData {
+  problemAnalysis: ProblemAnalysis;
+  projectIdea: ProjectIdea;
+  generalObjectives: ObjectiveItem[];
+  specificObjectives: ObjectiveItem[];
+  projectManagement: ProjectManagement;
+  activities: WorkPackage[];
+  outputs: ResultItem[];
+  outcomes: ResultItem[];
+  impacts: ResultItem[];
+  risks: RiskItem[];
+  kers: KERItem[];
+  partners?: ProjectPartner[];
+  fundingModel?: FundingModel;
+  maxPartners?: number;
+}
+
+// ─── VERSIONING & META ───────────────────────────────────────────
+
+export interface ProjectMeta {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  language: 'en' | 'si';
+  version: number;
+}
+
+export interface SavedProject {
+  meta: ProjectMeta;
+  data: ProjectData;
+  translations?: Record<string, ProjectData>;
+}
+
+// ─── MODAL CONFIGURATION ─────────────────────────────────────────
+
+export interface ModalConfig {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'error' | 'confirm' | 'choice';
+  actions?: ModalAction[];
+}
+
+export interface ModalAction {
+  label: string;
+  variant: 'primary' | 'secondary' | 'danger';
+  onClick: () => void;
+}
+
+// ─── EXPORT & CHART TYPES ────────────────────────────────────────
+
+export interface ExportData {
+  projectName: string;
+  exportDate: string;
+  data: ProjectData;
+}
+
+export interface ChartImageData {
+  stepKey: string;
+  subStepKey: string;
+  imageDataUrl: string;
+  width: number;
+  height: number;
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────
+
+export interface AuthRecord {
+  id: string;
+  email: string;
+  displayName?: string;
+  apiKey?: string;
+  modelName?: string;
+  createdAt: string;
+}
+
+// ─── INSTRUCTIONS ────────────────────────────────────────────────
+
+export interface InstructionSet {
+  id: string;
+  name: string;
+  systemPrompt: string;
+  isDefault: boolean;
+}
+
+// ─── GANTT / PERT ────────────────────────────────────────────────
+
+export interface GanttTask {
+  id: string;
+  wpId: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  dependencies: TaskDependency[];
+  progress?: number;
+}
+
+export interface PERTTask {
+  id: string;
+  wpId: string;
+  title: string;
+  duration: number;
+  earliestStart: number;
+  earliestFinish: number;
+  latestStart: number;
+  latestFinish: number;
+  slack: number;
+  isCritical: boolean;
+  dependencies: string[];
+}
+
+// ─── READINESS LEVEL DEFINITIONS ─────────────────────────────────
+
+export interface ReadinessLevelDefinition {
+  level: number;
+  title: string;
+}
+
+export interface ReadinessLevelCategory {
+  name: string;
+  description: string;
+  levels: ReadinessLevelDefinition[];
+}
+
+export interface ReadinessLevelsDefinitions {
+  TRL: ReadinessLevelCategory;
+  SRL: ReadinessLevelCategory;
+  ORL: ReadinessLevelCategory;
+  LRL: ReadinessLevelCategory;
+}
+
+// ─── STEP NAVIGATION ─────────────────────────────────────────────
+
+export interface StepDefinition {
+  id: number;
+  key: string;
+  title: string;
+  color: string;
+}
+
+export interface SubStepDefinition {
+  id: string;
+  key: string;
+  title: string;
+}
+
+// ─── ADMIN ───────────────────────────────────────────────────────
+
+export type AdminRole = 'superadmin' | 'admin' | 'user';
+
+export interface AdminUserProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  role: AdminRole;
+  createdAt: string;
+  lastLogin?: string;
+  apiKey?: string;
+  modelName?: string;
+}
+
+export interface AdminLog {
+  id: string;
+  userId: string;
+  action: string;
+  details: string;
+  timestamp: string;
+}
+
+// ─── CHART VISUALIZATION ─────────────────────────────────────────
+
+export type ChartType =
+  | 'bar'
+  | 'pie'
+  | 'line'
+  | 'radar'
+  | 'doughnut'
+  | 'polarArea'
+  | 'bubble'
+  | 'scatter'
+  | 'treemap'
+  | 'sankey'
+  | 'horizontalBar'
+  | 'stackedBar'
+  | 'heatmap'
+  | 'funnel'
+  | 'waterfall'
+  | 'gauge'
+  | 'timeline'
+  | 'orgChart'
+  | 'flowChart'
+  | 'mindMap'
+  | 'network';
+
+export interface ExtractedDataPoint {
+  label: string;
+  value: number;
+  category?: string;
+  group?: string;
+}
+
+export interface ChartDataExtraction {
+  chartType: ChartType;
+  title: string;
+  data: ExtractedDataPoint[];
+  labels?: string[];
+  datasets?: any[];
+}
+
+// ─── ORGANIZATION / MULTI-TENANT (v5.1) ─────────────────────────
+
+export type OrgRole = 'owner' | 'admin' | 'member';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  logoUrl?: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: OrgRole;
+  email: string;
+  displayName?: string;
+  joinedAt: string;
+}
+
+export interface OrganizationInstructions {
+  id: string;
+  organizationId: string;
+  systemPrompt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
