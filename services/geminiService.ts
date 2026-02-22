@@ -1478,7 +1478,7 @@ RESPONSE FORMAT — JSON array:
         "hours": 286,
         "pm": 2.0,
         "directCosts": [
-          { "id": "dc-1", "categoryKey": "labourCosts", "name": "Labour costs", "amount": 11400 },
+          { "id": "dc-1", "categoryKey": "labourCosts", "name": "Staff / Personnel costs", "amount": 11400 },
           { "id": "dc-2", "categoryKey": "travelCosts", "name": "Travel costs", "amount": 1500 }
         ],
         "totalDirectCost": 12900,
