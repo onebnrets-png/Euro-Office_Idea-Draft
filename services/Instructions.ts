@@ -1703,6 +1703,73 @@ export function getAvailableOverrideKeys(): string[] {
     'fieldRules_projectAcronym',
   ];
 }
+// ═══════════════════════════════════════════════════════════════════
+// BACKWARD COMPATIBILITY — exports required by AdminPanel.tsx
+// ═══════════════════════════════════════════════════════════════════
+
+/** Labels for chapter keys — used in AdminPanel Instructions editor */
+export const CHAPTER_LABELS: Record<string, string> = {
+  chapter1_problemAnalysis: 'Chapter 1 — Problem Analysis',
+  chapter2_projectIdea: 'Chapter 2 — Project Idea',
+  chapter3_4_objectives: 'Chapters 3–4 — Objectives',
+  chapter5_activities: 'Chapter 5 — Activities, Management & Risks',
+  chapter6_results: 'Chapter 6 — Expected Results & KERs',
+  chapter5b_partners: 'Chapter 5B — Partnership (Consortium)',
+};
+
+/** Labels for field rule keys — used in AdminPanel Instructions editor */
+export const FIELD_RULE_LABELS: Record<string, string> = {
+  title: 'Title',
+  description: 'Description',
+  indicator: 'Indicator',
+  mitigation: 'Mitigation Strategy',
+  exploitationStrategy: 'Exploitation Strategy',
+  mainAim: 'Main Aim',
+  projectTitle: 'Project Title',
+  projectAcronym: 'Project Acronym',
+};
+
+/** Get full instructions object — used by AdminPanel to display all rules */
+export function getFullInstructions(): any {
+  return {
+    GLOBAL_RULES,
+    LANGUAGE_DIRECTIVES,
+    LANGUAGE_MISMATCH_TEMPLATE,
+    ACADEMIC_RIGOR_RULES,
+    HUMANIZATION_RULES,
+    PROJECT_TITLE_RULES,
+    MODE_INSTRUCTIONS,
+    QUALITY_GATES,
+    SECTION_TASK_INSTRUCTIONS,
+    CHAPTERS,
+    FIELD_RULES,
+    SUMMARY_RULES,
+    TRANSLATION_RULES,
+    TEMPORAL_INTEGRITY_RULE,
+    INTERVENTION_LOGIC_FRAMEWORK,
+    CONSORTIUM_ALLOCATION_RULES,
+    RESOURCE_COHERENCE_RULES,
+    OPENROUTER_SYSTEM_PROMPT,
+  };
+}
+
+/** Get default instructions — used by AdminPanel for reset */
+export function getDefaultInstructions(): any {
+  return getFullInstructions();
+}
+
+/** Save app instructions — stores overrides via globalInstructionsService */
+export async function saveAppInstructions(instructions: any): Promise<void> {
+  // AdminPanel saves via its own admin.saveGlobalInstructions() path
+  // This is a no-op placeholder for backward compatibility
+  console.log('[Instructions] saveAppInstructions called — AdminPanel handles saving via useAdmin hook');
+}
+
+/** Reset app instructions — returns defaults */
+export async function resetAppInstructions(): Promise<any> {
+  console.log('[Instructions] resetAppInstructions called — returning defaults');
+  return getDefaultInstructions();
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // END OF Instructions.ts v7.0
