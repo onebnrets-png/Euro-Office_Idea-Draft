@@ -638,7 +638,7 @@ const renderPartners = (props) => {
     const { projectData, onUpdateData, onAddItem, onRemoveItem, onGenerateSection, isLoading, language, missingApiKey } = props;
     const t = TEXT[language] || TEXT['en'];
     const tp = t.partners || {};
-    const partners = projectData.partners || [];
+    const partners = Array.isArray(projectData.partners) ? projectData.partners : [];
 
     return (
         <div id="partners" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
