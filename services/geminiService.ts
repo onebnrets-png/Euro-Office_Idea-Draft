@@ -1603,7 +1603,7 @@ CRITICAL:
           directCosts.unshift({
             id: `dc-labour-${Date.now()}`,
             categoryKey: 'labourCosts',
-            name: language === 'si' ? 'Stroški dela' : 'Labour costs',
+            name: language === 'si' ? 'Stroški dela' : 'Staff / Personnel costs',
             amount: labourCost,
           });
         }
