@@ -1434,7 +1434,7 @@ const renderActivities = (props) => {
                                                                 ))}
                                                                 {(alloc.directCosts || []).length > 0 && (
                                                                     <div className="text-right text-xs font-bold text-green-800 mt-1 pr-8">
-                                                                        Σ €{directTotal.toLocaleString()}
+                                                                        Σ €{directTotal.toLocaleString('de-DE')}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1448,7 +1448,7 @@ const renderActivities = (props) => {
                                                                             {tf.indirectCosts || 'Indirect Costs'} ({indirectSettings.percentage}%)
                                                                         </span>
                                                                         <span className="text-sm font-bold text-amber-800 font-mono">
-                                                                            €{indirectTotal.toLocaleString()}
+                                                                            €{indirectTotal.toLocaleString('de-DE')}
                                                                         </span>
                                                                     </div>
                                                                     <p className="text-xs text-amber-600 mt-1">
@@ -1467,7 +1467,7 @@ const renderActivities = (props) => {
                                                                         {partner?.code || '?'} — {tp.totalCost || 'Total'}:
                                                                     </span>
                                                                     <span className="text-sm font-bold text-sky-800">
-                                                                        €{(directTotal + indirectTotal).toLocaleString()}
+                                                                        €{(directTotal + indirectTotal).toLocaleString('de-DE')}
                                                                     </span>
                                                                 </div>
                                                             )}
