@@ -244,11 +244,25 @@ export const isSubStepCompleted = (
 
       default:
         return false;
-    }
-  } catch (e) {
-    return false;
-  }
-};
+     }
+     } catch (e) {
+       return false;
+
+      // ── Activities: Partners ──────────────────────────────
+      case 'partners':
+        return Array.isArray(projectData.partners) && projectData.partners.length > 0 
+          && projectData.partners.some((p: any) => hasText(p.name));
+
+      // ── Activities: Finance ───────────────────────────────
+      case 'finance':
+        return Array.isArray(projectData.activities) && projectData.activities.some((wp: any) =>
+          wp.tasks && wp.tasks.some((t: any) =>
+            t.partnerAllocations && t.partnerAllocations.length > 0
+            && t.partnerAllocations.some((pa: any) =>
+              pa.directCosts && pa.directCosts.some((dc: any) => dc.amount > 0)
+            )
+          )
+        );
 
 export const isStepCompleted = (
   projectData: any,
