@@ -1,17 +1,10 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v6.0 — 2026-02-22 — NEW: Partnership & Finance UI renderers
-//   - NEW: renderPartners() — full consortium management UI
-//   - NEW: renderFinance() — budget overview with direct/indirect costs
-//   - renderActivities() now calls renderPartners() and renderFinance()
-//   - Import PM_HOURS_PER_MONTH and cost constants from types.ts
-//   - All previous v5.1 changes preserved.
-//
-// v5.1 — 2026-02-21 — FIX: YELLOW BACKGROUND BLEED-THROUGH ON CHARTS
-// v5.0 — 2026-02-17 — DESIGN SYSTEM CARD LAYOUT + MICRO ANIMATIONS
-// v4.9 — 2026-02-17 — INLINE CHARTS FOR ALL DESCRIPTION FIELDS
-// v4.8 — 2026-02-16 — SECTION GENERATE BUTTONS FOR ALL SUB-SECTIONS
-// v4.7 — 2026-02-14 — FIXES (risks, deliverables, scroll IDs)
+// v6.1 — 2026-02-22 — Phase 3: Partner Allocations on Task level
+//   - Tasks now include partner allocation UI (hours, PM, costs)
+//   - Finance tables auto-populate from task allocations
+//   - 1 PM = 143h info banner moved to task level
+//   - All previous v6.0 changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useRef, useEffect, useCallback } from 'react';
@@ -655,7 +648,7 @@ const renderPartners = (props) => {
                 </div>
             </div>
 
-           {/* Partner List Header */}
+            {/* Partner List Header */}
             <div className="mb-4">
                 <SectionHeader
                     title={tp.partnerName || 'Partners'}
@@ -812,7 +805,10 @@ const renderFinance = (props) => {
             (task.partnerAllocations || []).forEach((alloc: any) => {
                 const partner = partners.find((p: any) => p.id === alloc.partnerId);
                 const directTotal = (alloc.directCosts || []).reduce((sum: number, dc: any) => sum + (dc.amount || 0), 0);
-                const indirectTotal = (alloc.indirectCosts || []).reduce((sum: number, ic: any) => sum + (ic.calculatedAmount || 0), 0);
+                const indirectTotal = (alloc.indirectCosts || []).reduce((sum: number, ic: any) => {
+                    const dSum = (alloc.directCosts || []).reduce((s: number, dc: any) => s + (dc.amount || 0), 0);
+                    return sum + Math.round(dSum * ((ic.percentage || 0) / 100));
+                }, 0);
                 allAllocations.push({
                     wpId: wp.id, wpTitle: wp.title || '',
                     taskId: task.id, taskTitle: task.title || '',
@@ -1030,6 +1026,7 @@ const renderFinance = (props) => {
     );
 };
 
+// ★ v6.1: renderActivities — now with Phase 3 partner allocations on each task
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
     const path = ['activities'];
@@ -1061,11 +1058,20 @@ const renderActivities = (props) => {
         }
     };
 
+    // Phase 3 helper variables
+    const taskPartnersList = projectData.partners || [];
+    const fundingModel = projectData.fundingModel || 'centralized';
+    const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
+    const indirectCostDefs = fundingModel === 'centralized' ? CENTRALIZED_INDIRECT_COSTS : DECENTRALIZED_INDIRECT_COSTS;
+    const lang = language === 'si' ? 'si' : 'en';
+    const tp = t.partners || {};
+    const tf = t.finance || {};
+
     return (
         <>
             {renderProjectManagement(props)}
 
-            {/* ★ v6.0: Partnership section — between organigram and workplan */}
+            {/* ★ v6.0: Partnership section */}
             {renderPartners(props)}
 
             <div id="workplan">
@@ -1084,8 +1090,9 @@ const renderActivities = (props) => {
                         </div>
                         <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         
+                        {/* ═══ TASKS ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
-                            <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [] })} addText={t.add} />
+                            <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
                                 <div key={taskIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-slate-50 relative group">
                                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'tasks'], taskIndex)} text={t.remove} /></div>
@@ -1109,10 +1116,249 @@ const renderActivities = (props) => {
                                         onAddDependency={(dep) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], [...deps, dep]); }}
                                         onRemoveDependency={(depIdx) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx)); }}
                                     />
+
+                                    {/* ★ Phase 3: Partner Allocations per Task */}
+                                    {(() => {
+                                        const taskAllocations = task.partnerAllocations || [];
+                                        const allocPath = [...path, wpIndex, 'tasks', taskIndex, 'partnerAllocations'];
+
+                                        if (taskPartnersList.length === 0) return (
+                                            <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-dashed border-slate-300 text-center text-sm text-slate-400 italic">
+                                                {tp.noPartnersYet || 'No partners defined yet.'}
+                                            </div>
+                                        );
+
+                                        return (
+                                            <div className="mt-4 pt-4 border-t border-slate-200">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <h6 className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                                        {tp.partnerAllocation || 'Partner Allocations'}
+                                                    </h6>
+                                                    <button
+                                                        onClick={() => {
+                                                            const usedIds = taskAllocations.map(a => a.partnerId);
+                                                            const available = taskPartnersList.filter(p => !usedIds.includes(p.id));
+                                                            if (available.length === 0) return;
+                                                            onAddItem(allocPath, {
+                                                                partnerId: available[0].id,
+                                                                hours: 0,
+                                                                pm: 0,
+                                                                directCosts: [],
+                                                                indirectCosts: []
+                                                            });
+                                                        }}
+                                                        disabled={taskAllocations.length >= taskPartnersList.length}
+                                                        className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    >
+                                                        + {tp.partnerAllocation || 'Add Allocation'}
+                                                    </button>
+                                                </div>
+
+                                                <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-1.5 mb-3 text-xs text-sky-700 font-medium">
+                                                    {tp.hoursPerPM || `1 PM = ${PM_HOURS_PER_MONTH} hours (EU standard)`}
+                                                </div>
+
+                                                {taskAllocations.map((alloc, allocIdx) => {
+                                                    const partner = taskPartnersList.find(p => p.id === alloc.partnerId);
+                                                    const usedIds = taskAllocations.map(a => a.partnerId);
+                                                    const availableForSwitch = taskPartnersList.filter(p => p.id === alloc.partnerId || !usedIds.includes(p.id));
+
+                                                    return (
+                                                        <div key={allocIdx} className="p-3 mb-3 bg-white rounded-lg border border-emerald-100 shadow-sm relative group/alloc hover:shadow-md transition-all">
+                                                            <div className="absolute top-2 right-2 opacity-0 group-hover/alloc:opacity-100 transition-opacity">
+                                                                <RemoveButton onClick={() => onRemoveItem(allocPath, allocIdx)} text={t.remove} />
+                                                            </div>
+
+                                                            {/* Partner selector + hours/PM */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.partnerName || 'Partner'}</label>
+                                                                    <select
+                                                                        value={alloc.partnerId || ''}
+                                                                        onChange={(e) => onUpdateData([...allocPath, allocIdx, 'partnerId'], e.target.value)}
+                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white"
+                                                                    >
+                                                                        <option value="">{tp.selectPartner || 'Select partner...'}</option>
+                                                                        {availableForSwitch.map(p => (
+                                                                            <option key={p.id} value={p.id}>
+                                                                                {p.code} — {p.name || '?'}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.hours || 'Hours'}</label>
+                                                                    <input
+                                                                        type="number" min={0}
+                                                                        value={alloc.hours || ''}
+                                                                        onChange={(e) => {
+                                                                            const hrs = e.target.value ? parseFloat(e.target.value) : 0;
+                                                                            onUpdateData([...allocPath, allocIdx, 'hours'], hrs);
+                                                                            onUpdateData([...allocPath, allocIdx, 'pm'], parseFloat((hrs / PM_HOURS_PER_MONTH).toFixed(2)));
+                                                                        }}
+                                                                        placeholder="0"
+                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.pm || 'PM'}</label>
+                                                                    <input
+                                                                        type="number" min={0} step={0.01}
+                                                                        value={alloc.pm || ''}
+                                                                        onChange={(e) => {
+                                                                            const pm = e.target.value ? parseFloat(e.target.value) : 0;
+                                                                            onUpdateData([...allocPath, allocIdx, 'pm'], pm);
+                                                                            onUpdateData([...allocPath, allocIdx, 'hours'], Math.round(pm * PM_HOURS_PER_MONTH));
+                                                                        }}
+                                                                        placeholder="0.00"
+                                                                        className="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Direct Costs */}
+                                                            <div className="mb-3">
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <span className="text-xs font-bold text-green-700 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                                                        {tf.directCosts || 'Direct Costs'}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => onAddItem([...allocPath, allocIdx, 'directCosts'], { categoryIndex: 0, name: directCostDefs[0]?.[lang] || '', amount: 0 })}
+                                                                        className="px-2 py-0.5 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition-all"
+                                                                    >
+                                                                        + {tf.addDirectCost || 'Add'}
+                                                                    </button>
+                                                                </div>
+                                                                {(alloc.directCosts || []).map((dc, dcIdx) => (
+                                                                    <div key={dcIdx} className="flex gap-2 mb-1.5 items-end">
+                                                                        <div className="flex-1">
+                                                                            <select
+                                                                                value={dc.categoryIndex ?? 0}
+                                                                                onChange={(e) => {
+                                                                                    const ci = parseInt(e.target.value);
+                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'categoryIndex'], ci);
+                                                                                    onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'name'], directCostDefs[ci]?.[lang] || '');
+                                                                                }}
+                                                                                className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
+                                                                            >
+                                                                                {directCostDefs.map((cat, ci) => (
+                                                                                    <option key={ci} value={ci}>{cat[lang]}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div className="w-28">
+                                                                            <input
+                                                                                type="number" min={0}
+                                                                                value={dc.amount || ''}
+                                                                                onChange={(e) => onUpdateData([...allocPath, allocIdx, 'directCosts', dcIdx, 'amount'], e.target.value ? parseFloat(e.target.value) : 0)}
+                                                                                placeholder="€ 0"
+                                                                                className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-right"
+                                                                            />
+                                                                        </div>
+                                                                        <button onClick={() => onRemoveItem([...allocPath, allocIdx, 'directCosts'], dcIdx)} className="text-red-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
+                                                                    </div>
+                                                                ))}
+                                                                {(alloc.directCosts || []).length > 0 && (
+                                                                    <div className="text-right text-xs font-bold text-green-800 mt-1 pr-8">
+                                                                        Σ €{(alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0).toLocaleString()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Indirect Costs */}
+                                                            <div>
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <span className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                                        {tf.indirectCosts || 'Indirect Costs'}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => onAddItem([...allocPath, allocIdx, 'indirectCosts'], { categoryIndex: 0, name: indirectCostDefs[0]?.[lang] || '', percentage: 0, calculatedAmount: 0 })}
+                                                                        className="px-2 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 transition-all"
+                                                                    >
+                                                                        + {t.add || 'Add'}
+                                                                    </button>
+                                                                </div>
+                                                                {(alloc.indirectCosts || []).map((ic, icIdx) => {
+                                                                    const directSum = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
+                                                                    const calcAmount = Math.round(directSum * ((ic.percentage || 0) / 100));
+                                                                    return (
+                                                                        <div key={icIdx} className="flex gap-2 mb-1.5 items-end">
+                                                                            <div className="flex-1">
+                                                                                <select
+                                                                                    value={ic.categoryIndex ?? 0}
+                                                                                    onChange={(e) => {
+                                                                                        const ci = parseInt(e.target.value);
+                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'categoryIndex'], ci);
+                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'name'], indirectCostDefs[ci]?.[lang] || '');
+                                                                                    }}
+                                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
+                                                                                >
+                                                                                    {indirectCostDefs.map((cat, ci) => (
+                                                                                        <option key={ci} value={ci}>{cat[lang]}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </div>
+                                                                            <div className="w-16">
+                                                                                <input
+                                                                                    type="number" min={0} max={100}
+                                                                                    value={ic.percentage || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const pct = e.target.value ? parseFloat(e.target.value) : 0;
+                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'percentage'], pct);
+                                                                                        onUpdateData([...allocPath, allocIdx, 'indirectCosts', icIdx, 'calculatedAmount'], Math.round((alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0) * (pct / 100)));
+                                                                                    }}
+                                                                                    placeholder="%"
+                                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-right"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="w-24 p-1.5 bg-amber-50 border border-amber-200 rounded text-xs font-mono text-right text-amber-800">
+                                                                                €{calcAmount.toLocaleString()}
+                                                                            </div>
+                                                                            <button onClick={() => onRemoveItem([...allocPath, allocIdx, 'indirectCosts'], icIdx)} className="text-red-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                                {(alloc.indirectCosts || []).length > 0 && (
+                                                                    <div className="text-right text-xs font-bold text-amber-800 mt-1 pr-8">
+                                                                        Σ €{(alloc.indirectCosts || []).reduce((s, ic) => {
+                                                                            const dSum = (alloc.directCosts || []).reduce((ss, dc) => ss + (dc.amount || 0), 0);
+                                                                            return s + Math.round(dSum * ((ic.percentage || 0) / 100));
+                                                                        }, 0).toLocaleString()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Allocation Total */}
+                                                            {((alloc.directCosts || []).length > 0 || (alloc.indirectCosts || []).length > 0) && (() => {
+                                                                const dTotal = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
+                                                                const iTotal = (alloc.indirectCosts || []).reduce((s, ic) => {
+                                                                    return s + Math.round(dTotal * ((ic.percentage || 0) / 100));
+                                                                }, 0);
+                                                                return (
+                                                                    <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
+                                                                        <span className="text-xs font-semibold text-slate-500">
+                                                                            {partner?.code || '?'} — {tp.totalCost || 'Total'}:
+                                                                        </span>
+                                                                        <span className="text-sm font-bold text-sky-800">
+                                                                            €{(dTotal + iTotal).toLocaleString()}
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             ))}
                         </div>
 
+                        {/* ═══ MILESTONES ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-amber-100">
                             <SectionHeader title={t.milestones} onAdd={() => onAddItem([...path, wpIndex, 'milestones'], { id: `M${wpIndex + 1}.${(wp.milestones || []).length + 1}`, description: '', date: '' })} addText={t.add} />
                             {(wp.milestones || []).map((milestone, msIndex) => {
@@ -1139,6 +1385,7 @@ const renderActivities = (props) => {
                             })}
                         </div>
 
+                        {/* ═══ DELIVERABLES ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-indigo-100">
                             <SectionHeader title={t.deliverables} onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, title: '', description: '', indicator: '' })} addText={t.add} />
                             {(wp.deliverables || []).map((deliverable, dIndex) => (
@@ -1169,7 +1416,7 @@ const renderActivities = (props) => {
                 </div>
             </div>
 
-            {/* ★ v6.0: Finance section — between PERT and risks */}
+            {/* ★ v6.0: Finance section */}
             {renderFinance(props)}
 
             {renderRisks(props)}
