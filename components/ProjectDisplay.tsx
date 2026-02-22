@@ -693,8 +693,8 @@ const renderPartners = (props) => {
                     {tp.noPartnersYet || 'No partners defined yet.'}
                 </div>
             )}
+             (Array.isArray(partners) ? partners : []).map((partner, index) => { ... })
 
-            {partners.map((partner, index) => (
                 <div key={partner.id || index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <RemoveButton onClick={() => onRemoveItem(['partners'], index)} text={tp.removePartner || t.remove} />
@@ -792,7 +792,7 @@ const renderPartners = (props) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {partners.map((p, i) => (
+                              (Array.isArray(partners) ? partners : []).map((partner, index) => { ... })
                                     <tr key={i} className="border-b border-slate-100 hover:bg-white transition-colors">
                                         <td className="py-2 px-3 font-bold text-sky-700">{p.code}</td>
                                         <td className="py-2 px-3 text-slate-500 text-xs">
