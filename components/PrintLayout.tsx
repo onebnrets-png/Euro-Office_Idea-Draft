@@ -1,8 +1,11 @@
 // components/PrintLayout.tsx
 // ═══════════════════════════════════════════════════════════════
-// Print-only layout component.
-// Renders the complete project in a clean, printable format.
-// Hidden on screen (className="hidden print:block" in App.tsx).
+// v6.1 — 2026-02-22 — NEW: Partnership & Finance sections in Print
+//   - Partner summary table
+//   - Funding model info
+//   - Task-level partner allocations in workplan
+//   - Finance budget overview tables (per WP, per Partner)
+//   - All previous changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
 import React from 'react';
@@ -11,6 +14,13 @@ import { TEXT } from '../locales.ts';
 import GanttChart from './GanttChart.tsx';
 import PERTChart from './PERTChart.tsx';
 import Organigram from './Organigram.tsx';
+import {
+    PM_HOURS_PER_MONTH,
+    CENTRALIZED_DIRECT_COSTS,
+    CENTRALIZED_INDIRECT_COSTS,
+    DECENTRALIZED_DIRECT_COSTS,
+    DECENTRALIZED_INDIRECT_COSTS
+} from '../types.ts';
 
 interface SectionProps {
     title: string;
@@ -79,11 +89,15 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
     const { problemAnalysis, projectIdea, generalObjectives, specificObjectives, activities, outputs, outcomes, impacts, risks, kers, projectManagement } = projectData;
     const STEPS = getSteps(language);
     const t = TEXT[language];
+    const tp = t.partners || {};
+    const tf = t.finance || {};
     const READINESS_LEVELS_DEFINITIONS = getReadinessLevelsDefinitions(language);
+    const partners = projectData.partners || [];
+    const fundingModel = projectData.fundingModel || 'centralized';
+    const lang = language === 'si' ? 'si' : 'en';
 
     const displayLogo = logo || BRAND_ASSETS.logoText;
 
-    // ─── Safe accessor for localized enum values ─────────────────
     const safeCategory = (cat: string | undefined): string => {
         if (!cat) return '';
         const key = cat.toLowerCase();
@@ -95,6 +109,40 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
         const key = level.toLowerCase();
         return t.risks.levels[key] || level;
     };
+
+    // ★ v6.1: Collect all allocations for finance tables
+    const allAllocations: any[] = [];
+    (Array.isArray(activities) ? activities : []).forEach((wp: any) => {
+        (wp.tasks || []).forEach((task: any) => {
+            (task.partnerAllocations || []).forEach((alloc: any) => {
+                const partner = partners.find((p: any) => p.id === alloc.partnerId);
+                const directTotal = (alloc.directCosts || []).reduce((sum: number, dc: any) => sum + (dc.amount || 0), 0);
+                const indirectTotal = (alloc.indirectCosts || []).reduce((sum: number, ic: any) => {
+                    return sum + Math.round(directTotal * ((ic.percentage || 0) / 100));
+                }, 0);
+                allAllocations.push({
+                    wpId: wp.id, taskId: task.id,
+                    partnerCode: partner?.code || '?',
+                    hours: alloc.hours || 0, pm: alloc.pm || 0,
+                    directTotal, indirectTotal, total: directTotal + indirectTotal,
+                });
+            });
+        });
+    });
+
+    const grandDirect = allAllocations.reduce((s, a) => s + a.directTotal, 0);
+    const grandIndirect = allAllocations.reduce((s, a) => s + a.indirectTotal, 0);
+    const grandTotal = grandDirect + grandIndirect;
+    const grandHours = allAllocations.reduce((s, a) => s + a.hours, 0);
+    const grandPM = allAllocations.reduce((s, a) => s + a.pm, 0);
+
+    // Group by WP
+    const wpGroups: Record<string, any[]> = {};
+    allAllocations.forEach(a => { if (!wpGroups[a.wpId]) wpGroups[a.wpId] = []; wpGroups[a.wpId].push(a); });
+
+    // Group by Partner
+    const partnerGroups: Record<string, any[]> = {};
+    allAllocations.forEach(a => { if (!partnerGroups[a.partnerCode]) partnerGroups[a.partnerCode] = []; partnerGroups[a.partnerCode].push(a); });
 
     return (
         <div className="p-8 bg-white text-black font-sans relative">
@@ -145,7 +193,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                 {/* 4. Specific Objectives */}
                 <Section title={STEPS[3].title}><ResultsList items={specificObjectives} prefix="SO" indicatorLabel={t.indicator} /></Section>
 
-                {/* 5. Activities (Includes Workplan, Gantt, Risks) */}
+                {/* 5. Activities */}
                 <Section title={STEPS[4].title}>
                     
                     {/* Management Section */}
@@ -154,6 +202,39 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                             <p className="whitespace-pre-wrap mb-4">{projectManagement.description}</p>
                             <h4 className="font-bold mb-2">{t.management.organigram}</h4>
                             <Organigram structure={projectManagement.structure} activities={activities} language={language} id="organigram-print" />
+                        </SubSection>
+                    )}
+
+                    {/* ★ v6.1: Partnership (Consortium) */}
+                    {partners.length > 0 && (
+                        <SubSection title={tp.title || 'Partnership (Consortium)'}>
+                            <p className="text-sm text-gray-600 mb-3">
+                                <strong>{tp.fundingModel || 'Funding Model'}:</strong>{' '}
+                                {fundingModel === 'centralized' ? (tp.centralized || 'Centralized') : (tp.decentralized || 'Decentralized')}
+                                {projectData.maxPartners && (<> | <strong>{tp.maxPartners || 'Max Partners'}:</strong> {projectData.maxPartners}</>)}
+                            </p>
+                            <table className="w-full border-collapse border border-gray-300 text-sm mb-4">
+                                <thead>
+                                    <tr className="bg-blue-50">
+                                        <th className="border border-gray-300 p-2 text-left">{tp.code || 'Code'}</th>
+                                        <th className="border border-gray-300 p-2 text-left">{tp.partnerName || 'Name'}</th>
+                                        <th className="border border-gray-300 p-2 text-left">{tp.expertise || 'Expertise'}</th>
+                                        <th className="border border-gray-300 p-2 text-left">{tp.partnerType || 'Type'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tp.pmRate || 'PM Rate'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {partners.map((p, i) => (
+                                        <tr key={i} className={i === 0 ? 'bg-amber-50' : ''}>
+                                            <td className="border border-gray-300 p-2 font-bold">{p.code || (i === 0 ? 'CO' : `P${i + 1}`)}</td>
+                                            <td className="border border-gray-300 p-2">{p.name || '—'}</td>
+                                            <td className="border border-gray-300 p-2 text-xs">{p.expertise || '—'}</td>
+                                            <td className="border border-gray-300 p-2">{(tp.partnerTypes || {})[p.partnerType] || '—'}</td>
+                                            <td className="border border-gray-300 p-2 text-right font-mono">{p.pmRate ? `€${p.pmRate.toLocaleString()}` : '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </SubSection>
                     )}
 
@@ -183,6 +264,49 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                                         ))}
                                     </tbody>
                                 </table>
+
+                                {/* ★ v6.1: Task-level Partner Allocations */}
+                                {wp.tasks.map(task => {
+                                    const taskAllocs = task.partnerAllocations || [];
+                                    if (taskAllocs.length === 0) return null;
+                                    return (
+                                        <div key={`alloc-${task.id}`} className="mb-3 ml-4">
+                                            <h6 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">
+                                                {task.id} — {tp.partnerAllocation || 'Partner Allocations'}
+                                            </h6>
+                                            <table className="w-full border-collapse border border-gray-200 text-xs mb-2">
+                                                <thead>
+                                                    <tr className="bg-emerald-50">
+                                                        <th className="border border-gray-200 p-1.5 text-left">{tp.code || 'Partner'}</th>
+                                                        <th className="border border-gray-200 p-1.5 text-right">{tp.hours || 'Hours'}</th>
+                                                        <th className="border border-gray-200 p-1.5 text-right">{tp.pm || 'PM'}</th>
+                                                        <th className="border border-gray-200 p-1.5 text-right">{tf.directCosts || 'Direct'}</th>
+                                                        <th className="border border-gray-200 p-1.5 text-right">{tf.indirectCosts || 'Indirect'}</th>
+                                                        <th className="border border-gray-200 p-1.5 text-right">{tf.grandTotal || 'Total'}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {taskAllocs.map((alloc, ai) => {
+                                                        const partner = partners.find(p => p.id === alloc.partnerId);
+                                                        const dTotal = (alloc.directCosts || []).reduce((s, dc) => s + (dc.amount || 0), 0);
+                                                        const iTotal = (alloc.indirectCosts || []).reduce((s, ic) => s + Math.round(dTotal * ((ic.percentage || 0) / 100)), 0);
+                                                        return (
+                                                            <tr key={ai}>
+                                                                <td className="border border-gray-200 p-1.5 font-bold">{partner?.code || '?'}</td>
+                                                                <td className="border border-gray-200 p-1.5 text-right font-mono">{alloc.hours || 0}</td>
+                                                                <td className="border border-gray-200 p-1.5 text-right font-mono">{(alloc.pm || 0).toFixed(1)}</td>
+                                                                <td className="border border-gray-200 p-1.5 text-right font-mono">€{dTotal.toLocaleString()}</td>
+                                                                <td className="border border-gray-200 p-1.5 text-right font-mono">€{iTotal.toLocaleString()}</td>
+                                                                <td className="border border-gray-200 p-1.5 text-right font-mono font-bold">€{(dTotal + iTotal).toLocaleString()}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })}
+
                                 {wp.milestones?.length > 0 && wp.milestones.some(m => m.description) && (
                                     <div className="mb-2">
                                         <h5 className="font-bold text-gray-700">{t.milestones}</h5>
@@ -203,7 +327,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                         ))}
                     </SubSection>
 
-                    {/* Gantt Chart (Visual) */}
+                    {/* Gantt Chart */}
                     <div style={{ pageBreakInside: 'avoid', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                          <h3 className="text-xl font-semibold text-gray-800 mb-2">{t.subSteps.ganttChart}</h3>
                          <div className="border border-gray-300 rounded overflow-hidden">
@@ -211,7 +335,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                          </div>
                     </div>
 
-                    {/* PERT Chart (Visual) */}
+                    {/* PERT Chart */}
                     <div style={{ pageBreakInside: 'avoid', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                          <h3 className="text-xl font-semibold text-gray-800 mb-2">{t.subSteps.pertChart}</h3>
                          <div className="border border-gray-300 rounded overflow-hidden">
@@ -219,7 +343,119 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                          </div>
                     </div>
 
-                    {/* Risks — NOW SAFE against undefined category/likelihood/impact */}
+                    {/* ★ v6.1: Finance (Budget) Overview */}
+                    {allAllocations.length > 0 && (
+                        <SubSection title={tf.title || 'Finance (Budget)'}>
+                            <p className="text-sm text-gray-600 mb-3">
+                                <strong>{tf.costModel || 'Model'}:</strong>{' '}
+                                {fundingModel === 'centralized' ? (tf.centralizedModel || 'Centralized') : (tf.decentralizedModel || 'Decentralized')}
+                            </p>
+
+                            {/* Grand Totals */}
+                            <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+                                <div className="bg-green-50 border border-green-200 rounded p-3">
+                                    <p className="text-xs font-bold text-green-700 uppercase">{tf.totalDirectCosts || 'Total Direct'}</p>
+                                    <p className="text-lg font-bold text-green-800">€{grandDirect.toLocaleString()}</p>
+                                </div>
+                                <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                                    <p className="text-xs font-bold text-amber-700 uppercase">{tf.totalIndirectCosts || 'Total Indirect'}</p>
+                                    <p className="text-lg font-bold text-amber-800">€{grandIndirect.toLocaleString()}</p>
+                                </div>
+                                <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                                    <p className="text-xs font-bold text-blue-700 uppercase">{tf.grandTotal || 'Grand Total'}</p>
+                                    <p className="text-lg font-bold text-blue-800">€{grandTotal.toLocaleString()}</p>
+                                </div>
+                            </div>
+
+                            {/* Per WP Table */}
+                            <h4 className="font-bold text-gray-700 mb-2">{tf.perWP || 'Per Work Package'}</h4>
+                            <table className="w-full border-collapse border border-gray-300 text-sm mb-4">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-300 p-2 text-left">WP</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.directCosts || 'Direct'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.indirectCosts || 'Indirect'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.grandTotal || 'Total'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tp.totalHours || 'Hours'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tp.totalPM || 'PM'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.entries(wpGroups).map(([wpId, items]) => {
+                                        const d = items.reduce((s, a) => s + a.directTotal, 0);
+                                        const ind = items.reduce((s, a) => s + a.indirectTotal, 0);
+                                        const h = items.reduce((s, a) => s + a.hours, 0);
+                                        const pm = items.reduce((s, a) => s + a.pm, 0);
+                                        return (
+                                            <tr key={wpId}>
+                                                <td className="border border-gray-300 p-2 font-bold">{wpId}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">€{d.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">€{ind.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono font-bold">€{(d + ind).toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">{h.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">{pm.toFixed(1)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-gray-100 font-bold">
+                                        <td className="border border-gray-300 p-2">{tf.grandTotal || 'TOTAL'}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandDirect.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandIndirect.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandTotal.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">{grandHours.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">{grandPM.toFixed(1)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+
+                            {/* Per Partner Table */}
+                            <h4 className="font-bold text-gray-700 mb-2">{tf.perPartner || 'Per Partner'}</h4>
+                            <table className="w-full border-collapse border border-gray-300 text-sm">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-300 p-2 text-left">{tp.code || 'Partner'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.directCosts || 'Direct'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.indirectCosts || 'Indirect'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tf.grandTotal || 'Total'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tp.totalHours || 'Hours'}</th>
+                                        <th className="border border-gray-300 p-2 text-right">{tp.totalPM || 'PM'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.entries(partnerGroups).map(([code, items]) => {
+                                        const d = items.reduce((s, a) => s + a.directTotal, 0);
+                                        const ind = items.reduce((s, a) => s + a.indirectTotal, 0);
+                                        const h = items.reduce((s, a) => s + a.hours, 0);
+                                        const pm = items.reduce((s, a) => s + a.pm, 0);
+                                        return (
+                                            <tr key={code}>
+                                                <td className="border border-gray-300 p-2 font-bold">{code}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">€{d.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">€{ind.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono font-bold">€{(d + ind).toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">{h.toLocaleString()}</td>
+                                                <td className="border border-gray-300 p-2 text-right font-mono">{pm.toFixed(1)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-gray-100 font-bold">
+                                        <td className="border border-gray-300 p-2">{tf.grandTotal || 'TOTAL'}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandDirect.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandIndirect.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">€{grandTotal.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">{grandHours.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-mono">{grandPM.toFixed(1)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </SubSection>
+                    )}
+
+                    {/* Risks */}
                     <SubSection title={t.subSteps.riskMitigation}>
                         {risks.map((risk, i) => risk.description && (
                             <div key={i} className="mb-4 border-b border-gray-100 pb-2">
