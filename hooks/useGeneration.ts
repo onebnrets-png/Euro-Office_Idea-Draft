@@ -495,6 +495,7 @@ export const useGeneration = ({
         const subMapping = SUB_SECTION_MAP[sectionKey];
 
         // ★ v4.2: Sub-section generation — generate ONLY a specific sub-part
+        // ★ v4.2: Sub-section generation — generate ONLY a specific sub-part
         if (subMapping) {
           generatedData = await generateSectionContent(
             sectionKey,
@@ -502,6 +503,68 @@ export const useGeneration = ({
             language,
             mode
           );
+
+        // ★ v7.1: Partner Allocations — AI generates allocations for all tasks
+        } else if (sectionKey === 'partnerAllocations') {
+          const pa_partners = Array.isArray(projectData.partners) ? projectData.partners : [];
+          const pa_activities = Array.isArray(projectData.activities) ? projectData.activities : [];
+
+          if (pa_partners.length === 0 || pa_activities.length === 0) {
+            setModalConfig({
+              isOpen: true,
+              title: language === 'si' ? 'Manjkajo podatki' : 'Missing Data',
+              message: language === 'si'
+                ? 'Za generiranje alokacij partnerjev potrebujete definirane partnerje IN delovne pakete z nalogami.\n\nNajprej generirajte partnerje (Konzorcij) in aktivnosti (Delovni načrt).'
+                : 'To generate partner allocations you need defined partners AND work packages with tasks.\n\nFirst generate Partners (Consortium) and Activities (Work Plan).',
+              confirmText: language === 'si' ? 'V redu' : 'OK',
+              secondaryText: '',
+              cancelText: '',
+              onConfirm: () => closeModal(),
+              onSecondary: null,
+              onCancel: () => closeModal(),
+            });
+            setIsLoading(false);
+            return;
+          }
+
+          setIsLoading(
+            language === 'si'
+              ? 'Generiram alokacije partnerjev na naloge...'
+              : 'Generating partner allocations for tasks...'
+          );
+
+          const allocResult = await generatePartnerAllocations(
+            projectData,
+            language,
+            (msg: string) => setIsLoading(msg)
+          );
+
+          // Merge allocations into activities
+          const updatedActivities = pa_activities.map((wp: any) => ({
+            ...wp,
+            tasks: (wp.tasks || []).map((task: any) => {
+              const taskAlloc = allocResult.find(
+                (a: any) => a.taskId === task.id
+              );
+              if (taskAlloc && Array.isArray(taskAlloc.allocations) && taskAlloc.allocations.length > 0) {
+                return {
+                  ...task,
+                  partnerAllocations: taskAlloc.allocations,
+                };
+              }
+              return task;
+            }),
+          }));
+
+          const newAllocData = { ...projectData, activities: updatedActivities };
+          setProjectData(newAllocData);
+          setHasUnsavedTranslationChanges(true);
+
+          const totalAllocations = allocResult.reduce((s: number, t: any) => s + (t.allocations?.length || 0), 0);
+          console.log(`[useGeneration] Partner allocations applied: ${totalAllocations} allocations across ${allocResult.length} tasks`);
+
+          setIsLoading(false);
+          return;
 
         // ★ v5.0 / v7.0: Partners (Consortium) generation
         } else if (sectionKey === 'partners') {
