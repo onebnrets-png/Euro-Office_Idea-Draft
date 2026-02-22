@@ -651,7 +651,27 @@ Must link to EU policy objectives.
 
 SECTION 6D — KEY EXPLOITABLE RESULTS (4–6 KERs)
 Title format: specific asset/product name (noun phrase).
-Each includes exploitation strategy.`
+Each includes exploitation strategy.`,
+
+  chapter5b_partners: `CHAPTER 5B — PARTNERSHIP (CONSORTIUM)
+
+The Partnership section defines the consortium composition for the EU project.
+AI generates PARTNER TYPES, not specific organisation names.
+
+STRUCTURE:
+Each partner entry includes: id, code (P1, P2...), name (type description),
+expertise (2-4 sentences), and pmRate (EUR per person-month).
+
+P1 is always the Lead Partner / Coordinator.
+
+RULES:
+- Partner "name" field = ORGANISATION TYPE, e.g., "Research University in Marine Biology"
+- NEVER use real organisation names (no "University of Ljubljana", no "Fraunhofer", etc.)
+- PM rates must be realistic for the partner type
+- Consortium must cover all WP competences
+- Include a mix of academia, industry/SME, public sector, and civil society as needed
+- Number of partners is determined by project complexity and scope`
+
 };
 
 // ───────────────────────────────────────────────────────────────
