@@ -29,18 +29,67 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
 
   const wpPfx = lang === 'si' ? 'DS' : 'WP';
   const tskPfx = lang === 'si' ? 'N' : 'T';
+  const wrongWpPfx = lang === 'si' ? 'WP' : 'DS';
+  const wrongTskPfx = lang === 'si' ? 'T' : 'N';
 
-// Check if migration is needed — look at first WP id AND first Task id
-  const firstWpId = (activities[0]?.id || '').toString();
-  const firstTaskId = (activities[0]?.tasks?.[0]?.id || '').toString();
-  const wpCorrect =
-    (lang === 'si' && firstWpId.startsWith('DS')) ||
-    (lang === 'en' && firstWpId.startsWith('WP'));
-  const taskCorrect =
-    !firstTaskId ||
-    (lang === 'si' && firstTaskId.startsWith('N')) ||
-    (lang === 'en' && firstTaskId.startsWith('T'));
-  if (wpCorrect && taskCorrect) return data;
+  // Check ALL WP and Task IDs — if ANY has wrong prefix, migrate everything
+  let needsMigration = false;
+  for (const wp of activities) {
+    const wpId = (wp.id || '').toString();
+    if (wpId.startsWith(wrongWpPfx)) { needsMigration = true; break; }
+    for (const task of (wp.tasks || [])) {
+      const taskId = (task.id || '').toString();
+      if (taskId.startsWith(wrongTskPfx)) { needsMigration = true; break; }
+    }
+    if (needsMigration) break;
+  }
+
+  if (!needsMigration) return data;
+
+  console.log(`[PrefixMigration] Migrating activity prefixes to ${lang.toUpperCase()} (${wpPfx}/${tskPfx})`);
+
+  // Build old→new ID map for dependency fixes
+  const idMap = new Map<string, string>();
+
+  const migratedActivities = activities.map((wp: any, wpIdx: number) => {
+    const newWpId = `${wpPfx}${wpIdx + 1}`;
+    if (wp.id && wp.id !== newWpId) idMap.set(wp.id, newWpId);
+
+    const tasks = (wp.tasks || []).map((task: any, tIdx: number) => {
+      const newTaskId = `${tskPfx}${wpIdx + 1}.${tIdx + 1}`;
+      if (task.id && task.id !== newTaskId) idMap.set(task.id, newTaskId);
+      return { ...task, id: newTaskId };
+    });
+
+    const milestones = (wp.milestones || []).map((ms: any, mIdx: number) => ({
+      ...ms,
+      id: `M${wpIdx + 1}.${mIdx + 1}`,
+    }));
+
+    const deliverables = (wp.deliverables || []).map((del: any, dIdx: number) => ({
+      ...del,
+      id: `D${wpIdx + 1}.${dIdx + 1}`,
+    }));
+
+    return { ...wp, id: newWpId, tasks, milestones, deliverables };
+  });
+
+  // Fix dependency predecessorId references
+  migratedActivities.forEach((wp: any) => {
+    (wp.tasks || []).forEach((task: any) => {
+      if (task.dependencies && Array.isArray(task.dependencies)) {
+        task.dependencies = task.dependencies.map((dep: any) => ({
+          ...dep,
+          predecessorId: idMap.get(dep.predecessorId) || dep.predecessorId,
+        }));
+      }
+    });
+  });
+
+  console.log(`[PrefixMigration] Migrated ${idMap.size} IDs (${[...idMap.entries()].slice(0, 6).map(([o, n]) => `${o}→${n}`).join(', ')}${idMap.size > 6 ? '...' : ''})`);
+
+  return { ...data, activities: migratedActivities };
+};
 
   console.log(`[PrefixMigration] Migrating activity prefixes to ${lang.toUpperCase()} (${wpPfx}/${tskPfx})`);
 
