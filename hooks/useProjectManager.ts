@@ -278,12 +278,14 @@ export const useProjectManager = ({
   }, [projectData, language]);
 
   // ─── Auto-save (debounced 2s) ─────────────────────────────────
+  // ★ v1.3: Skip auto-save during loadActiveProject to prevent saving migrated data prematurely
 
   useEffect(() => {
     // Only auto-save if a project is actually loaded
     if (!currentProjectId) return;
     
     const timer = setTimeout(async () => {
+      if (isLoadingProjectRef.current) return;
       if (currentUser && hasContent(projectData)) {
         await storageService.saveProject(projectData, language, currentProjectId);
       }
