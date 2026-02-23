@@ -41,6 +41,7 @@ import { organizationService } from '../services/organizationService.ts';
 import type { OrganizationMember } from '../services/organizationService.ts';
 import { knowledgeBaseService } from '../services/knowledgeBaseService.ts';
 import { getEffectiveOverrideSync } from '../services/globalInstructionsService.ts';
+import { INTERVENTION_LOGIC_FRAMEWORK, HUMANIZATION_RULES, ACADEMIC_RIGOR_RULES } from '../services/Instructions.ts';
 import { TEXT } from '../locales.ts';
 import { generateContent, getRateLimitStatus } from '../services/aiProvider.ts';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
