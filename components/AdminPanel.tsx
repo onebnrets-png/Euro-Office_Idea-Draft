@@ -831,12 +831,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <label style={labelStyle}>{aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'} API Key</label>
                 <input type="password" value={aiProvider === 'gemini' ? geminiKey : aiProvider === 'openai' ? openaiKey : openRouterKey} onChange={(e) => { if (aiProvider === 'gemini') setGeminiKey(e.target.value); else if (aiProvider === 'openai') setOpenaiKey(e.target.value); else setOpenRouterKey(e.target.value); }} placeholder={`Enter ${aiProvider} API key...`} style={inputStyle} />
               </div>
-              <div style={{ marginBottom: '16px' }}>
+                            <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{language === 'si' ? 'Glavni model (generiranje vsebine)' : 'Primary Model (content generation)'}</label>
                 <select value={modelName} onChange={(e) => setModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
+                <div style={{ marginTop: '6px', padding: '8px 12px', borderRadius: radii.md, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, fontSize: typography.fontSize.xs, color: secondaryInfoText }}>
+                  {language === 'si'
+                    ? `💡 Priporočen: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro — najboljši za kompleksno generiranje' : aiProvider === 'openai' ? 'GPT-5 Mini — odlično razmerje cena/kvaliteta' : 'DeepSeek V3.2 — top open-source model'}`
+                    : `💡 Recommended: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro — best for complex generation' : aiProvider === 'openai' ? 'GPT-5 Mini — great price/quality ratio' : 'DeepSeek V3.2 — top open-source model'}`}
+                  {(() => {
+                    const recommended: Record<string, string> = { gemini: 'gemini-2.5-pro', openai: 'gpt-5-mini', openrouter: 'deepseek/deepseek-v3.2' };
+                    return modelName !== recommended[aiProvider] ? (
+                      <button
+                        type="button"
+                        onClick={() => setModelName(recommended[aiProvider])}
+                        style={{ marginLeft: '8px', padding: '2px 10px', borderRadius: radii.md, border: `1px solid ${secondaryInfoBorder}`, background: 'transparent', color: secondaryInfoText, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}
+                      >
+                        {language === 'si' ? 'Uporabi priporočenega' : 'Use recommended'}
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
               </div>
+
 
               {/* ★ v4.1: Light Model for translations, chatbot, field generation */}
               <div style={{ marginBottom: '16px' }}>
