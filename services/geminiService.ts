@@ -1152,10 +1152,12 @@ export const generateActivitiesPerWP = async (
     consortiumRules ? `\n${consortiumRules}` : '',
     resourceRules ? `\n${resourceRules}` : '',
     `\n${context}`,
-    `\nTASK: Create a SCAFFOLD for work packages. Return a JSON array of objects with ONLY: id, title, dateRange (startDate, endDate). Do NOT generate tasks, milestones, or deliverables.
+        `\nTASK: Create a SCAFFOLD for work packages. Return a JSON array of objects with ONLY: id, title, dateRange (startDate, endDate). Do NOT generate tasks, milestones, or deliverables.
 MANDATORY WPs: Second-to-last WP MUST be "Dissemination, Communication & Exploitation", last WP MUST be "Project Management & Coordination". Both must span the full project duration (${pStart} to ${pEnd}).
 WP1 MUST be foundational/analytical and include a "Capitalisation and Synergies" task.
-Total 5-8 WPs.`,
+Total 5-8 WPs.
+WP/TASK ID PREFIX RULES: ${language === 'si' ? 'Use DS prefix for WP IDs (DS1, DS2...) and N prefix for Task IDs (N1.1, N1.2...).' : 'Use WP prefix for WP IDs (WP1, WP2...) and T prefix for Task IDs (T1.1, T1.2...).'}`,
+
     `\n${temporalRule}`
   ].filter(Boolean).join('\n');
 
