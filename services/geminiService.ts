@@ -1212,7 +1212,9 @@ WP/TASK ID PREFIX RULES: ${language === 'si' ? 'Use DS prefix for WP IDs (DS1, D
       previousWPsContext,
       `\nSCAFFOLD:\n${JSON.stringify(scaffold, null, 2)}`,
       `\nTASK: Generate the COMPLETE work package ${wpId} ("${wpScaffold.title}").
+WP/TASK ID PREFIX RULES: ${language === 'si' ? 'Use DS prefix for WP IDs (DS1, DS2...) and N prefix for Task IDs (N1.1, N1.2...). Milestone IDs: M1.1, Deliverable IDs: D1.1.' : 'Use WP prefix for WP IDs (WP1, WP2...) and T prefix for Task IDs (T1.1, T1.2...). Milestone IDs: M1.1, Deliverable IDs: D1.1.'}
 Return ONE JSON object with: id, title, tasks (3-5 tasks with id, title, description, startDate, endDate, dependencies), milestones (1-2), deliverables (1-3 with id, title, description, indicator).
+
 All task dates must be within ${wpScaffold.dateRange?.startDate || pStart} - ${wpScaffold.dateRange?.endDate || pEnd}.
 Consider dependencies on tasks in previous WPs.
 Every deliverable indicator MUST be BINARY and verifiable (Lump Sum compliant).
