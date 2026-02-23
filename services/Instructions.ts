@@ -682,7 +682,20 @@ MILESTONES:
 - Milestone date in YYYY-MM-DD format. Place at logical completion points.
 - Milestone indicators MUST also be BINARY and verifiable (Lump Sum compliant).
 
-No markdown. Write like an experienced EU project consultant.`
+No markdown. Write like an experienced EU project consultant.
+
+WP AND TASK ID PREFIX RULES (LANGUAGE-DEPENDENT — MANDATORY):
+When the LANGUAGE DIRECTIVE specifies Slovenian output:
+- Work Package IDs MUST use "DS" prefix: DS1, DS2, DS3, ...
+- Task IDs MUST use "N" prefix: N1.1, N1.2, N2.1, ...
+- Milestone IDs: M1.1, M2.1, ... (unchanged)
+- Deliverable IDs: D1.1, D2.1, ... (unchanged)
+When the LANGUAGE DIRECTIVE specifies English output:
+- Work Package IDs MUST use "WP" prefix: WP1, WP2, WP3, ...
+- Task IDs MUST use "T" prefix: T1.1, T1.2, T2.1, ...
+- Milestone IDs: M1.1, M2.1, ... (unchanged)
+- Deliverable IDs: D1.1, D2.1, ... (unchanged)
+This is NON-NEGOTIABLE — wrong prefixes are a FATAL ERROR.`
   },
   outputs: {
     en: `Generate 5–8 concrete project outputs (direct deliverables).
