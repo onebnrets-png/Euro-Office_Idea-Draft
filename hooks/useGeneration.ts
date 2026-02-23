@@ -737,7 +737,6 @@ export const useGeneration = ({
             }
 
             const wpPfx = language === 'si' ? 'DS' : 'WP';
-              const wpPfx = language === 'si' ? 'DS' : 'WP';
             augmentedWPs.forEach((wp, idx) => {
               wp.id = `${wpPfx}${idx + 1}`;
             });
