@@ -3,11 +3,17 @@
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
 //
+// v1.3 — 2026-02-23 — FIX: Project duplication/loss race condition
+//   - NEW: isLoadingProjectRef guard — prevents auto-save and sync effect
+//     from interfering during loadActiveProject
+//   - FIX: setProjectVersions now called BEFORE setProjectData in loadActiveProject
+//   - FIX: sync useEffect and auto-save both skip when isLoadingProjectRef is true
+//   - Resolves: project data mixing between EN/SI, project "disappearing"
+//
 // v1.2 — 2026-02-23 — FIX: WP/Task prefix migration on project load
 //   - NEW: migrateActivityPrefixes() — auto-fixes WP/Task IDs per language
 //   - EN: WP1, T1.1 | SI: DS1, N1.1
 //   - Runs on every loadActiveProject, zero overhead if already correct
-//
 // v1.1 — 2026-02-21 — FIX: IMPORT SOURCE
 //   - CHANGED: detectProjectLanguage imported from utils.ts instead of
 //     geminiService.ts (was never re-exported from geminiService)
