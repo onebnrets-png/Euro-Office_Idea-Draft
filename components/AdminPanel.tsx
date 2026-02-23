@@ -401,6 +401,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       setOpenaiKey(storageService.getOpenAIKey() || '');
       const model = storageService.getCustomModel();
       setModelName(model || (provider === 'gemini' ? 'gemini-3-pro-preview' : provider === 'openai' ? 'gpt-5.2' : 'deepseek/deepseek-v3.2'));
+      setSecondaryModelName(storageService.getSecondaryModel() || '');  // ★ v4.0
       setCustomLogo(storageService.getCustomLogo());
       setAppInstructions(JSON.parse(JSON.stringify(getFullInstructions())));
       setInstructionsChanged(false);
