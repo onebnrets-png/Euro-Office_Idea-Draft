@@ -201,28 +201,39 @@ export const useProjectManager = ({
   // ─── Load active project ──────────────────────────────────────
   // ★ v1.2: Added migrateActivityPrefixes call after safeMerge
 
-  const loadActiveProject = useCallback(
+    const loadActiveProject = useCallback(
     async (specificId: string | null = null) => {
-      const loadedData = await storageService.loadProject(language, specificId);
+      // ★ v1.3: Guard — prevent auto-save and sync effect during load
+      isLoadingProjectRef.current = true;
 
-      if (loadedData) {
-        // ★ v1.2: Migrate WP/Task prefixes to match current language
-        const mergedData = migrateActivityPrefixes(safeMerge(loadedData), language);
-        setProjectData(mergedData);
+      try {
+        const loadedData = await storageService.loadProject(language, specificId);
 
-        const otherLang = language === 'en' ? 'si' : 'en';
-        const otherData = await storageService.loadProject(otherLang, specificId);
-        const mergedOther = otherData ? migrateActivityPrefixes(safeMerge(otherData), otherLang) : null;
-        setProjectVersions({
-          en: language === 'en' ? mergedData : mergedOther,
-          si: language === 'si' ? mergedData : mergedOther,
-        });
-      } else {
-        setProjectData(createEmptyProjectData());
+        if (loadedData) {
+          // ★ v1.2: Migrate WP/Task prefixes to match current language
+          const mergedData = migrateActivityPrefixes(safeMerge(loadedData), language);
+
+          const otherLang = language === 'en' ? 'si' : 'en';
+          const otherData = await storageService.loadProject(otherLang, specificId);
+          const mergedOther = otherData ? migrateActivityPrefixes(safeMerge(otherData), otherLang) : null;
+
+          // ★ v1.3: Set projectVersions BEFORE projectData to prevent sync effect from overwriting
+          setProjectVersions({
+            en: language === 'en' ? mergedData : mergedOther,
+            si: language === 'si' ? mergedData : mergedOther,
+          });
+          setProjectData(mergedData);
+        } else {
+          setProjectData(createEmptyProjectData());
+          setProjectVersions({ en: null, si: null });
+        }
+
+        const activeId = storageService.getCurrentProjectId();
+        setCurrentProjectId(activeId);
+      } finally {
+        // ★ v1.3: Release guard after a tick to let React batch the state updates
+        setTimeout(() => { isLoadingProjectRef.current = false; }, 100);
       }
-
-      const activeId = storageService.getCurrentProjectId();
-      setCurrentProjectId(activeId);
     },
     [language]
   );
