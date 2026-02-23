@@ -92,7 +92,7 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
     });
   });
 
-    console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
+console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
 
   // ★ v1.2: Migrate partner coordinator code (EN=CO, SI=KO)
   let migratedPartners = data.partners;
@@ -109,8 +109,6 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
   }
 
   return { ...data, activities: migratedActivities, partners: migratedPartners };
-
-};
 
 interface UseProjectManagerProps {
   language: 'en' | 'si';
