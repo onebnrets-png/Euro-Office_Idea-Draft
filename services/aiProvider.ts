@@ -1,11 +1,13 @@
 // services/aiProvider.ts
 // ═══════════════════════════════════════════════════════════════
-// Universal AI Provider Abstraction Layer – v3.0 (2026-02-18)
+// Universal AI Provider Abstraction Layer – v4.0 (2026-02-23)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v4.0 – NEW: Dual-model support (primary + light model)
+//         Added AITaskType, getProviderConfigForTask(),
+//         RECOMMENDED_LIGHT_MODELS, generateContentForTask()
+//         Existing generateContent() unchanged (backward compat)
 // v3.0 – NEW: OpenAI (ChatGPT) provider support
-//         Added OPENAI_MODELS, generateWithOpenAI adapter,
-//         validateOpenAI, hasValidProviderKey for 'openai'
 // v2.0 – FIX: Dynamic max_tokens for OpenRouter
 // v1.0 – Initial version.
 // ═══════════════════════════════════════════════════════════════
@@ -17,6 +19,9 @@ import { OPENROUTER_SYSTEM_PROMPT } from './Instructions.ts';
 // ─── TYPES ───────────────────────────────────────────────────────
 
 export type AIProviderType = 'gemini' | 'openrouter' | 'openai';
+
+// ★ v4.0: Task types for dual-model routing
+export type AITaskType = 'generation' | 'translation' | 'chatbot' | 'field' | 'allocation' | 'summary';
 
 export interface AIProviderConfig {
   provider: AIProviderType;
@@ -30,11 +35,27 @@ export interface AIGenerateOptions {
   jsonMode?: boolean;
   temperature?: number;
   sectionKey?: string;
+  taskType?: AITaskType;  // ★ v4.0
 }
 
 export interface AIGenerateResult {
   text: string;
 }
+
+// ─── ★ v4.0: RECOMMENDED LIGHT MODELS PER PROVIDER ──────────────
+// When user selects a primary model but no secondary, we auto-suggest
+// the best economy model from the SAME provider.
+
+export const RECOMMENDED_LIGHT_MODELS: Record<AIProviderType, { id: string; name: string }> = {
+  gemini:     { id: 'gemini-2.5-flash-lite',  name: 'Gemini 2.5 Flash-Lite ($0.10/1M)' },
+  openai:     { id: 'gpt-4.1-nano',           name: 'GPT-4.1 Nano ($0.05/1M)' },
+  openrouter: { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2 (~$0.14/1M)' },
+};
+
+// ★ v4.0: Which task types use the light (secondary) model
+const LIGHT_MODEL_TASKS: Set<AITaskType> = new Set([
+  'translation', 'chatbot', 'field'
+]);
 
 // ─── ★ FIX v2.0: DYNAMIC MAX_TOKENS PER SECTION ─────────────────
 
@@ -79,25 +100,16 @@ export const GEMINI_MODELS = [
 // ─── ★ v3.0: OPENAI MODELS ──────────────────────────────────────
 
 export const OPENAI_MODELS = [
-  // ═══ GPT-5.2 (Latest Flagship) ═══
   { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Best model for coding and agentic tasks across industries' },
   { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Smarter and more precise responses' },
-
-  // ═══ GPT-5.1 ═══
   { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Coding and agentic tasks with configurable reasoning effort' },
-
-  // ═══ GPT-5 ═══
   { id: 'gpt-5', name: 'GPT-5', description: 'Intelligent reasoning model for complex tasks' },
   { id: 'gpt-5-pro', name: 'GPT-5 Pro', description: 'Smarter and more precise version of GPT-5' },
   { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Faster, cost-efficient version of GPT-5' },
   { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Fastest, most cost-efficient version of GPT-5' },
-
-  // ═══ GPT-4.1 ═══
   { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Smartest non-reasoning model' },
   { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', description: 'Smaller, faster version of GPT-4.1' },
   { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Fastest, most cost-efficient version of GPT-4.1' },
-
-  // ═══ GPT-4o (Legacy) ═══
   { id: 'gpt-4o', name: 'GPT-4o', description: 'Fast, intelligent, flexible GPT model' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast, affordable small model for focused tasks' },
 ];
@@ -152,10 +164,39 @@ export function getProviderConfig(): AIProviderConfig {
   return { provider, apiKey, model };
 }
 
+// ★ v4.0: Get config with task-aware model selection
+export function getProviderConfigForTask(taskType?: AITaskType): AIProviderConfig {
+  const baseConfig = getProviderConfig();
+
+  // If no taskType or not a "light" task, use primary model
+  if (!taskType || !LIGHT_MODEL_TASKS.has(taskType)) {
+    return baseConfig;
+  }
+
+  // Check if user has configured a secondary (light) model
+  const secondaryModel = storageService.getSecondaryModel();
+
+  if (secondaryModel && secondaryModel.trim() !== '') {
+    // User explicitly chose a light model — use it with same provider + API key
+    return { ...baseConfig, model: secondaryModel };
+  }
+
+  // No secondary model configured — fall back to primary model (no change)
+  return baseConfig;
+}
+
 export function getDefaultModel(provider: AIProviderType): string {
   if (provider === 'openrouter') return 'deepseek/deepseek-v3.2';
   if (provider === 'openai') return 'gpt-5.2';
   return 'gemini-3-pro-preview';
+}
+
+// ★ v4.0: Get the model list for a provider (used in AdminPanel dropdowns)
+export function getModelsForProvider(provider: AIProviderType): { id: string; name: string; description: string }[] {
+  if (provider === 'gemini') return GEMINI_MODELS;
+  if (provider === 'openai') return OPENAI_MODELS;
+  if (provider === 'openrouter') return OPENROUTER_MODELS;
+  return [];
 }
 
 // ─── VALIDATION ──────────────────────────────────────────────────
@@ -181,7 +222,6 @@ export async function validateProviderKey(provider: AIProviderType, apiKey: stri
       return response.ok;
     }
 
-    // ★ v3.0: OpenAI validation — test with /v1/models endpoint
     if (provider === 'openai') {
       if (!apiKey.startsWith('sk-') || apiKey.length < 20) return false;
       const response = await fetch('https://api.openai.com/v1/models', {
@@ -213,12 +253,18 @@ export function hasValidProviderKey(): boolean {
 
 // ─── GENERATION ──────────────────────────────────────────────────
 
+// ★ v4.0: Original function preserved for backward compatibility
 export async function generateContent(options: AIGenerateOptions): Promise<AIGenerateResult> {
-  const config = getProviderConfig();
+  // ★ v4.0: If taskType is provided, use task-aware routing
+  const config = options.taskType
+    ? getProviderConfigForTask(options.taskType)
+    : getProviderConfig();
 
   if (!config.apiKey) {
     throw new Error('MISSING_API_KEY');
   }
+
+  console.log(`[aiProvider] ${options.taskType || 'default'} → model: ${config.model}`);
 
   if (config.provider === 'gemini') {
     return generateWithGemini(config, options);
@@ -314,7 +360,7 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
       if (response.status === 402) throw new Error(`INSUFFICIENT_CREDITS|openrouter|Requested ${maxTokens} tokens for "${options.sectionKey || 'unknown'}". ${errorMsg}`);
       if (response.status === 503) throw new Error(`MODEL_OVERLOADED|openrouter|Model ${config.model} is temporarily unavailable. ${errorMsg}`);
       if (response.status === 500 || response.status === 502) throw new Error(`SERVER_ERROR|openrouter|${errorMsg}`);
-            if (response.status === 408) throw new Error(`TIMEOUT|openrouter|Request timed out. ${errorMsg}`);
+      if (response.status === 408) throw new Error(`TIMEOUT|openrouter|Request timed out. ${errorMsg}`);
       throw new Error(`UNKNOWN_ERROR|openrouter|HTTP ${response.status}: ${errorMsg}`);
     }
 
@@ -350,11 +396,10 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
 async function generateWithOpenAI(config: AIProviderConfig, options: AIGenerateOptions): Promise<AIGenerateResult> {
   const messages: any[] = [];
 
-  // System prompt for JSON mode
   if (options.jsonSchema || options.jsonMode) {
     messages.push({
       role: 'system',
-      content: OPENROUTER_SYSTEM_PROMPT  // Same structured JSON instructions work for OpenAI
+      content: OPENROUTER_SYSTEM_PROMPT
     });
   }
 
@@ -427,7 +472,6 @@ async function generateWithOpenAI(config: AIProviderConfig, options: AIGenerateO
 }
 
 // ─── ERROR HANDLING ──────────────────────────────────────────────
-// (ostane IDENTIČNO kot v v2.0 — brez sprememb)
 
 function handleProviderError(e: any, provider: string): never {
   const msg = e.message || e.toString();
