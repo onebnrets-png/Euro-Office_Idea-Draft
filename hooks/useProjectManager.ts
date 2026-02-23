@@ -30,12 +30,18 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
   const wpPfx = lang === 'si' ? 'DS' : 'WP';
   const tskPfx = lang === 'si' ? 'N' : 'T';
 
-  // Check if migration is needed — look at first WP id
-  const firstId = (activities[0]?.id || '').toString();
-  const alreadyCorrect =
-    (lang === 'si' && firstId.startsWith('DS')) ||
-    (lang === 'en' && firstId.startsWith('WP'));
-  if (alreadyCorrect) return data;
+// Check if migration is needed — look at first WP id AND first Task id
+  const firstWpId = (activities[0]?.id || '').toString();
+  const firstTaskId = (activities[0]?.tasks?.[0]?.id || '').toString();
+  const wpCorrect =
+    (lang === 'si' && firstWpId.startsWith('DS')) ||
+    (lang === 'en' && firstWpId.startsWith('WP'));
+  const taskCorrect =
+    !firstTaskId ||
+    (lang === 'si' && firstTaskId.startsWith('N')) ||
+    (lang === 'en' && firstTaskId.startsWith('T'));
+  if (wpCorrect && taskCorrect) return data;
+
   console.log(`[PrefixMigration] Migrating activity prefixes to ${lang.toUpperCase()} (${wpPfx}/${tskPfx})`);
 
   // Build old→new ID map for dependency fixes
