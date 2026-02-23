@@ -1237,7 +1237,7 @@ const renderActivities = (props) => {
                         
                         {/* ═══ TASKS ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
-                            <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `T${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
+                            <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `${taskPrefix}${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
                                 <div key={taskIndex} className="p-4 border border-slate-200 rounded-lg mb-4 bg-slate-50 relative group">
                                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'tasks'], taskIndex)} text={t.remove} /></div>
