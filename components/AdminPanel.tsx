@@ -466,6 +466,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     if (provider === 'gemini') setModelName('gemini-3-pro-preview');
     else if (provider === 'openai') setModelName('gpt-5.2');
     else if (provider === 'openrouter') setModelName('deepseek/deepseek-v3.2');
+    setSecondaryModelName('');  // ★ v4.0: reset light model on provider change
   };
 
   const handleAISave = async () => {
