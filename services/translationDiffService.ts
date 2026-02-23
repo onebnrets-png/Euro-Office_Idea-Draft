@@ -284,7 +284,8 @@ const translateFieldBatch = async (
   const result = await generateContent({
     prompt,
     jsonMode: true,
-    sectionKey: 'translation'
+    sectionKey: 'translation',
+    taskType: 'translation'  // ★ v4.0: uses light model
   });
 
   const jsonStr = result.text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
