@@ -832,11 +832,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <input type="password" value={aiProvider === 'gemini' ? geminiKey : aiProvider === 'openai' ? openaiKey : openRouterKey} onChange={(e) => { if (aiProvider === 'gemini') setGeminiKey(e.target.value); else if (aiProvider === 'openai') setOpenaiKey(e.target.value); else setOpenRouterKey(e.target.value); }} placeholder={`Enter ${aiProvider} API key...`} style={inputStyle} />
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={labelStyle}>Model</label>
+                <label style={labelStyle}>{language === 'si' ? 'Glavni model (generiranje vsebine)' : 'Primary Model (content generation)'}</label>
                 <select value={modelName} onChange={(e) => setModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
               </div>
+
+              {/* ★ v4.1: Light Model for translations, chatbot, field generation */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={labelStyle}>{language === 'si' ? 'Hitri model (prevodi, chatbot, polja)' : 'Light Model (translations, chatbot, fields)'}</label>
+                <select value={secondaryModelName} onChange={(e) => setSecondaryModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
+                  <option value="">{language === 'si' ? '— Uporabi glavni model —' : '— Use primary model —'}</option>
+                  {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
+                </select>
+                <div style={{ marginTop: '6px', padding: '8px 12px', borderRadius: radii.md, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, fontSize: typography.fontSize.xs, color: secondaryInfoText }}>
+                  {language === 'si'
+                    ? `💡 Priporočen: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — hitrejši in cenejši za prevode in chatbot. Isti API ključ.`
+                    : `💡 Recommended: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — faster & cheaper for translations and chatbot. Same API key.`}
+                  {!secondaryModelName && (
+                    <button
+                      type="button"
+                      onClick={() => setSecondaryModelName(RECOMMENDED_LIGHT_MODELS[aiProvider]?.id || '')}
+                      style={{ marginLeft: '8px', padding: '2px 10px', borderRadius: radii.md, border: `1px solid ${secondaryInfoBorder}`, background: 'transparent', color: secondaryInfoText, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}
+                    >
+                      {language === 'si' ? 'Uporabi priporočenega' : 'Use recommended'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {message && (<div style={{ padding: '10px 14px', borderRadius: radii.lg, marginBottom: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm }}>{isError ? '\u274C' : '\u2705'} {message}</div>)}
               <button onClick={handleAISave} disabled={isValidating} style={{ padding: '10px 24px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: isValidating ? 'not-allowed' : 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, opacity: isValidating ? 0.7 : 1 }}>
                 {isValidating ? (language === 'si' ? 'Preverjam...' : 'Validating...') : (language === 'si' ? 'Shrani nastavitve' : 'Save Settings')}
