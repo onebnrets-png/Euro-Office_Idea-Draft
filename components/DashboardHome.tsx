@@ -1627,7 +1627,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                 </div>
               )}
 
-              {cardId === 'chatbot' && <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} />}
+             {cardId === 'chatbot' && <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} projectData={projectData} />}
 
               {cardId === 'admin' && isAdmin && (
                 <div style={{ display: 'grid', gridTemplateColumns: gridCols === 1 ? '1fr' : '1fr 1fr', gap: spacing.xs }}>
