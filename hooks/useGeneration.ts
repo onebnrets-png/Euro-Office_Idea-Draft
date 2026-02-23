@@ -621,7 +621,7 @@ export const useGeneration = ({
             generatedData = generatedData.map((p: any, idx: number) => ({
               ...p,
               id: p.id || `partner-${idx + 1}`,
-              code: p.code || (idx === 0 ? 'CO' : `P${idx + 1}`),
+              code: p.code || (idx === 0 ? (language === 'si' ? 'KO' : 'CO') : `P${idx + 1}`),
               partnerType: (p.partnerType && isValidPartnerType(p.partnerType))
                 ? p.partnerType
                 : 'other',
