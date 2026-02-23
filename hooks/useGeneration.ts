@@ -528,8 +528,13 @@ export const useGeneration = ({
   // existingScaffold + onlyIndices. Mandatory WP detection adds
   // only missing WPs instead of destroying existing ones.
 
-  const executeGeneration = useCallback(
+    const executeGeneration = useCallback(
     async (sectionKey: string, mode: string = 'regenerate') => {
+      // ★ v7.2: Pre-generation guard — block double-clicks and rate limit overflow
+      if (!preGenerationGuard(sectionKey)) return;
+
+      isGeneratingRef.current = true;
+      sessionCallCountRef.current++;
       closeModal();
       setIsLoading(`${t.generating} ${sectionKey}...`);
       setError(null);
