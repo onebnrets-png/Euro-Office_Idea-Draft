@@ -1251,11 +1251,45 @@ If this is the Dissemination WP, strictly separate CDE tasks (Communication, Dis
     }
   }
 
-  let result = sanitizeActivities(fullActivities);
+    let result = sanitizeActivities(fullActivities);
   result = enforceTemporalIntegrity(result, projectData);
+
+  // ★ v7.4: Force correct WP/Task/Milestone/Deliverable prefixes based on language
+  const wpPfxFinal = language === 'si' ? 'DS' : 'WP';
+  const tskPfxFinal = language === 'si' ? 'N' : 'T';
+  result.forEach((wp: any, wpIdx: number) => {
+    wp.id = `${wpPfxFinal}${wpIdx + 1}`;
+    if (wp.tasks && Array.isArray(wp.tasks)) {
+      wp.tasks.forEach((task: any, tIdx: number) => {
+        const oldId = task.id;
+        task.id = `${tskPfxFinal}${wpIdx + 1}.${tIdx + 1}`;
+        // Fix dependencies referencing old IDs
+        result.forEach((otherWp: any) => {
+          (otherWp.tasks || []).forEach((otherTask: any) => {
+            (otherTask.dependencies || []).forEach((dep: any) => {
+              if (dep.predecessorId === oldId) {
+                dep.predecessorId = task.id;
+              }
+            });
+          });
+        });
+      });
+    }
+    if (wp.milestones && Array.isArray(wp.milestones)) {
+      wp.milestones.forEach((ms: any, mIdx: number) => {
+        ms.id = `M${wpIdx + 1}.${mIdx + 1}`;
+      });
+    }
+    if (wp.deliverables && Array.isArray(wp.deliverables)) {
+      wp.deliverables.forEach((del: any, dIdx: number) => {
+        del.id = `D${wpIdx + 1}.${dIdx + 1}`;
+      });
+    }
+  });
 
   return result;
 };
+
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC API: TARGETED FILL
