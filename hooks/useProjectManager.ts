@@ -92,7 +92,7 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
     });
   });
 
-  console.log(`[PrefixMigration] Migrated ${idMap.size} IDs (${[...idMap.entries()].slice(0, 6).map(([o, n]) => `${o}→${n}`).join(', ')}${idMap.size > 6 ? '...' : ''})`);
+  console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
 
   return { ...data, activities: migratedActivities };
 };
