@@ -138,6 +138,7 @@ export const useProjectManager = ({
   const [showProjectListOnLogin, setShowProjectListOnLogin] = useState(false);
 
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const isLoadingProjectRef = useRef(false);
 
   // ─── Helpers ───────────────────────────────────────────────────
 
