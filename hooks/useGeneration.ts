@@ -1,6 +1,13 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.2 — 2026-02-23 — SMART AI CREDIT PROTECTION
+//   - NEW: Global isGenerating lock — prevents double-clicks and parallel generations
+//   - NEW: Pre-generation rate limit check with user-facing warning modal
+//   - NEW: Session usage counter (calls this session)
+//   - NEW: Import getRateLimitStatus from aiProvider.ts
+//   - All previous v7.0 changes preserved.
+//
 // v7.0 — 2026-02-22 — FULL v7.0 ALIGNMENT
 //   - CHANGED: Partners post-processing includes partnerType validation
 //     via isValidPartnerType() from Instructions.ts
