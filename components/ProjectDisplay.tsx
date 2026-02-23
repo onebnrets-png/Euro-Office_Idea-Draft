@@ -1,6 +1,9 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v7.0.1 — 2026-02-22 — BUGFIX: partners.map is not a function
+// v7.3 — 2026-02-23 — Language-aware WP/Task prefixes + partners.map bugfix
+//   - FIX: WP prefix: EN=WP, SI=DS (was hardcoded WP)
+//   - FIX: Task prefix: EN=T, SI=N (was hardcoded T)
+//   - All v7.0.1 bugfixes preserved.
 //   - FIX: All partners access now uses Array.isArray guard
 //   - FIX: renderPartners .map calls restored to proper JSX
 //   - FIX: renderFinance + renderActivities partners guard added
