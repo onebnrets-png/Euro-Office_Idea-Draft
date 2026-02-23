@@ -330,6 +330,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [modelName, setModelName] = useState('');
+  const [secondaryModelName, setSecondaryModelName] = useState('');  // ★ v4.0
   const [isValidating, setIsValidating] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
 
