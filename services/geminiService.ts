@@ -1182,7 +1182,8 @@ Total 5-8 WPs.`,
 
   for (let wpIdx = 0; wpIdx < scaffold.length; wpIdx++) {
     const wpScaffold = scaffold[wpIdx];
-    const wpId = wpScaffold.id || `WP${wpIdx + 1}`;
+    const wpPfx = language === 'si' ? 'DS' : 'WP';
+    const wpId = wpScaffold.id || `${wpPfx}${wpIdx + 1}`;
 
     if (onProgress) {
       onProgress(language === 'si'
