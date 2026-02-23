@@ -3,6 +3,11 @@
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
 //
+// v1.2 — 2026-02-23 — FIX: WP/Task prefix migration on project load
+//   - NEW: migrateActivityPrefixes() — auto-fixes WP/Task IDs per language
+//   - EN: WP1, T1.1 | SI: DS1, N1.1
+//   - Runs on every loadActiveProject, zero overhead if already correct
+//
 // v1.1 — 2026-02-21 — FIX: IMPORT SOURCE
 //   - CHANGED: detectProjectLanguage imported from utils.ts instead of
 //     geminiService.ts (was never re-exported from geminiService)
@@ -20,6 +25,7 @@ import {
   safeMerge,
   detectProjectLanguage,
 } from '../utils.ts';
+import html2canvas from 'html2canvas';
 
 // ★ v1.2: Migrate WP/Task ID prefixes based on language
 // EN: WP1, T1.1 | SI: DS1, N1.1
@@ -91,59 +97,12 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
   return { ...data, activities: migratedActivities };
 };
 
-  console.log(`[PrefixMigration] Migrating activity prefixes to ${lang.toUpperCase()} (${wpPfx}/${tskPfx})`);
-
-  // Build old→new ID map for dependency fixes
-  const idMap = new Map<string, string>();
-
-  const migratedActivities = activities.map((wp: any, wpIdx: number) => {
-    const newWpId = `${wpPfx}${wpIdx + 1}`;
-    if (wp.id) idMap.set(wp.id, newWpId);
-
-    const tasks = (wp.tasks || []).map((task: any, tIdx: number) => {
-      const newTaskId = `${tskPfx}${wpIdx + 1}.${tIdx + 1}`;
-      if (task.id) idMap.set(task.id, newTaskId);
-      return { ...task, id: newTaskId };
-    });
-
-    const milestones = (wp.milestones || []).map((ms: any, mIdx: number) => ({
-      ...ms,
-      id: `M${wpIdx + 1}.${mIdx + 1}`,
-    }));
-
-    const deliverables = (wp.deliverables || []).map((del: any, dIdx: number) => ({
-      ...del,
-      id: `D${wpIdx + 1}.${dIdx + 1}`,
-    }));
-
-    return { ...wp, id: newWpId, tasks, milestones, deliverables };
-  });
-
-  // Fix dependency predecessorId references
-  migratedActivities.forEach((wp: any) => {
-    (wp.tasks || []).forEach((task: any) => {
-      if (task.dependencies && Array.isArray(task.dependencies)) {
-        task.dependencies = task.dependencies.map((dep: any) => ({
-          ...dep,
-          predecessorId: idMap.get(dep.predecessorId) || dep.predecessorId,
-        }));
-      }
-    });
-  });
-
-  // Fix partner allocation references (if any use old task IDs in wpId/taskId-like fields)
-  // Partner allocations use partnerId, not task IDs, so no fix needed there.
-
-  const fixCount = idMap.size;
-  console.log(`[PrefixMigration] Migrated ${fixCount} IDs (${[...idMap.entries()].slice(0, 5).map(([o, n]) => `${o}→${n}`).join(', ')}${fixCount > 5 ? '...' : ''})`);
-  return { ...data, activities: migratedActivities };
-};
-import html2canvas from 'html2canvas';
 interface UseProjectManagerProps {
   language: 'en' | 'si';
   setLanguage: (lang: 'en' | 'si') => void;
   currentUser: string | null;
 }
+
 export const useProjectManager = ({
   language,
   setLanguage,
@@ -224,8 +183,9 @@ export const useProjectManager = ({
   }, []);
 
   // ─── Load active project ──────────────────────────────────────
+  // ★ v1.2: Added migrateActivityPrefixes call after safeMerge
 
-    const loadActiveProject = useCallback(
+  const loadActiveProject = useCallback(
     async (specificId: string | null = null) => {
       const loadedData = await storageService.loadProject(language, specificId);
 
