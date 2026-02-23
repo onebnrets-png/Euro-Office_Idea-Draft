@@ -267,8 +267,10 @@ export const useProjectManager = ({
   }, [currentUser]); // intentionally omit refreshProjectList, loadActiveProject
 
   // ─── Sync project versions ────────────────────────────────────
+  // ★ v1.3: Skip sync during loadActiveProject to prevent overwriting other language
 
   useEffect(() => {
+    if (isLoadingProjectRef.current) return;
     setProjectVersions((prev) => ({
       en: language === 'en' ? projectData : prev.en,
       si: language === 'si' ? projectData : prev.si,
