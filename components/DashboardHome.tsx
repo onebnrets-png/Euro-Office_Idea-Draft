@@ -1217,10 +1217,16 @@ const OrganizationCard: React.FC<{
   const prevMsgCountRef = useRef(messages.length);
   useEffect(() => {
     if (messages.length > prevMsgCountRef.current) {
-      requestAnimationFrame(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); });
+      requestAnimationFrame(() => {
+        // ★ v7.0: Scroll only WITHIN chat container, not the entire page
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      });
     }
     prevMsgCountRef.current = messages.length;
   }, [messages.length]);
+
 
   useEffect(() => {
     if (chatContainerRef.current) {
