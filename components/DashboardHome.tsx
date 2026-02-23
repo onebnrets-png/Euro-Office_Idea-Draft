@@ -1336,20 +1336,22 @@ const OrganizationCard: React.FC<{
         }
       }
 
-      // 2. ORGANIZATION + GLOBAL INSTRUCTIONS
+            // 2. INSTRUCTIONS — directly from Instructions.ts + org overrides
       let instructionsContext = '';
       try {
         const parts: string[] = [];
 
-        // Global rules from Instructions.ts via override system
+        // ★ CRITICAL: Inject core rules directly from Instructions.ts
+        if (INTERVENTION_LOGIC_FRAMEWORK) parts.push(INTERVENTION_LOGIC_FRAMEWORK);
+        if (HUMANIZATION_RULES?.en) parts.push(HUMANIZATION_RULES.en);
+        if (ACADEMIC_RIGOR_RULES?.en) parts.push(ACADEMIC_RIGOR_RULES.en);
+
+        // Admin overrides from Supabase (if any exist)
         const chatbotRole = getEffectiveOverrideSync('chatbot_system_role');
-        if (chatbotRole) parts.push(`System Role: ${chatbotRole}`);
+        if (chatbotRole) parts.push(`Admin Override: ${chatbotRole}`);
 
         const globalRules = getEffectiveOverrideSync('global_rules');
         if (globalRules) parts.push(`Global Rules: ${globalRules}`);
-
-        const languageRules = getEffectiveOverrideSync('language_rules');
-        if (languageRules) parts.push(`Language Rules: ${languageRules}`);
 
         // Org-specific instructions
         if (activeOrg?.id) {
@@ -1370,61 +1372,6 @@ const OrganizationCard: React.FC<{
         }
       } catch (e) {
         console.warn('[AIChatbot] Instructions load failed:', e);
-      }
-
-      // 3. ACTIVE PROJECT CONTEXT
-      let projectContext = '';
-      if (projectData) {
-        try {
-          const parts: string[] = [];
-          const pi = projectData.projectIdea;
-          if (pi?.projectTitle) parts.push(`Project Title: ${pi.projectTitle}`);
-          if (pi?.projectAcronym) parts.push(`Acronym: ${pi.projectAcronym}`);
-          if (pi?.mainAim) parts.push(`Main Aim: ${pi.mainAim}`);
-          if (pi?.proposedSolution) parts.push(`Proposed Solution: ${pi.proposedSolution.substring(0, 500)}`);
-
-          const pa = projectData.problemAnalysis;
-          if (pa?.coreProblem?.title) parts.push(`Core Problem: ${pa.coreProblem.title}`);
-          if (pa?.coreProblem?.description) parts.push(`Problem Description: ${pa.coreProblem.description.substring(0, 300)}`);
-
-          if (projectData.generalObjectives?.length > 0) {
-            const objs = projectData.generalObjectives
-              .filter((o: any) => o.title?.trim())
-              .map((o: any) => o.title)
-              .join('; ');
-            if (objs) parts.push(`General Objectives: ${objs}`);
-          }
-
-          if (projectData.specificObjectives?.length > 0) {
-            const sObjs = projectData.specificObjectives
-              .filter((o: any) => o.title?.trim())
-              .map((o: any) => o.title)
-              .join('; ');
-            if (sObjs) parts.push(`Specific Objectives: ${sObjs}`);
-          }
-
-          if (projectData.activities?.length > 0) {
-            const wps = projectData.activities
-              .filter((wp: any) => wp.title?.trim())
-              .map((wp: any) => `${wp.id}: ${wp.title}`)
-              .join('; ');
-            if (wps) parts.push(`Work Packages: ${wps}`);
-          }
-
-          if (projectData.partners?.length > 0) {
-            const partners = projectData.partners
-              .filter((p: any) => p.name?.trim())
-              .map((p: any) => `${p.code || '?'}: ${p.name} (${p.partnerType || '?'})`)
-              .join('; ');
-            if (partners) parts.push(`Partners: ${partners}`);
-          }
-
-          if (parts.length > 0) {
-            projectContext = '\n\n══ ACTIVE PROJECT ══\n' + parts.join('\n') + '\n══ END PROJECT ══';
-          }
-        } catch (e) {
-          console.warn('[AIChatbot] Project context build failed:', e);
-        }
       }
 
       // 4. CONVERSATION HISTORY (last 10 messages)
