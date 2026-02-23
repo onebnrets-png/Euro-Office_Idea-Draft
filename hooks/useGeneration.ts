@@ -615,6 +615,8 @@ export const useGeneration = ({
           console.log(`[useGeneration] Partner allocations applied: ${totalAllocations} allocations across ${allocResult.length} tasks`);
 
           setIsLoading(false);
+          // ★ v7.2: Release generation lock on early return
+          isGeneratingRef.current = false;
           return;
 
         // ★ v5.0 / v7.0: Partners (Consortium) generation
