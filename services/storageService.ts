@@ -520,6 +520,13 @@ export const storageService = {
   async setCustomModel(model: string) {
     await this.updateSettings({ model: model.trim() || null });
   },
+  getSecondaryModel(): string | null {
+    return cachedSettings?.secondary_model || null;
+  },
+
+  async setSecondaryModel(model: string) {
+    await this.updateSettings({ secondary_model: model.trim() || null });
+  },
 
   getCustomLogo(): string | null {
     if (this.isSuperAdmin()) {
