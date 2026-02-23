@@ -108,9 +108,11 @@ console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
     }
   }
 
-  return { ...data, activities: migratedActivities, partners: migratedPartners };
+    return { ...data, activities: migratedActivities, partners: migratedPartners };
+};
 
 interface UseProjectManagerProps {
+
   language: 'en' | 'si';
   setLanguage: (lang: 'en' | 'si') => void;
   currentUser: string | null;
