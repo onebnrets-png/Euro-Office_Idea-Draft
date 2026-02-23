@@ -260,28 +260,28 @@ export const GEMINI_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', description: 'Most advanced — complex reasoning, coding, multimodal' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', description: 'Next-gen speed — agentic workflows, balanced quality' },
   // ═══ Gemini 2.5 — stable, production-ready ═══
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Stable)', description: 'Deep reasoning, coding, complex tasks — 1M context' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable) ★ Recommended', description: 'Best price-performance — fast, high volume, thinking' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Stable)', description: 'Cheapest — classification, simple extraction, bulk tasks' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Stable) ★ Primary', description: 'Deep reasoning, coding, complex tasks — 1M context' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable)', description: 'Best price-performance — fast, high volume, thinking' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Stable) ★ Light', description: 'Cheapest — ideal for chatbot, translations, field fills' },
 ];
 
 // ─── OPENAI MODELS ───────────────────────────────────────────────
 
 export const OPENAI_MODELS = [
   // ═══ GPT-5.2 — latest flagship (Feb 2026) ═══
-  { id: 'gpt-5.2', name: 'GPT-5.2 ★ Recommended', description: 'Best model — coding, agentic tasks, reasoning' },
+  { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Best model — coding, agentic tasks, reasoning' },
   { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Smarter, more precise responses — higher cost' },
   // ═══ GPT-5.1 — previous generation ═══
   { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Coding and agentic tasks — configurable reasoning' },
   // ═══ GPT-5 — stable ═══
   { id: 'gpt-5', name: 'GPT-5', description: 'Intelligent reasoning — complex tasks' },
   { id: 'gpt-5-pro', name: 'GPT-5 Pro', description: 'Enhanced GPT-5 — more precise' },
-  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Faster, cost-efficient GPT-5 variant' },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini ★ Primary', description: 'Faster, cost-efficient GPT-5 variant' },
   { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Cheapest GPT-5 — fast, lightweight tasks' },
   // ═══ GPT-4.1 — non-reasoning, still available in API ═══
   { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Smartest non-reasoning model — still in API' },
   { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', description: 'Smaller, faster GPT-4.1' },
-  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Cheapest — ultra-fast, bulk tasks' },
+  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano ★ Light', description: 'Cheapest — ideal for chatbot, translations, field fills' },
   // ═══ o-series reasoning ═══
   { id: 'o3', name: 'o3', description: 'Reasoning model — complex analytical tasks' },
   { id: 'o3-pro', name: 'o3 Pro', description: 'Enhanced o3 — more compute, better answers' },
@@ -304,7 +304,7 @@ export const OPENROUTER_MODELS = [
   { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (via OpenRouter)', description: 'Google flagship via OpenRouter' },
   { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (via OpenRouter)', description: 'Google fast model via OpenRouter' },
   // ═══ DeepSeek ═══
-  { id: 'deepseek/deepseek-v3.2', name: '🇨🇳 DeepSeek V3.2 ★ Recommended', description: 'Flagship open-source — MoE 671B, top quality' },
+  { id: 'deepseek/deepseek-v3.2', name: '🇨🇳 DeepSeek V3.2 ★ Primary & Light', description: 'Flagship open-source — MoE 671B, top quality, cheapest via OpenRouter' },
   { id: 'deepseek/deepseek-r1', name: '🇨🇳 DeepSeek R1', description: 'Reasoning model — rivals OpenAI o1' },
   { id: 'deepseek/deepseek-r1-0528', name: '🇨🇳 DeepSeek R1 0528', description: 'Latest R1 — enhanced reasoning' },
   // ═══ Chinese frontier ═══
