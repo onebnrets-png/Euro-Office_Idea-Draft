@@ -1,8 +1,15 @@
 // services/aiProvider.ts
 // ═══════════════════════════════════════════════════════════════
-// Universal AI Provider Abstraction Layer – v4.0 (2026-02-23)
+// Universal AI Provider Abstraction Layer – v5.0 (2026-02-23)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v5.0 – NEW: Smart AI credit protection system
+//         - Client-side rate limiter (configurable per-minute cap)
+//         - Retry with exponential backoff (RATE_LIMIT, SERVER_ERROR, TIMEOUT)
+//         - Global request queue with concurrency limit
+//         - Usage event emitter (aiUsageEvent) for tracking
+//         - Cooldown enforcement between rapid calls
+//         - All protection is transparent — callers unchanged
 // v4.0 – NEW: Dual-model support (primary + light model)
 //         Added AITaskType, getProviderConfigForTask(),
 //         RECOMMENDED_LIGHT_MODELS, generateContentForTask()
@@ -16,11 +23,177 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { storageService } from './storageService.ts';
 import { OPENROUTER_SYSTEM_PROMPT } from './Instructions.ts';
 
+// ═══════════════════════════════════════════════════════════════
+// ★ v5.0: SMART AI CREDIT PROTECTION SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Rate Limiter — sliding window per-minute cap ────────────────
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 14;
+const MIN_COOLDOWN_MS = 1_500;
+
+const requestTimestamps: number[] = [];
+let lastRequestTime = 0;
+
+function checkClientRateLimit(): { allowed: boolean; waitMs: number; reason: string } {
+  const now = Date.now();
+
+  const sinceLast = now - lastRequestTime;
+  if (sinceLast < MIN_COOLDOWN_MS) {
+    return { allowed: false, waitMs: MIN_COOLDOWN_MS - sinceLast, reason: 'cooldown' };
+  }
+
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - RATE_LIMIT_WINDOW_MS) {
+    requestTimestamps.shift();
+  }
+
+  if (requestTimestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const oldestInWindow = requestTimestamps[0];
+    const waitMs = oldestInWindow + RATE_LIMIT_WINDOW_MS - now + 500;
+    return { allowed: false, waitMs: Math.max(waitMs, 1000), reason: 'window_full' };
+  }
+
+  return { allowed: true, waitMs: 0, reason: '' };
+}
+
+function recordRequest(): void {
+  const now = Date.now();
+  requestTimestamps.push(now);
+  lastRequestTime = now;
+}
+
+// ─── Retry with exponential backoff ──────────────────────────────
+
+const RETRYABLE_ERRORS = new Set(['RATE_LIMIT', 'SERVER_ERROR', 'TIMEOUT', 'MODEL_OVERLOADED']);
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 2_000;
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  context: string = ''
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const rateCheck = checkClientRateLimit();
+      if (!rateCheck.allowed) {
+        console.log(`[aiProvider] Rate limit (${rateCheck.reason}): waiting ${rateCheck.waitMs}ms before ${context || 'request'}`);
+        await sleep(rateCheck.waitMs);
+      }
+
+      recordRequest();
+      return await fn();
+    } catch (e: any) {
+      lastError = e;
+      const errorCode = (e.message || '').split('|')[0];
+
+      if (!RETRYABLE_ERRORS.has(errorCode)) {
+        throw e;
+      }
+
+      if (attempt >= MAX_RETRIES) {
+        console.warn(`[aiProvider] All ${MAX_RETRIES} retries exhausted for ${context}: ${errorCode}`);
+        throw e;
+      }
+
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+      console.log(`[aiProvider] Retry ${attempt + 1}/${MAX_RETRIES} for ${context} (${errorCode}) — waiting ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Global concurrency queue ────────────────────────────────────
+
+const MAX_CONCURRENT = 2;
+let activeRequests = 0;
+const pendingQueue: Array<{ resolve: () => void }> = [];
+
+async function acquireSlot(): Promise<void> {
+  if (activeRequests < MAX_CONCURRENT) {
+    activeRequests++;
+    return;
+  }
+  return new Promise<void>((resolve) => {
+    pendingQueue.push({ resolve });
+  });
+}
+
+function releaseSlot(): void {
+  activeRequests--;
+  if (pendingQueue.length > 0 && activeRequests < MAX_CONCURRENT) {
+    activeRequests++;
+    const next = pendingQueue.shift()!;
+    next.resolve();
+  }
+}
+
+// ─── Usage event emitter ─────────────────────────────────────────
+
+export interface AIUsageEvent {
+  timestamp: number;
+  provider: string;
+  model: string;
+  taskType: string;
+  sectionKey: string;
+  success: boolean;
+  durationMs: number;
+  errorCode?: string;
+}
+
+type AIUsageListener = (event: AIUsageEvent) => void;
+const usageListeners: AIUsageListener[] = [];
+
+export function onAIUsage(listener: AIUsageListener): () => void {
+  usageListeners.push(listener);
+  return () => {
+    const idx = usageListeners.indexOf(listener);
+    if (idx >= 0) usageListeners.splice(idx, 1);
+  };
+}
+
+function emitUsageEvent(event: AIUsageEvent): void {
+  for (const listener of usageListeners) {
+    try { listener(event); } catch (e) { console.warn('[aiProvider] Usage listener error:', e); }
+  }
+}
+
+// ─── Public: get current rate limit status ───────────────────────
+
+export function getRateLimitStatus(): {
+  requestsInWindow: number;
+  maxRequests: number;
+  windowMs: number;
+  cooldownMs: number;
+  activeRequests: number;
+  queuedRequests: number;
+} {
+  const now = Date.now();
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - RATE_LIMIT_WINDOW_MS) {
+    requestTimestamps.shift();
+  }
+  return {
+    requestsInWindow: requestTimestamps.length,
+    maxRequests: RATE_LIMIT_MAX_REQUESTS,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    cooldownMs: Math.max(0, MIN_COOLDOWN_MS - (now - lastRequestTime)),
+    activeRequests,
+    queuedRequests: pendingQueue.length,
+  };
+}
+
 // ─── TYPES ───────────────────────────────────────────────────────
 
 export type AIProviderType = 'gemini' | 'openrouter' | 'openai';
 
-// ★ v4.0: Task types for dual-model routing
 export type AITaskType = 'generation' | 'translation' | 'chatbot' | 'field' | 'allocation' | 'summary';
 
 export interface AIProviderConfig {
@@ -35,7 +208,7 @@ export interface AIGenerateOptions {
   jsonMode?: boolean;
   temperature?: number;
   sectionKey?: string;
-  taskType?: AITaskType;  // ★ v4.0
+  taskType?: AITaskType;
 }
 
 export interface AIGenerateResult {
@@ -43,8 +216,6 @@ export interface AIGenerateResult {
 }
 
 // ─── ★ v4.0: RECOMMENDED LIGHT MODELS PER PROVIDER ──────────────
-// When user selects a primary model but no secondary, we auto-suggest
-// the best economy model from the SAME provider.
 
 export const RECOMMENDED_LIGHT_MODELS: Record<AIProviderType, { id: string; name: string }> = {
   gemini:     { id: 'gemini-2.5-flash-lite',  name: 'Gemini 2.5 Flash-Lite ($0.10/1M)' },
@@ -52,12 +223,11 @@ export const RECOMMENDED_LIGHT_MODELS: Record<AIProviderType, { id: string; name
   openrouter: { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2 (~$0.14/1M)' },
 };
 
-// ★ v4.0: Which task types use the light (secondary) model
 const LIGHT_MODEL_TASKS: Set<AITaskType> = new Set([
   'translation', 'chatbot', 'field'
 ]);
 
-// ─── ★ FIX v2.0: DYNAMIC MAX_TOKENS PER SECTION ─────────────────
+// ─── DYNAMIC MAX_TOKENS PER SECTION ──────────────────────────────
 
 const SECTION_MAX_TOKENS: Record<string, number> = {
   activities:          16384,
@@ -97,7 +267,7 @@ export const GEMINI_MODELS = [
   { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite (⚠ deprecated)', description: 'Shutdown March 31, 2026 — migrate to 2.5+' },
 ];
 
-// ─── ★ v3.0: OPENAI MODELS ──────────────────────────────────────
+// ─── OPENAI MODELS ───────────────────────────────────────────────
 
 export const OPENAI_MODELS = [
   { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Best model for coding and agentic tasks across industries' },
@@ -164,24 +334,19 @@ export function getProviderConfig(): AIProviderConfig {
   return { provider, apiKey, model };
 }
 
-// ★ v4.0: Get config with task-aware model selection
 export function getProviderConfigForTask(taskType?: AITaskType): AIProviderConfig {
   const baseConfig = getProviderConfig();
 
-  // If no taskType or not a "light" task, use primary model
   if (!taskType || !LIGHT_MODEL_TASKS.has(taskType)) {
     return baseConfig;
   }
 
-  // Check if user has configured a secondary (light) model
   const secondaryModel = storageService.getSecondaryModel();
 
   if (secondaryModel && secondaryModel.trim() !== '') {
-    // User explicitly chose a light model — use it with same provider + API key
     return { ...baseConfig, model: secondaryModel };
   }
 
-  // No secondary model configured — fall back to primary model (no change)
   return baseConfig;
 }
 
@@ -191,7 +356,6 @@ export function getDefaultModel(provider: AIProviderType): string {
   return 'gemini-3-pro-preview';
 }
 
-// ★ v4.0: Get the model list for a provider (used in AdminPanel dropdowns)
 export function getModelsForProvider(provider: AIProviderType): { id: string; name: string; description: string }[] {
   if (provider === 'gemini') return GEMINI_MODELS;
   if (provider === 'openai') return OPENAI_MODELS;
@@ -252,10 +416,9 @@ export function hasValidProviderKey(): boolean {
 }
 
 // ─── GENERATION ──────────────────────────────────────────────────
+// ★ v5.0: Wrapped with retry, queue, rate limiting, and usage tracking
 
-// ★ v4.0: Original function preserved for backward compatibility
 export async function generateContent(options: AIGenerateOptions): Promise<AIGenerateResult> {
-  // ★ v4.0: If taskType is provided, use task-aware routing
   const config = options.taskType
     ? getProviderConfigForTask(options.taskType)
     : getProviderConfig();
@@ -264,21 +427,58 @@ export async function generateContent(options: AIGenerateOptions): Promise<AIGen
     throw new Error('MISSING_API_KEY');
   }
 
-  console.log(`[aiProvider] ${options.taskType || 'default'} → model: ${config.model}`);
+  const context = `${options.taskType || 'default'}:${options.sectionKey || 'unknown'}`;
+  console.log(`[aiProvider] ${context} → model: ${config.model}`);
 
-  if (config.provider === 'gemini') {
-    return generateWithGemini(config, options);
+  // ★ v5.0: Acquire concurrency slot
+  await acquireSlot();
+  const startTime = Date.now();
+
+  try {
+    // ★ v5.0: Wrap actual call with retry logic
+    const result = await withRetry(async () => {
+      if (config.provider === 'gemini') {
+        return generateWithGemini(config, options);
+      }
+      if (config.provider === 'openrouter') {
+        return generateWithOpenRouter(config, options);
+      }
+      if (config.provider === 'openai') {
+        return generateWithOpenAI(config, options);
+      }
+      throw new Error(`Unknown AI provider: ${config.provider}`);
+    }, context);
+
+    // ★ v5.0: Emit success usage event
+    emitUsageEvent({
+      timestamp: Date.now(),
+      provider: config.provider,
+      model: config.model,
+      taskType: options.taskType || 'default',
+      sectionKey: options.sectionKey || 'unknown',
+      success: true,
+      durationMs: Date.now() - startTime,
+    });
+
+    return result;
+  } catch (e: any) {
+    // ★ v5.0: Emit failure usage event
+    const errorCode = (e.message || '').split('|')[0];
+    emitUsageEvent({
+      timestamp: Date.now(),
+      provider: config.provider,
+      model: config.model,
+      taskType: options.taskType || 'default',
+      sectionKey: options.sectionKey || 'unknown',
+      success: false,
+      durationMs: Date.now() - startTime,
+      errorCode,
+    });
+    throw e;
+  } finally {
+    // ★ v5.0: Always release concurrency slot
+    releaseSlot();
   }
-
-  if (config.provider === 'openrouter') {
-    return generateWithOpenRouter(config, options);
-  }
-
-  if (config.provider === 'openai') {
-    return generateWithOpenAI(config, options);
-  }
-
-  throw new Error(`Unknown AI provider: ${config.provider}`);
 }
 
 // ─── GEMINI ADAPTER ──────────────────────────────────────────────
@@ -391,7 +591,7 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
   }
 }
 
-// ─── ★ v3.0: OPENAI ADAPTER ─────────────────────────────────────
+// ─── OPENAI ADAPTER ──────────────────────────────────────────────
 
 async function generateWithOpenAI(config: AIProviderConfig, options: AIGenerateOptions): Promise<AIGenerateResult> {
   const messages: any[] = [];
