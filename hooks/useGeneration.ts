@@ -575,6 +575,8 @@ export const useGeneration = ({
               onCancel: () => closeModal(),
             });
             setIsLoading(false);
+            // ★ v7.2: Release generation lock on early return
+            isGeneratingRef.current = false;
             return;
           }
 
