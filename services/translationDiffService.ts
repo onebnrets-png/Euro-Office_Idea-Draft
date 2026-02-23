@@ -324,7 +324,8 @@ const translateSingleField = async (
   try {
     const result = await generateContent({
       prompt,
-      sectionKey: 'field'
+      sectionKey: 'field',
+      taskType: 'translation'  // ★ v4.0: uses light model
     });
     const translated = result.text.trim();
     if (translated && translated !== field.value) {
