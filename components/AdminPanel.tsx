@@ -473,6 +473,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     setIsValidating(true); setMessage(tAuth.validating || "Validating..."); setIsError(false);
     await storageService.setAIProvider(aiProvider);
     await storageService.setCustomModel(modelName.trim());
+    await storageService.setSecondaryModel(secondaryModelName.trim());  // ★ v4.0
     await storageService.setApiKey(geminiKey.trim());
     await storageService.setOpenRouterKey(openRouterKey.trim());
     await storageService.setOpenAIKey(openaiKey.trim());
