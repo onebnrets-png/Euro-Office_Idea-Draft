@@ -20,14 +20,75 @@ import {
   safeMerge,
   detectProjectLanguage,
 } from '../utils.ts';
-import html2canvas from 'html2canvas';
 
+// ★ v1.2: Migrate WP/Task ID prefixes based on language
+// EN: WP1, T1.1 | SI: DS1, N1.1
+const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
+  const activities = data?.activities;
+  if (!activities || !Array.isArray(activities) || activities.length === 0) return data;
+
+  const wpPfx = lang === 'si' ? 'DS' : 'WP';
+  const tskPfx = lang === 'si' ? 'N' : 'T';
+
+  // Check if migration is needed — look at first WP id
+  const firstId = (activities[0]?.id || '').toString();
+  const alreadyCorrect =
+    (lang === 'si' && firstId.startsWith('DS')) ||
+    (lang === 'en' && firstId.startsWith('WP'));
+  if (alreadyCorrect) return data;
+  console.log(`[PrefixMigration] Migrating activity prefixes to ${lang.toUpperCase()} (${wpPfx}/${tskPfx})`);
+
+  // Build old→new ID map for dependency fixes
+  const idMap = new Map<string, string>();
+
+  const migratedActivities = activities.map((wp: any, wpIdx: number) => {
+    const newWpId = `${wpPfx}${wpIdx + 1}`;
+    if (wp.id) idMap.set(wp.id, newWpId);
+
+    const tasks = (wp.tasks || []).map((task: any, tIdx: number) => {
+      const newTaskId = `${tskPfx}${wpIdx + 1}.${tIdx + 1}`;
+      if (task.id) idMap.set(task.id, newTaskId);
+      return { ...task, id: newTaskId };
+    });
+
+    const milestones = (wp.milestones || []).map((ms: any, mIdx: number) => ({
+      ...ms,
+      id: `M${wpIdx + 1}.${mIdx + 1}`,
+    }));
+
+    const deliverables = (wp.deliverables || []).map((del: any, dIdx: number) => ({
+      ...del,
+      id: `D${wpIdx + 1}.${dIdx + 1}`,
+    }));
+
+    return { ...wp, id: newWpId, tasks, milestones, deliverables };
+  });
+
+  // Fix dependency predecessorId references
+  migratedActivities.forEach((wp: any) => {
+    (wp.tasks || []).forEach((task: any) => {
+      if (task.dependencies && Array.isArray(task.dependencies)) {
+        task.dependencies = task.dependencies.map((dep: any) => ({
+          ...dep,
+          predecessorId: idMap.get(dep.predecessorId) || dep.predecessorId,
+        }));
+      }
+    });
+  });
+
+  // Fix partner allocation references (if any use old task IDs in wpId/taskId-like fields)
+  // Partner allocations use partnerId, not task IDs, so no fix needed there.
+
+  const fixCount = idMap.size;
+  console.log(`[PrefixMigration] Migrated ${fixCount} IDs (${[...idMap.entries()].slice(0, 5).map(([o, n]) => `${o}→${n}`).join(', ')}${fixCount > 5 ? '...' : ''})`);
+  return { ...data, activities: migratedActivities };
+};
+import html2canvas from 'html2canvas';
 interface UseProjectManagerProps {
   language: 'en' | 'si';
   setLanguage: (lang: 'en' | 'si') => void;
   currentUser: string | null;
 }
-
 export const useProjectManager = ({
   language,
   setLanguage,
