@@ -692,8 +692,9 @@ export const useGeneration = ({
             if (missingPM) {
               missingNames.push(language === 'si' ? 'Upravljanje projekta' : 'Project Management');
 
+              const wpPfx2 = language === 'si' ? 'DS' : 'WP';
               const pmPlaceholder = {
-                id: `WP${augmentedWPs.length + 1}`,
+                id: `${wpPfx2}${augmentedWPs.length + 1}`,
                 title: language === 'si' ? 'Upravljanje in koordinacija projekta' : 'Project Management and Coordination',
                 startDate: projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0],
                 endDate: '',
