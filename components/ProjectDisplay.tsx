@@ -1171,6 +1171,10 @@ const renderActivities = (props) => {
 
     const allTasks = activities.flatMap(wp => wp.tasks || []);
 
+    // ★ v7.3: Language-aware prefixes for WP/Task IDs
+    const wpPrefix = language === 'si' ? 'DS' : 'WP';
+    const taskPrefix = language === 'si' ? 'N' : 'T';
+
     const handleTaskUpdate = (itemPath, value) => {
         if (itemPath.includes('tasks')) {
             const tempProjectData = JSON.parse(JSON.stringify(projectData));
