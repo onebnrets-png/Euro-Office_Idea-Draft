@@ -867,7 +867,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   {language === 'si'
                     ? `💡 Priporočen: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — hitrejši in cenejši za prevode in chatbot. Isti API ključ.`
                     : `💡 Recommended: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — faster & cheaper for translations and chatbot. Same API key.`}
-                  {!secondaryModelName && (
+                  {secondaryModelName !== (RECOMMENDED_LIGHT_MODELS[aiProvider]?.id || '') && (
                     <button
                       type="button"
                       onClick={() => setSecondaryModelName(RECOMMENDED_LIGHT_MODELS[aiProvider]?.id || '')}
