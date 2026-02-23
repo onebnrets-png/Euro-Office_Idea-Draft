@@ -667,7 +667,7 @@ const renderPartners = (props) => {
                     <button
                         onClick={() => {
                             const nextIndex = partners.length;
-                            const code = nextIndex === 0 ? 'CO' : `P${nextIndex + 1}`;
+                            const code = nextIndex === 0 ? (language === 'si' ? 'KO' : 'CO') : `P${nextIndex + 1}`;
                             onAddItem(['partners'], {
                                 id: `partner-${Date.now()}`,
                                 code: code,
