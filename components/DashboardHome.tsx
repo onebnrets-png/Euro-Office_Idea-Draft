@@ -1241,24 +1241,241 @@ const OrganizationCard: React.FC<{
     setConversations(prev => prev.map(cv => { if (cv.id !== convoId) return cv; const title = newMessages.find(m => m.role === 'user')?.content.substring(0, 40) || cv.title; return { ...cv, messages: newMessages, title, updatedAt: Date.now() }; }));
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim(); if (!trimmed || isGenerating) return;
+    const handleSend = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed || isGenerating) return;
+
+    // ★ v7.0: Rate limit check before chatbot call
+    const rlStatus = getRateLimitStatus();
+    if (rlStatus.requestsInWindow >= rlStatus.maxRequests - 1) {
+      const waitMsg = language === 'si'
+        ? `⏳ Preveč zahtev — počakajte ${Math.ceil(rlStatus.cooldownRemaining / 1000)}s.`
+        : `⏳ Too many requests — please wait ${Math.ceil(rlStatus.cooldownRemaining / 1000)}s.`;
+      const waitChatMsg: ChatMessage = { role: 'assistant', content: waitMsg, timestamp: Date.now() };
+      if (activeConvoId) {
+        updateConvoMessages(activeConvoId, [...messages, { role: 'user', content: trimmed, timestamp: Date.now() }, waitChatMsg]);
+      }
+      return;
+    }
+
     let convoId = activeConvoId;
-    if (!convoId) { convoId = `chat-${Date.now()}`; const newConvo: ChatConversation = { id: convoId, title: trimmed.substring(0, 40), messages: [], createdAt: Date.now(), updatedAt: Date.now() }; setConversations(prev => { let u = [newConvo, ...prev]; if (u.length > MAX_CONVERSATIONS) u = u.slice(0, MAX_CONVERSATIONS); return u; }); setActiveConvoId(convoId); }
+    if (!convoId) {
+      convoId = `chat-${Date.now()}`;
+      const newConvo: ChatConversation = {
+        id: convoId, title: trimmed.substring(0, 40), messages: [],
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      setConversations(prev => {
+        let u = [newConvo, ...prev];
+        if (u.length > MAX_CONVERSATIONS) u = u.slice(0, MAX_CONVERSATIONS);
+        return u;
+      });
+      setActiveConvoId(convoId);
+    }
+
     const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: Date.now() };
     const currentMessages = [...messages, userMsg];
-    updateConvoMessages(convoId, currentMessages); setInput(''); setIsGenerating(true);
+    updateConvoMessages(convoId, currentMessages);
+    setInput('');
+    setIsGenerating(true);
+
     try {
-      let kbContext = '', orgRules = '';
-      if (activeOrg?.id) { try { const kb = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5); if (kb.length > 0) kbContext = '\n\n--- KNOWLEDGE BASE ---\n' + kb.join('\n\n'); } catch {} try { const ins = await organizationService.getActiveOrgInstructions?.(); if (ins) orgRules = '\n\n--- ORGANIZATION RULES ---\n' + JSON.stringify(ins); } catch {} }
-      const hist = currentMessages.slice(-10).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-      const prompt = `You are EURO-OFFICE AI Assistant.\nLanguage: ${language === 'si' ? 'Slovenian' : 'English'}${kbContext}${orgRules}\n\nConversation:\n${hist}\n\nUser: ${trimmed}\nAssistant:`;
-      const result = await generateContent({ prompt });
-      const aiResp = result?.text || (language === 'si' ? 'Napaka.' : 'Error.');
+      // ═══ v7.0: Build rich context for chatbot ═══
+
+      // 1. KNOWLEDGE BASE — full extracted texts (not just search chunks)
+      let kbContext = '';
+      if (activeOrg?.id) {
+        try {
+          // First: get ALL extracted texts for comprehensive context
+          const allTexts = await knowledgeBaseService.getAllExtractedTexts(activeOrg.id);
+          if (allTexts.length > 0) {
+            // Limit total KB context to ~8000 chars to avoid token overflow
+            const MAX_KB_CHARS = 8000;
+            let totalChars = 0;
+            const includedTexts: string[] = [];
+
+            // Also run keyword search to prioritize relevant docs
+            let relevantFiles: Set<string> = new Set();
+            try {
+              const searchResults = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5);
+              searchResults.forEach(r => {
+                const match = r.match(/\[Source: (.+?)\]/);
+                if (match) relevantFiles.add(match[1]);
+              });
+            } catch {}
+
+            // Add relevant docs first, then fill remaining space
+            const sorted = [...allTexts].sort((a, b) => {
+              const aRel = relevantFiles.has(a.fileName) ? 0 : 1;
+              const bRel = relevantFiles.has(b.fileName) ? 0 : 1;
+              return aRel - bRel;
+            });
+
+            for (const doc of sorted) {
+              const entry = `[${doc.fileName}]: ${doc.text.substring(0, 2000)}`;
+              if (totalChars + entry.length > MAX_KB_CHARS) break;
+              includedTexts.push(entry);
+              totalChars += entry.length;
+            }
+
+            if (includedTexts.length > 0) {
+              kbContext = '\n\n══ KNOWLEDGE BASE (organization documents) ══\n' +
+                includedTexts.join('\n---\n') +
+                '\n══ END KNOWLEDGE BASE ══';
+            }
+          }
+        } catch (e) {
+          console.warn('[AIChatbot] KB load failed:', e);
+        }
+      }
+
+      // 2. ORGANIZATION + GLOBAL INSTRUCTIONS
+      let instructionsContext = '';
+      try {
+        const parts: string[] = [];
+
+        // Global rules from Instructions.ts via override system
+        const chatbotRole = getEffectiveOverrideSync('chatbot_system_role');
+        if (chatbotRole) parts.push(`System Role: ${chatbotRole}`);
+
+        const globalRules = getEffectiveOverrideSync('global_rules');
+        if (globalRules) parts.push(`Global Rules: ${globalRules}`);
+
+        const languageRules = getEffectiveOverrideSync('language_rules');
+        if (languageRules) parts.push(`Language Rules: ${languageRules}`);
+
+        // Org-specific instructions
+        if (activeOrg?.id) {
+          try {
+            const ins = await organizationService.getActiveOrgInstructions?.();
+            if (ins) {
+              const orgStr = Object.entries(ins)
+                .filter(([_, v]) => typeof v === 'string' && (v as string).trim().length > 0)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join('\n');
+              if (orgStr) parts.push(`Organization Instructions:\n${orgStr}`);
+            }
+          } catch {}
+        }
+
+        if (parts.length > 0) {
+          instructionsContext = '\n\n══ INSTRUCTIONS & RULES ══\n' + parts.join('\n\n') + '\n══ END INSTRUCTIONS ══';
+        }
+      } catch (e) {
+        console.warn('[AIChatbot] Instructions load failed:', e);
+      }
+
+      // 3. ACTIVE PROJECT CONTEXT
+      let projectContext = '';
+      if (projectData) {
+        try {
+          const parts: string[] = [];
+          const pi = projectData.projectIdea;
+          if (pi?.projectTitle) parts.push(`Project Title: ${pi.projectTitle}`);
+          if (pi?.projectAcronym) parts.push(`Acronym: ${pi.projectAcronym}`);
+          if (pi?.mainAim) parts.push(`Main Aim: ${pi.mainAim}`);
+          if (pi?.proposedSolution) parts.push(`Proposed Solution: ${pi.proposedSolution.substring(0, 500)}`);
+
+          const pa = projectData.problemAnalysis;
+          if (pa?.coreProblem?.title) parts.push(`Core Problem: ${pa.coreProblem.title}`);
+          if (pa?.coreProblem?.description) parts.push(`Problem Description: ${pa.coreProblem.description.substring(0, 300)}`);
+
+          if (projectData.generalObjectives?.length > 0) {
+            const objs = projectData.generalObjectives
+              .filter((o: any) => o.title?.trim())
+              .map((o: any) => o.title)
+              .join('; ');
+            if (objs) parts.push(`General Objectives: ${objs}`);
+          }
+
+          if (projectData.specificObjectives?.length > 0) {
+            const sObjs = projectData.specificObjectives
+              .filter((o: any) => o.title?.trim())
+              .map((o: any) => o.title)
+              .join('; ');
+            if (sObjs) parts.push(`Specific Objectives: ${sObjs}`);
+          }
+
+          if (projectData.activities?.length > 0) {
+            const wps = projectData.activities
+              .filter((wp: any) => wp.title?.trim())
+              .map((wp: any) => `${wp.id}: ${wp.title}`)
+              .join('; ');
+            if (wps) parts.push(`Work Packages: ${wps}`);
+          }
+
+          if (projectData.partners?.length > 0) {
+            const partners = projectData.partners
+              .filter((p: any) => p.name?.trim())
+              .map((p: any) => `${p.code || '?'}: ${p.name} (${p.partnerType || '?'})`)
+              .join('; ');
+            if (partners) parts.push(`Partners: ${partners}`);
+          }
+
+          if (parts.length > 0) {
+            projectContext = '\n\n══ ACTIVE PROJECT ══\n' + parts.join('\n') + '\n══ END PROJECT ══';
+          }
+        } catch (e) {
+          console.warn('[AIChatbot] Project context build failed:', e);
+        }
+      }
+
+      // 4. CONVERSATION HISTORY (last 10 messages)
+      const hist = currentMessages.slice(-10)
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n');
+
+      // 5. BUILD FULL PROMPT with rich system message
+      const langName = language === 'si' ? 'Slovenian' : 'English';
+      const systemPrompt = `You are EURO-OFFICE AI Assistant — an expert consultant specializing in EU project funding (Horizon Europe, Erasmus+, Interreg, Creative Europe, CERV, LIFE, Digital Europe, and other EU programs).
+
+Your core competencies:
+- EU project proposal writing and structure (problem analysis, objectives, work packages, deliverables, milestones, Gantt charts, PERT diagrams)
+- Intervention logic and logical frameworks
+- Partner consortium design and allocation
+- Budget planning and co-financing rules
+- Impact assessment, KERs, dissemination strategies
+- Readiness levels (TRL, SRL, ORL, LRL)
+
+RESPONSE LANGUAGE: Always respond in ${langName}. If the user writes in another language, still respond in ${langName} unless explicitly asked otherwise.
+
+IMPORTANT RULES:
+- Use the KNOWLEDGE BASE documents below as your primary reference — cite document names when relevant
+- Consider the ACTIVE PROJECT context — tailor advice to the user's specific project
+- Follow INSTRUCTIONS & RULES set by the organization administrator
+- Be precise, actionable, and concrete — avoid vague generalities
+- When discussing EU project sections, reference the specific fields the user should fill in
+- Format responses clearly with markdown (headers, bullets, bold) for readability`;
+
+      const prompt = `${systemPrompt}${kbContext}${instructionsContext}${projectContext}
+
+══ CONVERSATION ══
+${hist}
+
+User: ${trimmed}
+Assistant:`;
+
+      // 6. CALL AI with taskType: 'chatbot' for light model routing
+      const result = await generateContent({
+        prompt,
+        taskType: 'chatbot',
+        sectionKey: 'chatbot',
+      });
+
+      const aiResp = result?.text || (language === 'si' ? 'Napaka pri generiranju odgovora.' : 'Error generating response.');
       updateConvoMessages(convoId, [...currentMessages, { role: 'assistant', content: aiResp, timestamp: Date.now() }]);
-    } catch (e: any) { updateConvoMessages(convoId, [...currentMessages, { role: 'assistant', content: `Error: ${e.message}`, timestamp: Date.now() }]); }
-    finally { setIsGenerating(false); inputRef.current?.focus(); }
-  }, [input, isGenerating, activeConvoId, messages, activeOrg, language, updateConvoMessages]);
+
+    } catch (e: any) {
+      console.error('[AIChatbot] Generation error:', e);
+      const errorMsg = language === 'si'
+        ? `Napaka: ${e.message || 'Neznana napaka'}`
+        : `Error: ${e.message || 'Unknown error'}`;
+      updateConvoMessages(convoId, [...currentMessages, { role: 'assistant', content: errorMsg, timestamp: Date.now() }]);
+    } finally {
+      setIsGenerating(false);
+      inputRef.current?.focus();
+    }
+  }, [input, isGenerating, activeConvoId, messages, activeOrg, language, projectData, updateConvoMessages]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', minHeight: 300 }}>
