@@ -92,9 +92,24 @@ const migrateActivityPrefixes = (data: any, lang: 'en' | 'si'): any => {
     });
   });
 
-  console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
+    console.log('[PrefixMigration] Migrated ' + idMap.size + ' IDs');
 
-  return { ...data, activities: migratedActivities };
+  // ★ v1.2: Migrate partner coordinator code (EN=CO, SI=KO)
+  let migratedPartners = data.partners;
+  if (Array.isArray(data.partners) && data.partners.length > 0) {
+    const correctCoCode = lang === 'si' ? 'KO' : 'CO';
+    const wrongCoCode = lang === 'si' ? 'CO' : 'KO';
+    if (data.partners[0]?.code === wrongCoCode) {
+      migratedPartners = data.partners.map((p: any, idx: number) => {
+        if (idx === 0) return { ...p, code: correctCoCode };
+        return p;
+      });
+      console.log('[PrefixMigration] Coordinator code: ' + wrongCoCode + ' -> ' + correctCoCode);
+    }
+  }
+
+  return { ...data, activities: migratedActivities, partners: migratedPartners };
+
 };
 
 interface UseProjectManagerProps {
