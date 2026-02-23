@@ -256,61 +256,72 @@ function getMaxTokensForSection(sectionKey?: string): number {
 // ─── GEMINI MODELS ───────────────────────────────────────────────
 
 export const GEMINI_MODELS = [
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', description: 'Most intelligent — multimodal, agentic, reasoning' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', description: 'Balanced speed & intelligence' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced thinking — code, math, STEM, long context' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Best price-performance — fast, thinking enabled' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', description: 'Ultra fast — cost-efficient, high throughput' },
-  { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash Preview (Sep 2025)', description: 'Latest Flash preview with enhancements' },
-  { id: 'gemini-2.5-flash-lite-preview-09-2025', name: 'Gemini 2.5 Flash-Lite Preview (Sep 2025)', description: 'Latest Flash-Lite preview' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (⚠ deprecated)', description: 'Shutdown March 31, 2026 — migrate to 2.5+' },
-  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite (⚠ deprecated)', description: 'Shutdown March 31, 2026 — migrate to 2.5+' },
+  // ═══ Gemini 3 — newest generation (preview, Feb 2026) ═══
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', description: 'Most advanced — complex reasoning, coding, multimodal' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', description: 'Next-gen speed — agentic workflows, balanced quality' },
+  // ═══ Gemini 2.5 — stable, production-ready ═══
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Stable)', description: 'Deep reasoning, coding, complex tasks — 1M context' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable) ★ Recommended', description: 'Best price-performance — fast, high volume, thinking' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Stable)', description: 'Cheapest — classification, simple extraction, bulk tasks' },
 ];
 
 // ─── OPENAI MODELS ───────────────────────────────────────────────
 
 export const OPENAI_MODELS = [
-  { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Best model for coding and agentic tasks across industries' },
-  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Smarter and more precise responses' },
-  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Coding and agentic tasks with configurable reasoning effort' },
-  { id: 'gpt-5', name: 'GPT-5', description: 'Intelligent reasoning model for complex tasks' },
-  { id: 'gpt-5-pro', name: 'GPT-5 Pro', description: 'Smarter and more precise version of GPT-5' },
-  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Faster, cost-efficient version of GPT-5' },
-  { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Fastest, most cost-efficient version of GPT-5' },
-  { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Smartest non-reasoning model' },
-  { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', description: 'Smaller, faster version of GPT-4.1' },
-  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Fastest, most cost-efficient version of GPT-4.1' },
-  { id: 'gpt-4o', name: 'GPT-4o', description: 'Fast, intelligent, flexible GPT model' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast, affordable small model for focused tasks' },
+  // ═══ GPT-5.2 — latest flagship (Feb 2026) ═══
+  { id: 'gpt-5.2', name: 'GPT-5.2 ★ Recommended', description: 'Best model — coding, agentic tasks, reasoning' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Smarter, more precise responses — higher cost' },
+  // ═══ GPT-5.1 — previous generation ═══
+  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Coding and agentic tasks — configurable reasoning' },
+  // ═══ GPT-5 — stable ═══
+  { id: 'gpt-5', name: 'GPT-5', description: 'Intelligent reasoning — complex tasks' },
+  { id: 'gpt-5-pro', name: 'GPT-5 Pro', description: 'Enhanced GPT-5 — more precise' },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Faster, cost-efficient GPT-5 variant' },
+  { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Cheapest GPT-5 — fast, lightweight tasks' },
+  // ═══ GPT-4.1 — non-reasoning, still available in API ═══
+  { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Smartest non-reasoning model — still in API' },
+  { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', description: 'Smaller, faster GPT-4.1' },
+  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Cheapest — ultra-fast, bulk tasks' },
+  // ═══ o-series reasoning ═══
+  { id: 'o3', name: 'o3', description: 'Reasoning model — complex analytical tasks' },
+  { id: 'o3-pro', name: 'o3 Pro', description: 'Enhanced o3 — more compute, better answers' },
+  { id: 'o3-mini', name: 'o3 Mini', description: 'Small reasoning model — fast, affordable' },
 ];
 
 // ─── OPENROUTER POPULAR MODELS ───────────────────────────────────
 
 export const OPENROUTER_MODELS = [
-  { id: 'openai/gpt-4o', name: 'OpenAI GPT-4o', description: 'Most capable OpenAI model' },
-  { id: 'openai/gpt-4o-mini', name: 'OpenAI GPT-4o Mini', description: 'Fast & affordable OpenAI' },
+  // ═══ OpenAI via OpenRouter ═══
+  { id: 'openai/gpt-5.2', name: 'OpenAI GPT-5.2', description: 'Latest OpenAI flagship' },
+  { id: 'openai/gpt-5-mini', name: 'OpenAI GPT-5 Mini', description: 'Fast, cost-efficient reasoning' },
+  { id: 'openai/gpt-4.1', name: 'OpenAI GPT-4.1', description: 'Smartest non-reasoning model' },
+  { id: 'openai/gpt-4.1-nano', name: 'OpenAI GPT-4.1 Nano', description: 'Ultra cheap OpenAI' },
   { id: 'openai/o3-mini', name: 'OpenAI o3-mini', description: 'OpenAI reasoning model' },
+  // ═══ Anthropic via OpenRouter ═══
   { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', description: 'Anthropic balanced model' },
   { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4', description: 'Anthropic most capable' },
-  { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro (via OpenRouter)', description: 'Google via OpenRouter' },
-  { id: 'deepseek/deepseek-v3.2', name: '🇨🇳 DeepSeek V3.2', description: 'DeepSeek flagship – top open-source, MoE 671B' },
-  { id: 'deepseek/deepseek-r1', name: '🇨🇳 DeepSeek R1', description: 'DeepSeek reasoning model – rivals OpenAI o1' },
-  { id: 'deepseek/deepseek-r1-0528', name: '🇨🇳 DeepSeek R1 0528', description: 'Latest R1 update – enhanced reasoning' },
-  { id: 'moonshotai/kimi-k2.5', name: '🇨🇳 Kimi K2.5 (Moonshot AI)', description: '#1 open-source – reasoning + visual coding' },
-  { id: 'moonshotai/kimi-k2', name: '🇨🇳 Kimi K2 (Moonshot AI)', description: '1T param MoE – coding & agentic tasks' },
-  { id: 'z-ai/glm-5', name: '🇨🇳 GLM-5 (Zhipu AI)', description: 'Z.AI latest flagship – frontier open-source' },
-  { id: 'z-ai/glm-4.5-air:free', name: '🇨🇳 GLM-4.5 Air (FREE)', description: 'Zhipu AI – free lightweight model' },
-  { id: 'qwen/qwen3-235b-a22b', name: '🇨🇳 Qwen3 235B A22B (Alibaba)', description: 'Alibaba MoE 235B – top reasoning & coding' },
-  { id: 'qwen/qwen3-max', name: '🇨🇳 Qwen3 Max (Alibaba)', description: 'Alibaba cloud-hosted flagship' },
-  { id: 'qwen/qwen3-coder', name: '🇨🇳 Qwen3 Coder (Alibaba)', description: 'Alibaba coding specialist – 480B MoE' },
-  { id: 'minimax/minimax-m2.1', name: '🇨🇳 MiniMax M2.1', description: 'MiniMax flagship – coding & agents, efficient' },
-  { id: 'minimax/minimax-m2', name: '🇨🇳 MiniMax M2', description: 'MiniMax – compact high-performance model' },
-  { id: 'meta-llama/llama-4-maverick', name: '🦙 Llama 4 Maverick (Meta)', description: 'Meta MoE 128 experts – top Llama model' },
-  { id: 'meta-llama/llama-4-scout', name: '🦙 Llama 4 Scout (Meta)', description: 'Meta MoE 16 experts – fast & efficient' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: '🦙 Llama 3.3 70B (Meta)', description: 'Meta proven workhorse – great price/quality' },
-  { id: 'mistralai/mistral-large-2512', name: '🇫🇷 Mistral Large 3 (Dec 2025)', description: 'Mistral flagship – 262K context' },
-  { id: 'mistralai/devstral-2512', name: '🇫🇷 Devstral 2 (Mistral)', description: 'Mistral agentic coding specialist – 123B MoE' },
-  { id: 'mistralai/mistral-small-2503', name: '🇫🇷 Mistral Small (Mar 2025)', description: 'Mistral lightweight – fast responses' },
+  // ═══ Google via OpenRouter ═══
+  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (via OpenRouter)', description: 'Google flagship via OpenRouter' },
+  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (via OpenRouter)', description: 'Google fast model via OpenRouter' },
+  // ═══ DeepSeek ═══
+  { id: 'deepseek/deepseek-v3.2', name: '🇨🇳 DeepSeek V3.2 ★ Recommended', description: 'Flagship open-source — MoE 671B, top quality' },
+  { id: 'deepseek/deepseek-r1', name: '🇨🇳 DeepSeek R1', description: 'Reasoning model — rivals OpenAI o1' },
+  { id: 'deepseek/deepseek-r1-0528', name: '🇨🇳 DeepSeek R1 0528', description: 'Latest R1 — enhanced reasoning' },
+  // ═══ Chinese frontier ═══
+  { id: 'moonshotai/kimi-k2.5', name: '🇨🇳 Kimi K2.5 (Moonshot)', description: '#1 open-source — reasoning + visual coding' },
+  { id: 'moonshotai/kimi-k2', name: '🇨🇳 Kimi K2 (Moonshot)', description: '1T param MoE — coding & agentic tasks' },
+  { id: 'qwen/qwen3-235b-a22b', name: '🇨🇳 Qwen3 235B (Alibaba)', description: 'Alibaba MoE 235B — top reasoning & coding' },
+  { id: 'qwen/qwen3-max', name: '🇨🇳 Qwen3 Max (Alibaba)', description: 'Alibaba cloud flagship' },
+  { id: 'qwen/qwen3-coder', name: '🇨🇳 Qwen3 Coder (Alibaba)', description: 'Alibaba coding specialist — 480B MoE' },
+  { id: 'minimax/minimax-m2.1', name: '🇨🇳 MiniMax M2.1', description: 'MiniMax flagship — coding & agents' },
+  { id: 'z-ai/glm-5', name: '🇨🇳 GLM-5 (Zhipu)', description: 'Zhipu frontier open-source' },
+  // ═══ Meta Llama ═══
+  { id: 'meta-llama/llama-4-maverick', name: '🦙 Llama 4 Maverick', description: 'Meta MoE 128 experts — top Llama' },
+  { id: 'meta-llama/llama-4-scout', name: '🦙 Llama 4 Scout', description: 'Meta MoE 16 experts — fast & efficient' },
+  // ═══ Mistral ═══
+  { id: 'mistralai/mistral-large-2512', name: '🇫🇷 Mistral Large 3', description: 'Mistral flagship — 262K context' },
+  { id: 'mistralai/devstral-2512', name: '🇫🇷 Devstral 2 (Mistral)', description: 'Agentic coding specialist — 123B MoE' },
+  { id: 'mistralai/mistral-small-2503', name: '🇫🇷 Mistral Small', description: 'Lightweight — fast responses' },
 ];
 
 // ─── PROVIDER DETECTION ──────────────────────────────────────────
