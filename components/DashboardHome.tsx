@@ -1200,7 +1200,7 @@ const OrganizationCard: React.FC<{
 
 // ——— AI Chatbot — with formatted text + scroll fix ————————
 
-const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null }> = ({ language, isDark, colors: c, activeOrg }) => {
+  const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null; projectData: any }> = ({ language, isDark, colors: c, activeOrg, projectData }) => {
   const [conversations, setConversations] = useState<ChatConversation[]>(() => { try { const s = localStorage.getItem(CHAT_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [activeConvoId, setActiveConvoId] = useState<string | null>(() => conversations[0]?.id || null);
   const [input, setInput] = useState('');
