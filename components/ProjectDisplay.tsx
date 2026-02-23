@@ -1222,8 +1222,8 @@ const renderActivities = (props) => {
             {renderPartners(props)}
 
             <div id="workplan">
-                 <div id="workplan">
-                <SectionHeader title={t.subSteps.workplan} onAdd={() => onAddItem(path, { id: `${wpPrefix}${activities.length + 1}`, title: '', tasks: [], milestones: [], deliverables: [] })} addText={t.add}>
+                <SectionHeader title={t.subSteps.workplan} 
+                    onAdd={() => onAddItem(path, { id: `${wpPrefix}${activities.length + 1}`, title: '', tasks: [], milestones: [], deliverables: [] })} addText={t.add}>
                     <GenerateButton onClick={() => onGenerateSection('activities')} isLoading={isLoading === `${t.generating} activities...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 
