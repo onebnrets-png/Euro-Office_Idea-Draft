@@ -1373,61 +1373,146 @@ const OrganizationCard: React.FC<{
       } catch (e) {
         console.warn('[AIChatbot] Instructions load failed:', e);
       }
-       // 3. ACTIVE PROJECT CONTEXT
+            // 3. ACTIVE PROJECT CONTEXT — COMPLETE project data for full chatbot awareness
       let projectContext = '';
       if (projectData) {
         try {
+          const MAX_FIELD = 600;
+          const MAX_SHORT = 200;
           const parts: string[] = [];
+
+          // --- Project Idea ---
           const pi = projectData.projectIdea;
           if (pi?.projectTitle) parts.push(`Project Title: ${pi.projectTitle}`);
           if (pi?.projectAcronym) parts.push(`Acronym: ${pi.projectAcronym}`);
           if (pi?.mainAim) parts.push(`Main Aim: ${pi.mainAim}`);
-          if (pi?.proposedSolution) parts.push(`Proposed Solution: ${pi.proposedSolution.substring(0, 500)}`);
+          if (pi?.stateOfTheArt) parts.push(`State of the Art: ${pi.stateOfTheArt.substring(0, MAX_FIELD)}`);
+          if (pi?.proposedSolution) parts.push(`Proposed Solution: ${pi.proposedSolution.substring(0, MAX_FIELD)}`);
+          if (pi?.startDate) parts.push(`Start Date: ${pi.startDate}`);
+          if (pi?.durationMonths) parts.push(`Duration: ${pi.durationMonths} months`);
+          if (pi?.policies?.length > 0) {
+            const pols = pi.policies.filter((p: any) => p.name?.trim()).map((p: any) => `- ${p.name}: ${(p.description || '').substring(0, 120)}`).join('\n');
+            if (pols) parts.push(`EU Policies:\n${pols}`);
+          }
+          if (pi?.readinessLevels) {
+            const rl = pi.readinessLevels;
+            const rls = ['TRL', 'SRL', 'ORL', 'LRL'].map(k => {
+              const r = rl[k];
+              return r?.level != null ? `${k}: Level ${r.level} — ${(r.justification || '').substring(0, 80)}` : null;
+            }).filter(Boolean).join('; ');
+            if (rls) parts.push(`Readiness Levels: ${rls}`);
+          }
 
+          // --- Problem Analysis ---
           const pa = projectData.problemAnalysis;
           if (pa?.coreProblem?.title) parts.push(`Core Problem: ${pa.coreProblem.title}`);
-          if (pa?.coreProblem?.description) parts.push(`Problem Description: ${pa.coreProblem.description.substring(0, 300)}`);
+          if (pa?.coreProblem?.description) parts.push(`Problem Description: ${pa.coreProblem.description.substring(0, MAX_FIELD)}`);
+          if (pa?.causes?.length > 0) {
+            const causes = pa.causes.filter((c: any) => c.title?.trim()).map((c: any) => `- ${c.title}: ${(c.description || '').substring(0, MAX_SHORT)}`).join('\n');
+            if (causes) parts.push(`Causes:\n${causes}`);
+          }
+          if (pa?.consequences?.length > 0) {
+            const conseqs = pa.consequences.filter((c: any) => c.title?.trim()).map((c: any) => `- ${c.title}: ${(c.description || '').substring(0, MAX_SHORT)}`).join('\n');
+            if (conseqs) parts.push(`Consequences:\n${conseqs}`);
+          }
 
+          // --- Objectives ---
           if (projectData.generalObjectives?.length > 0) {
-            const objs = projectData.generalObjectives
-              .filter((o: any) => o.title?.trim())
-              .map((o: any) => o.title)
-              .join('; ');
-            if (objs) parts.push(`General Objectives: ${objs}`);
+            const objs = projectData.generalObjectives.filter((o: any) => o.title?.trim()).map((o: any) => `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [KPI: ${o.indicator || 'n/a'}]`).join('\n');
+            if (objs) parts.push(`General Objectives:\n${objs}`);
           }
-
           if (projectData.specificObjectives?.length > 0) {
-            const sObjs = projectData.specificObjectives
-              .filter((o: any) => o.title?.trim())
-              .map((o: any) => o.title)
-              .join('; ');
-            if (sObjs) parts.push(`Specific Objectives: ${sObjs}`);
+            const sObjs = projectData.specificObjectives.filter((o: any) => o.title?.trim()).map((o: any) => `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [KPI: ${o.indicator || 'n/a'}]`).join('\n');
+            if (sObjs) parts.push(`Specific Objectives:\n${sObjs}`);
           }
 
+          // --- Project Management ---
+          const pm = projectData.projectManagement;
+          if (pm?.description) parts.push(`Project Management:\n${pm.description.substring(0, MAX_FIELD)}`);
+          if (pm?.structure) {
+            const s = pm.structure;
+            const struct = [s.coordinator, s.steeringCommittee, s.advisoryBoard, s.wpLeaders].filter(Boolean).join(' | ');
+            if (struct) parts.push(`Management Structure: ${struct}`);
+          }
+
+          // --- Activities (WPs + tasks + deliverables + milestones) ---
           if (projectData.activities?.length > 0) {
-            const wps = projectData.activities
-              .filter((wp: any) => wp.title?.trim())
-              .map((wp: any) => `${wp.id}: ${wp.title}`)
-              .join('; ');
-            if (wps) parts.push(`Work Packages: ${wps}`);
+            const wps = projectData.activities.filter((wp: any) => wp.title?.trim()).map((wp: any) => {
+              const tasks = (wp.tasks || []).filter((t: any) => t.title?.trim()).map((t: any) =>
+                `  · ${t.id}: ${t.title} (${t.startDate || '?'} → ${t.endDate || '?'})`
+              ).join('\n');
+              const delivs = (wp.deliverables || []).filter((d: any) => d.title?.trim()).map((d: any) =>
+                `  » D: ${d.title} — ${(d.description || '').substring(0, 100)}`
+              ).join('\n');
+              const miles = (wp.milestones || []).filter((m: any) => m.description?.trim()).map((m: any) =>
+                `  ◆ M: ${m.description} (${m.date || '?'})`
+              ).join('\n');
+              return `- ${wp.id}: ${wp.title}${tasks ? '\n' + tasks : ''}${delivs ? '\n' + delivs : ''}${miles ? '\n' + miles : ''}`;
+            }).join('\n');
+            if (wps) parts.push(`Work Packages, Tasks, Deliverables & Milestones:\n${wps}`);
           }
 
+          // --- Risks ---
+          if (projectData.risks?.length > 0) {
+            const risks = projectData.risks.filter((r: any) => r.title?.trim()).map((r: any) =>
+              `- [${r.category || '?'}] ${r.title} (Likelihood: ${r.likelihood || '?'}, Impact: ${r.impact || '?'})\n  Description: ${(r.description || '').substring(0, MAX_SHORT)}\n  Mitigation: ${(r.mitigation || '').substring(0, MAX_SHORT)}`
+            ).join('\n');
+            if (risks) parts.push(`Risk Register:\n${risks}`);
+          }
+
+          // --- Outputs ---
+          if (projectData.outputs?.length > 0) {
+            const outputs = projectData.outputs.filter((o: any) => o.title?.trim()).map((o: any) =>
+              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+            ).join('\n');
+            if (outputs) parts.push(`Outputs:\n${outputs}`);
+          }
+
+          // --- Outcomes ---
+          if (projectData.outcomes?.length > 0) {
+            const outcomes = projectData.outcomes.filter((o: any) => o.title?.trim()).map((o: any) =>
+              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+            ).join('\n');
+            if (outcomes) parts.push(`Outcomes:\n${outcomes}`);
+          }
+
+          // --- Impacts ---
+          if (projectData.impacts?.length > 0) {
+            const impacts = projectData.impacts.filter((o: any) => o.title?.trim()).map((o: any) =>
+              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+            ).join('\n');
+            if (impacts) parts.push(`Impacts:\n${impacts}`);
+          }
+
+          // --- KERs ---
+          if (projectData.kers?.length > 0) {
+            const kers = projectData.kers.filter((k: any) => k.title?.trim()).map((k: any) =>
+              `- ${k.title}: ${(k.description || '').substring(0, MAX_SHORT)}\n  Exploitation: ${(k.exploitationStrategy || '').substring(0, MAX_SHORT)}`
+            ).join('\n');
+            if (kers) parts.push(`Key Exploitable Results (KERs):\n${kers}`);
+          }
+
+          // --- Partners ---
           if (projectData.partners?.length > 0) {
-            const partners = projectData.partners
-              .filter((p: any) => p.name?.trim())
-              .map((p: any) => `${p.code || '?'}: ${p.name} (${p.partnerType || '?'})`)
-              .join('; ');
-            if (partners) parts.push(`Partners: ${partners}`);
+            const partners = projectData.partners.filter((p: any) => p.name?.trim()).map((p: any) =>
+              `- ${p.code || '?'}: ${p.name} (${p.partnerType || '?'}, PM rate: €${p.pmRate || '?'}/month)\n  Expertise: ${(p.expertise || '').substring(0, 150)}`
+            ).join('\n');
+            if (partners) parts.push(`Partnership:\n${partners}`);
+          }
+
+          // --- Finance summary ---
+          if (projectData.fundingModel) parts.push(`Funding Model: ${projectData.fundingModel}`);
+          if (projectData.indirectCostSettings) {
+            parts.push(`Indirect Costs: ${projectData.indirectCostSettings.percentage}% on [${(projectData.indirectCostSettings.appliesToCategories || []).join(', ')}]`);
           }
 
           if (parts.length > 0) {
-            projectContext = '\n\n══ ACTIVE PROJECT ══\n' + parts.join('\n') + '\n══ END PROJECT ══';
+            projectContext = '\n\n══ ACTIVE PROJECT — COMPLETE DATA ══\n' + parts.join('\n\n') + '\n══ END PROJECT ══';
           }
         } catch (e) {
           console.warn('[AIChatbot] Project context build failed:', e);
         }
       }
-
       // 4. CONVERSATION HISTORY (last 10 messages)
       const hist = currentMessages.slice(-10)
         .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
