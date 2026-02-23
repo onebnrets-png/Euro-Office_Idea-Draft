@@ -14,7 +14,7 @@ import { colors as lightColors, darkColors, shadows, radii, animation, typograph
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { TEXT } from '../locales.ts';
 import { storageService } from '../services/storageService.ts';
-import { validateProviderKey, OPENROUTER_MODELS, GEMINI_MODELS, OPENAI_MODELS, type AIProviderType } from '../services/aiProvider.ts';
+import { validateProviderKey, OPENROUTER_MODELS, GEMINI_MODELS, OPENAI_MODELS, RECOMMENDED_LIGHT_MODELS, getModelsForProvider, type AIProviderType } from '../services/aiProvider.ts';
 import {
   getFullInstructions, getDefaultInstructions, saveAppInstructions, resetAppInstructions,
   LANGUAGE_DIRECTIVES, LANGUAGE_MISMATCH_TEMPLATE, ACADEMIC_RIGOR_RULES, HUMANIZATION_RULES,
