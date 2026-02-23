@@ -82,7 +82,7 @@ export const useGeneration = ({
   setLanguage,
   setProjectVersions,
 }: UseGenerationProps) => {
-  const [isLoading, setIsLoading] = useState<boolean | string>(false);
+    const [isLoading, setIsLoading] = useState<boolean | string>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Summary state
@@ -90,7 +90,45 @@ export const useGeneration = ({
   const [summaryText, setSummaryText] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
+  // ★ v7.2: Global generation lock — prevents double-clicks and parallel section generations
+  const isGeneratingRef = useRef(false);
+  const sessionCallCountRef = useRef(0);
+
   const t = TEXT[language] || TEXT['en'];
+
+  // ★ v7.2: Pre-generation guard — checks lock + client-side rate limit
+  const preGenerationGuard = useCallback(
+    (context: string): boolean => {
+      // Block if already generating
+      if (isGeneratingRef.current) {
+        console.warn(`[useGeneration] Blocked: already generating (${context})`);
+        return false;
+      }
+
+      // Check client-side rate limit status
+      const status = getRateLimitStatus();
+      if (status.requestsInWindow >= status.maxRequests - 1) {
+        const waitSec = Math.ceil(status.windowMs / 1000);
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Preveč zahtevkov' : 'Too Many Requests',
+          message: language === 'si'
+            ? `V zadnji minuti ste poslali ${status.requestsInWindow} zahtevkov (omejitev: ${status.maxRequests}/min).\n\nPočakajte ~${waitSec} sekund preden nadaljujete, da se izognete blokiranju s strani AI ponudnika.\n\nTa seja: ${sessionCallCountRef.current} AI klicev.`
+            : `You've made ${status.requestsInWindow} requests in the last minute (limit: ${status.maxRequests}/min).\n\nPlease wait ~${waitSec} seconds before continuing to avoid being blocked by the AI provider.\n\nThis session: ${sessionCallCountRef.current} AI calls.`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return false;
+      }
+
+      return true;
+    },
+    [language, setModalConfig, closeModal]
+  );
 
   // ─── DEEP CONTENT CHECKER (shared utility) ─────────────────────
 
