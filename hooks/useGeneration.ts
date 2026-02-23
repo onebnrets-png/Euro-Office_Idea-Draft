@@ -737,9 +737,10 @@ export const useGeneration = ({
             }
 
             const wpPfx = language === 'si' ? 'DS' : 'WP';
-              augmentedWPs.forEach((wp, idx) => {
+              const wpPfx = language === 'si' ? 'DS' : 'WP';
+            augmentedWPs.forEach((wp, idx) => {
               wp.id = `${wpPfx}${idx + 1}`;
-         });
+            });
             console.warn(`[Activities] Adding missing mandatory WPs: ${missingNames.join(', ')} — generating only indices [${mandatoryIndicesToGenerate.join(', ')}]`);
 
             const finalIndicesToGenerate: number[] = [];
