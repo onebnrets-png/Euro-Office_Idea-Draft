@@ -735,7 +735,6 @@ export const useGeneration = ({
               }
               mandatoryIndicesToGenerate.push(dissInsertIdx);
             }
-
             const wpPfx = language === 'si' ? 'DS' : 'WP';
             augmentedWPs.forEach((wp, idx) => {
               wp.id = `${wpPfx}${idx + 1}`;
