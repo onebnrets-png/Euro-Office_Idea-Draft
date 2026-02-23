@@ -1,7 +1,15 @@
 // components/DashboardHome.tsx
 // ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
-// v6.1 — 2026-02-21
+// v7.0 — 2026-02-23
+//
+// CHANGES v7.0:
+//   ★ CRITICAL FIX: AI Chatbot now uses FULL Knowledge Base context (getAllExtractedTexts)
+//   ★ AI Chatbot now includes Instructions.ts rules + global/org overrides
+//   ★ AI Chatbot now injects active project context (title, acronym, objectives)
+//   ★ AI Chatbot now uses taskType:'chatbot' for light model routing + rate limit
+//   ★ System prompt completely rebuilt — EU project expert persona
+//   ★ KB search still used for relevance ranking, but full context always included
 //
 // CHANGES v6.1:
 //   ★ Responsive grid — 1 column on mobile (<768px), 2 on desktop
