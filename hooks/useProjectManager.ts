@@ -170,18 +170,21 @@ export const useProjectManager = ({
 
   // ─── Load active project ──────────────────────────────────────
 
-  const loadActiveProject = useCallback(
+    const loadActiveProject = useCallback(
     async (specificId: string | null = null) => {
       const loadedData = await storageService.loadProject(language, specificId);
 
       if (loadedData) {
-        setProjectData(safeMerge(loadedData));
+        // ★ v1.2: Migrate WP/Task prefixes to match current language
+        const mergedData = migrateActivityPrefixes(safeMerge(loadedData), language);
+        setProjectData(mergedData);
 
         const otherLang = language === 'en' ? 'si' : 'en';
         const otherData = await storageService.loadProject(otherLang, specificId);
+        const mergedOther = otherData ? migrateActivityPrefixes(safeMerge(otherData), otherLang) : null;
         setProjectVersions({
-          en: language === 'en' ? safeMerge(loadedData) : safeMerge(otherData),
-          si: language === 'si' ? safeMerge(loadedData) : safeMerge(otherData),
+          en: language === 'en' ? mergedData : mergedOther,
+          si: language === 'si' ? mergedData : mergedOther,
         });
       } else {
         setProjectData(createEmptyProjectData());
