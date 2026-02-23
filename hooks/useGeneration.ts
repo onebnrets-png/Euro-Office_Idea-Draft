@@ -1342,6 +1342,8 @@ export const useGeneration = ({
         handleAIError(e, `generateSection(${sectionKey})`);
       } finally {
         setIsLoading(false);
+        // ★ v7.2: Release generation lock
+        isGeneratingRef.current = false;
       }
     },
     [
@@ -1352,8 +1354,10 @@ export const useGeneration = ({
       setProjectData,
       setHasUnsavedTranslationChanges,
       handleAIError,
+      preGenerationGuard,
     ]
   );
+
   // ─── 3-option generation modal helper ──────────────────────────
 
   const show3OptionModal = useCallback(
