@@ -1186,6 +1186,13 @@ export const useGeneration = ({
             signal  // ★ v7.5
           );
         }
+        // ★ DIAGNOSTIC: Log what AI actually returned
+        console.log(`[executeGeneration] ★ generatedData for "${sectionKey}":`, 
+          JSON.stringify(generatedData)?.substring(0, 500),
+          '| type:', typeof generatedData,
+          '| isArray:', Array.isArray(generatedData),
+          '| length:', Array.isArray(generatedData) ? generatedData.length : 'N/A'
+        );
 
         // ═══ DATA INSERTION ═══
         let newData = { ...projectData };
