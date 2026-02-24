@@ -390,6 +390,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'No banned AI phrases — write like a senior human consultant',
       'Sentence lengths and structures vary naturally throughout',
       'CROSS-CHECK: The Proposed Solution logically responds to the causes identified in Problem Analysis',
+      'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
   activities: {
