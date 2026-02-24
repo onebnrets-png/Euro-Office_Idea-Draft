@@ -153,8 +153,21 @@ export const safeMerge = (importedData: any): any => {
 
   if (!merged.projectManagement) merged.projectManagement = defaultData.projectManagement;
 
-  ['activities', 'generalObjectives', 'specificObjectives', 'outputs', 'outcomes', 'impacts', 'risks', 'kers'].forEach(key => {
-    if (!Array.isArray(merged[key])) merged[key] = defaultData[key];
+    ['activities', 'generalObjectives', 'specificObjectives', 'outputs', 'outcomes', 'impacts', 'risks', 'kers'].forEach(key => {
+    if (!Array.isArray(merged[key])) {
+      // ★ FIX: AI sometimes returns {objectives: [...]} or {key: [...]} instead of [...]
+      if (merged[key] && typeof merged[key] === 'object') {
+        for (const v of Object.values(merged[key])) {
+          if (Array.isArray(v) && v.length > 0) {
+            console.warn(`[safeMerge] ★ "${key}" was object, extracted nested array (${(v as any[]).length} items)`);
+            merged[key] = v;
+            break;
+          }
+        }
+      }
+      // If still not an array after extraction, use default
+      if (!Array.isArray(merged[key])) merged[key] = defaultData[key];
+    }
   });
 
   if (Array.isArray(merged.activities)) {
