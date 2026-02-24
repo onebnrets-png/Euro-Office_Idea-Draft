@@ -437,6 +437,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, game-changer, paradigm shift, empower, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
       'Target Groups and End Users are clearly distinguished where relevant',
+      'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
   partners: {
