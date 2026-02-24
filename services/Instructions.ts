@@ -1069,6 +1069,7 @@ export const GLOBAL_RULES = `
 12. Quantify wherever possible — no vague statements.
 13. Content should reflect the gender dimension and inclusivity principles (GEPs) in line with EU standards.
 14. Every deliverable and milestone indicator should be BINARY and verifiable (Lump Sum compliant).
+15. ZERO EMPTY FIELDS RULE (SUPREME — NO EXCEPTIONS): Every field defined in the JSON schema MUST contain substantive, meaningful content. An empty string (""), a placeholder like "N/A", or a field with only whitespace is a FATAL ERROR that causes the ENTIRE output to be REJECTED. This applies to EVERY field in EVERY section without exception: titles, descriptions, indicators, mitigations, exploitation strategies, justifications, names, dates — ALL fields. If you are unsure what to write for a field, generate your best professional attempt rather than leaving it empty.
 `;
 
 // ───────────────────────────────────────────────────────────────
