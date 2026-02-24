@@ -371,6 +371,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
       'CROSS-CHECK: Every cause listed here MUST be addressable by at least one Activity/WP in Chapter 5',
       'CROSS-CHECK: Every consequence listed here MUST connect to at least one Impact in Chapter 6',
+      'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
   projectIdea: {
