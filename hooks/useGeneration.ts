@@ -2202,13 +2202,7 @@ export const useGeneration = ({
         // ★ EXPLICIT SAVE — field generation must persist immediately
         try {
           if (currentProjectId) {
-            const updatedData = { ...projectData };
-            const pathCopy = [...path];
-            let target = updatedData;
-            for (let i = 0; i < pathCopy.length - 1; i++) {
-              target = target[pathCopy[i]];
-            }
-            target[pathCopy[pathCopy.length - 1]] = content;
+            const updatedData = set(projectData, path, content);
             await storageService.saveProject(updatedData, language, currentProjectId);
             console.log('[handleGenerateField] ★ Explicit save — SUCCESS');
           }
