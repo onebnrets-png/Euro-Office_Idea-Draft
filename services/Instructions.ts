@@ -713,11 +713,11 @@ Outputs are the direct, tangible deliverables of Activities. Every Output MUST
 be traceable to a specific WP. Outputs feed into Outcomes and eventually Impacts.
 
 MANDATORY:
-- Each output: title (result-oriented noun phrase), description (3–5 sentences, mentions specific WP link), measurable indicator.
 - Title MUST be a result-oriented noun phrase: "Digital Competence Curriculum" NOT "Develop a curriculum".
-- Indicators MUST be BINARY and verifiable (Lump Sum compliant).
+- Each description: 3–5 substantive sentences explaining what the output is, how it is produced, and who benefits. Mentions specific WP link.
+- Each output MUST have an "indicator" field containing a SPECIFIC, BINARY, and VERIFIABLE proof of completion. The indicator MUST include: quantity/format (e.g., "1 online platform"), scope (e.g., "covering 5 languages"), and verification method (e.g., "accessible at project URL, verified by external evaluator"). Lump Sum compliant — the indicator must allow YES/NO verification. Examples: "1 PDF handbook (min. 80 pages) in 5 languages, peer-reviewed by 3 external experts and published on the project website by M18" or "1 functional online dashboard with at least 500 registered users, verified by server analytics report at M24". NEVER leave the indicator field empty — this is a FATAL error.
 - Clearly state which Target Groups will directly receive/use each output.
-- No markdown. Vary sentence structures.
+- No markdown. Vary sentence structures. No banned AI phrases.
 - CROSS-CHECK: Each output should be producible by a specific WP/Task.`
   },
   outcomes: {
