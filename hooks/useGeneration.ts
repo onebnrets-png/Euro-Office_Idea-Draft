@@ -1763,6 +1763,7 @@ export const useGeneration = ({
                 },
               };
               successCount++;
+              console.log('[Composite/activities] PM content check — description length:', pmContent?.description?.length || 0, '| structure:', JSON.stringify(pmContent?.structure)?.substring(0, 200));
               console.log('[Composite/activities] Step 1/5: projectManagement ✅');
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
