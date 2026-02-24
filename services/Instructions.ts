@@ -423,6 +423,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Final reporting task and closing milestone are scheduled ON or BEFORE the project end date',
       'LUMP SUM: Every Deliverable and Milestone indicator MUST be a BINARY, verifiable proof of completion (e.g., "1 PDF report of min 30 pages, approved by Steering Committee and published on website")',
       'CROSS-CHECK: Every cause from Problem Analysis is addressed by at least one WP or Task',
+      'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
   _default: {
