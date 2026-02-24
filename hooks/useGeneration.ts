@@ -1386,18 +1386,17 @@ export const useGeneration = ({
           }
         }
 
-                setProjectData(newData);
-        setHasUnsavedTranslationChanges(true);
-
-        // ★ EXPLICIT SAVE — don't rely solely on auto-save debounce
-        try {
+        setProjectData((prev: any) => {
+          const savedData = { ...prev, ...newData };
+          // ★ EXPLICIT SAVE — save the ACTUAL merged state, not stale closure data
           if (currentProjectId) {
-            await storageService.saveProject(newData, language, currentProjectId);
-            console.log(`[executeGeneration] ★ Explicit save after ${sectionKey} generation — SUCCESS`);
+            storageService.saveProject(savedData, language, currentProjectId)
+              .then(() => console.log(`[executeGeneration] ★ Explicit save after ${sectionKey} — lang=${language}, generalObjectives: ${Array.isArray(savedData.generalObjectives) && savedData.generalObjectives.some((o: any) => o.title?.trim()) ? '✅ HAS' : '⚠️ EMPTY'}`))
+              .catch((e: any) => console.error(`[executeGeneration] ★ Explicit save failed:`, e));
           }
-        } catch (saveErr) {
-          console.error(`[executeGeneration] ★ Explicit save failed:`, saveErr);
-        }
+          return savedData;
+        });
+        setHasUnsavedTranslationChanges(true);
 
       } catch (e: any) {
         handleAIError(e, `generateSection(${sectionKey})`);
