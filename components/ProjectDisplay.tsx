@@ -1647,20 +1647,20 @@ const ProjectDisplay = (props) => {
                 );
             })()}
             
-        {isLoading && (
-        <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
-        <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
-        <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
-        {props.onCancelGeneration && (
-            <button
-                onClick={props.onCancelGeneration}
-                className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
-            >
-                ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
-            </button>
-        )}
-        </div>
-)}
+                    {isLoading && (
+                <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
+                    <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
+                    <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
+                    {props.onCancelGeneration && (
+                        <button
+                            onClick={props.onCancelGeneration}
+                            className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
+                        >
+                            ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div 
                 id="main-scroll-container" 
@@ -1680,3 +1680,4 @@ const ProjectDisplay = (props) => {
     );
 };
 export default ProjectDisplay;
+
