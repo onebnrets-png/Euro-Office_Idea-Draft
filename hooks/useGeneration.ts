@@ -1417,6 +1417,7 @@ export const useGeneration = ({
       setHasUnsavedTranslationChanges,
       handleAIError,
       preGenerationGuard,
+      currentProjectId,
     ]
   );
   // ─── 3-option generation modal helper ──────────────────────────
