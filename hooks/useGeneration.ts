@@ -1386,11 +1386,23 @@ export const useGeneration = ({
           }
         }
 
-        setProjectData(newData);
+                setProjectData(newData);
         setHasUnsavedTranslationChanges(true);
+
+        // ★ EXPLICIT SAVE — don't rely solely on auto-save debounce
+        try {
+          if (currentProjectId) {
+            await storageService.saveProject(newData, language, currentProjectId);
+            console.log(`[executeGeneration] ★ Explicit save after ${sectionKey} generation — SUCCESS`);
+          }
+        } catch (saveErr) {
+          console.error(`[executeGeneration] ★ Explicit save failed:`, saveErr);
+        }
+
       } catch (e: any) {
         handleAIError(e, `generateSection(${sectionKey})`);
       } finally {
+
         setIsLoading(false);
         isGeneratingRef.current = false;
         abortControllerRef.current = null;  // ★ v7.5: Cleanup
