@@ -455,6 +455,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'Partner count is appropriate for the project complexity (not too few, not too many)',
       'No markdown formatting, no banned AI phrases',
       'CROSS-CHECK: Every WP should have at least one partner with relevant expertise',
+      'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
   // ★ v7.0: NEW — Cross-Chapter Consistency Gate
