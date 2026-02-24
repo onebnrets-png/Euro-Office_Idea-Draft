@@ -2191,6 +2191,7 @@ export const useGeneration = ({
       performTranslationFromOther,
       show3OptionModal,
       preGenerationGuard,
+      currentProjectId,
     ]
   );
 
