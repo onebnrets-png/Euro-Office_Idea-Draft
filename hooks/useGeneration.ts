@@ -2330,6 +2330,27 @@ export const useGeneration = ({
       } else {
         runComposite('regenerate');
       }
+      },
+    [
+      ensureApiKey,
+      robustCheckSectionHasContent,
+      sectionNeedsGeneration,
+      checkOtherLanguageHasContent,
+      projectData,
+      language,
+      t,
+      closeModal,
+      setProjectData,
+      setHasUnsavedTranslationChanges,
+      setIsSettingsOpen,
+      setModalConfig,
+      handleAIError,
+      performTranslationFromOther,
+      show3OptionModal,
+      preGenerationGuard,
+      currentProjectId,
+    ]
+  );
   // ─── Single field generation ───────────────────────────────────
   // ★ v7.5: AbortController support
 
