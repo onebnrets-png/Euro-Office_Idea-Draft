@@ -1648,8 +1648,8 @@ export const useGeneration = ({
       const isActivities = compositeSectionKey === 'activities';
 
       // ── Check existing content ──
-      const checkableSections = isActivities
-        ? ['projectManagement', 'partners', 'activities', 'risks']  // partnerAllocations not checkable standalone
+            const checkableSections = isActivities
+        ? ['projectManagement', 'partners', 'activities', 'risks']
         : allSections;
 
       const hasContentInSections = checkableSections.some((s) =>
@@ -1658,10 +1658,44 @@ export const useGeneration = ({
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
+      // ★ FIX: For activities composite, check if other language has REAL content
+      // (not just empty templates with id:"WP1" and empty fields)
+      const hasRealContent = (data: any, sectionKey: string): boolean => {
+        if (!data) return false;
+        const section = data[sectionKey];
+        if (!section) return false;
+        if (Array.isArray(section)) {
+          return section.length > 0 && section.some((item: any) => {
+            if (!item || typeof item !== 'object') return false;
+            return Object.entries(item).some(([key, val]) => {
+              if (key === 'id' || key === 'startDate' || key === 'endDate' || key === 'startMonth' || key === 'endMonth' || key === 'dependencies' || key === 'leader' || key === 'participants') return false;
+              if (typeof val === 'string') return val.trim().length > 0;
+              if (Array.isArray(val)) return val.length > 0 && val.some((v: any) => {
+                if (!v || typeof v !== 'object') return false;
+                return Object.entries(v).some(([k2, v2]) => {
+                  if (k2 === 'id' || k2 === 'dependencies') return false;
+                  return typeof v2 === 'string' && v2.trim().length > 0;
+                });
+              });
+              return false;
+            });
+          });
+        }
+        if (typeof section === 'object') {
+          const desc = (section as any).description;
+          if (typeof desc === 'string' && desc.trim().length > 0) return true;
+          return false;
+        }
+        return false;
+      };
+
       let otherLangData: any = null;
       for (const s of checkableSections) {
-        otherLangData = await checkOtherLanguageHasContent(s);
-        if (otherLangData) break;
+        const candidate = await checkOtherLanguageHasContent(s);
+        if (candidate && hasRealContent(candidate, s)) {
+          otherLangData = candidate;
+          break;
+        }
       }
 
       // ── Main composite runner ──
