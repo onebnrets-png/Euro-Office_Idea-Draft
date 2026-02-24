@@ -1239,7 +1239,23 @@ export const useGeneration = ({
           if (compositeData.outcomes) newData.outcomes = compositeData.outcomes;
           if (compositeData.impacts) newData.impacts = compositeData.impacts;
         } else {
-          newData[sectionKey] = generatedData;
+          // ★ FIX: Handle AI returning {objectives: [...]} instead of [...]
+          if (Array.isArray(generatedData)) {
+            newData[sectionKey] = generatedData;
+          } else if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+            // AI might return wrapped object like {objectives: [...]} or {outputs: [...]}
+            const values = Object.values(generatedData);
+            const nestedArray = values.find((v: any) => Array.isArray(v) && v.length > 0);
+            if (nestedArray) {
+              console.warn(`[executeGeneration] ★ "${sectionKey}" returned as object, extracted nested array (${(nestedArray as any[]).length} items)`);
+              newData[sectionKey] = nestedArray;
+            } else {
+              newData[sectionKey] = generatedData;
+            }
+          } else {
+            console.warn(`[executeGeneration] ★ "${sectionKey}" generatedData is null/undefined — keeping original`);
+            // Don't overwrite with null/undefined
+          }
         }
 
         if (sectionKey === 'activities') {
