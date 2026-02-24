@@ -1146,7 +1146,7 @@ export const generateSectionContent = async (
   }
 
     if (mode === 'fill' && currentSectionData) {
-    return smartMerge(currentSectionData, parsed);
+    parsed = smartMerge(currentSectionData, parsed);
   }
 
   // ★ v7.6: UNIVERSAL POST-PROCESSING — ensure ALL fields are non-empty
