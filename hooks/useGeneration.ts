@@ -189,9 +189,12 @@ export const useGeneration = ({
             emptyIndices.push(index);
           } else {
             const hasEmptyFields = Object.entries(item).some(([key, val]) => {
-              if (key === 'id') return false;
-              return typeof val === 'string' && val.trim().length === 0;
-            });
+          if (key === 'id') return false;
+          // ★ FIX: Detect empty string, undefined, null, or AI placeholder as "empty"
+          if (val === undefined || val === null) return true;
+          if (typeof val === 'string' && (val.trim().length === 0 || val.includes('[AI did not generate'))) return true;
+          return false;
+        });
             if (hasEmptyFields) {
               emptyIndices.push(index);
             }
