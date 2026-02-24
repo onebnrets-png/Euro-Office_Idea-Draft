@@ -158,10 +158,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ isOpen, onClose, pr
   const overallCompleteness = useMemo(() => calculateOverallCompleteness(projectData), [projectData]);
 
   const pi = projectData?.projectIdea;
-  const wpCount = projectData?.activities?.filter((wp: any) => hasRealStr(wp.title)).length || 0;
-  const riskCount = projectData?.risks?.filter((r: any) => hasRealStr(r.title)).length || 0;
-  const genObjCount = projectData?.generalObjectives?.filter((o: any) => hasRealStr(o.title)).length || 0;
-  const specObjCount = projectData?.specificObjectives?.filter((o: any) => hasRealStr(o.title)).length || 0;
+  const wpCount = Array.isArray(projectData?.activities) ? projectData.activities.filter((wp: any) => hasRealStr(wp.title)).length : 0;
+  const riskCount = Array.isArray(projectData?.risks) ? projectData.risks.filter((r: any) => hasRealStr(r.title)).length : 0;
+  const genObjCount = Array.isArray(projectData?.generalObjectives) ? projectData.generalObjectives.filter((o: any) => hasRealStr(o.title)).length : 0;
+  const specObjCount = Array.isArray(projectData?.specificObjectives) ? projectData.specificObjectives.filter((o: any) => hasRealStr(o.title)).length : 0;
   const objCount = genObjCount + specObjCount;
 
   if (!isOpen) return null;
