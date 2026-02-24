@@ -1697,7 +1697,7 @@ export const useGeneration = ({
       let otherLangData: any = null;
       for (const s of checkableSections) {
         const candidate = await checkOtherLanguageHasContent(s);
-        if (candidate && hasRealContent(candidate, s)) {
+          if (candidate) {
           otherLangData = candidate;
           break;
         }
