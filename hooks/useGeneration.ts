@@ -1652,9 +1652,12 @@ export const useGeneration = ({
         ? ['projectManagement', 'partners', 'activities', 'risks']
         : allSections;
 
-      const hasContentInSections = checkableSections.some((s) =>
-        robustCheckSectionHasContent(s)
-      );
+            const hasContentInSections = checkableSections.some((s) => {
+        if (isActivities) {
+          return hasRealContent(projectData, s);
+        }
+        return robustCheckSectionHasContent(s);
+      });
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
