@@ -2175,8 +2175,27 @@ export const useGeneration = ({
         console.log('[handleGenerateField] ◀ content:', JSON.stringify(content).substring(0, 300), '| type:', typeof content, '| length:', content?.length);
         handleUpdateData(path, content);
         console.log('[handleGenerateField] ✅ handleUpdateData DONE');
+
+        // ★ EXPLICIT SAVE — field generation must persist immediately
+        try {
+          if (currentProjectId) {
+            const updatedData = { ...projectData };
+            const pathCopy = [...path];
+            let target = updatedData;
+            for (let i = 0; i < pathCopy.length - 1; i++) {
+              target = target[pathCopy[i]];
+            }
+            target[pathCopy[pathCopy.length - 1]] = content;
+            await storageService.saveProject(updatedData, language, currentProjectId);
+            console.log('[handleGenerateField] ★ Explicit save — SUCCESS');
+          }
+        } catch (saveErr) {
+          console.error('[handleGenerateField] ★ Explicit save failed:', saveErr);
+        }
+
       } catch (e: any) {
         if (e.name !== 'AbortError') {
+
           handleAIError(e, `generateField(${String(fieldName)})`);
         }
 
