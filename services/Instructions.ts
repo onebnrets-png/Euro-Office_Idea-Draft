@@ -750,9 +750,11 @@ Categorise each impact into one of the three Key Impact Pathways:
 Explicitly state the pathway in each impact description.
 
 MANDATORY:
-- Each impact: title (result-oriented noun phrase), description (3–5 sentences linking to EU goals and KIP), indicator with baseline and target.
 - Title MUST be result-oriented noun phrase: "Enhanced Cross-Border Innovation Ecosystem" NOT "Enhance the ecosystem".
-- No markdown. Vary sentence structures.
+- Each description: 3–5 substantive sentences linking to EU-level policy goals, explaining the causal pathway from project outcomes to long-term change.
+- Each impact MUST have an "indicator" field containing a SPECIFIC, MEASURABLE long-term indicator. Include a quantitative target, a timeframe (typically 3–5 years post-project), and a data source. Examples: "5% reduction in early school leaving rates in participating regions within 3 years post-project, measured via Eurostat regional education statistics" or "Adoption of the project methodology by at least 3 national education ministries within 5 years, verified by policy documents and MoUs". NEVER leave the indicator field empty — this is a FATAL error.
+- Each impact MUST specify its Key Impact Pathway (KIP): Scientific, Societal, or Economic.
+- No markdown. Vary sentence structures. No banned AI phrases.
 - CROSS-CHECK: Every impact links to at least one Consequence from Problem Analysis.`
   },
   risks: {
