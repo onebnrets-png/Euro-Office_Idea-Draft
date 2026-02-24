@@ -150,10 +150,23 @@ export const useProjectManager = ({
 
   const hasContent = useCallback((data: any): boolean => {
     if (!data) return false;
-    return (
-      (data.problemAnalysis?.coreProblem?.title || '') !== '' ||
-      (data.projectIdea?.projectTitle || '') !== ''
-    );
+    // Check core fields
+    if ((data.problemAnalysis?.coreProblem?.title || '') !== '') return true;
+    if ((data.projectIdea?.projectTitle || '') !== '') return true;
+    if ((data.projectIdea?.mainAim || '') !== '') return true;
+    // Check array sections — if any has content, project should be saved
+    const arraySections = ['generalObjectives', 'specificObjectives', 'activities', 'outputs', 'outcomes', 'impacts', 'risks', 'kers', 'partners'];
+    for (const key of arraySections) {
+      const arr = data[key];
+      if (Array.isArray(arr) && arr.length > 0) {
+        if (arr.some((item: any) => 
+          (item.title && item.title.trim() !== '') || 
+          (item.description && item.description.trim() !== '') ||
+          (item.name && item.name.trim() !== '')
+        )) return true;
+      }
+    }
+    return false;
   }, []);
 
   const generateFilename = useCallback((extension: string): string => {
