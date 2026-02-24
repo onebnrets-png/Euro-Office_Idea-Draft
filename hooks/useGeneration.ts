@@ -2157,7 +2157,8 @@ export const useGeneration = ({
       abortControllerRef.current = fieldAbort;
 
       try {
-        const content = await generateFieldContent(path, projectData, language, fieldAbort.signal);
+        const fieldPathStr = path.map(String).join('.');
+        const content = await generateFieldContent(fieldPathStr, projectData, language, fieldAbort.signal);
         handleUpdateData(path, content);
       } catch (e: any) {
         if (e.name !== 'AbortError') {
