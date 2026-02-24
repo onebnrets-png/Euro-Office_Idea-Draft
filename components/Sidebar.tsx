@@ -1,13 +1,12 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
-// v3.1 — 2026-02-21
+// v3.2 — 2026-02-24 — DEFENSIVE ARRAY HANDLING
+//   ★ v3.2: NEW safeArray() utility — handles AI returning objects
+//           instead of arrays (e.g. { objectives: [...] } vs [...])
+//   ★ v3.2: arrayHasContent + getStepCompletionPercent use safeArray()
 //   ★ v3.1: FIX: hasActiveProject prop — all steps disabled when no project selected
 //   ★ v3.0: Dashboard Home integration
-//     - NEW: activeView prop ('dashboard' | 'project')
-//     - NEW: onOpenDashboard prop
-//     - NEW: Dashboard button at top of navigation (Home icon)
-//     - Visual indicator for active view (Dashboard vs Project steps)
 //   ★ v2.0: Organization Switcher (Multi-Tenant)
 //   v1.8: Superadmin support
 //   v1.7: Dark-mode sub-step & step text colors
@@ -64,9 +63,22 @@ const STEP_ICONS: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
 
 const STEP_KEYS: StepColorKey[] = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
 
-function arrayHasContent(arr: any[] | undefined | null): boolean {
-  if (!arr || arr.length === 0) return false;
-  return arr.some((item: any) => {
+// ★ v3.2: Safe array extractor — AI sometimes returns { objectives: [...] } instead of [...]
+function safeArray(v: any): any[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+}
+
+// ★ v3.2: Accepts any type safely — never crashes
+function arrayHasContent(arr: any): boolean {
+  const safe = safeArray(arr);
+  if (safe.length === 0) return false;
+  return safe.some((item: any) => {
     if (typeof item === 'string') return item.trim().length > 0;
     if (typeof item !== 'object' || item === null) return false;
     const hasTitle = item.title && typeof item.title === 'string' && item.title.trim().length > 0;
@@ -76,58 +88,66 @@ function arrayHasContent(arr: any[] | undefined | null): boolean {
   });
 }
 
+// ★ v3.2: All .filter/.some calls use safeArray()
 function getStepCompletionPercent(projectData: ProjectData, stepKey: string): number {
-  if (stepKey === 'problemAnalysis') {
-    let filled = 0; const total = 3;
-    const pa = projectData.problemAnalysis;
-    if (pa?.coreProblem?.title && pa.coreProblem.title.trim()) filled++;
-    if (arrayHasContent(pa?.causes)) filled++;
-    if (arrayHasContent(pa?.consequences)) filled++;
-    return Math.round((filled / total) * 100);
+  try {
+    if (stepKey === 'problemAnalysis') {
+      let filled = 0; const total = 3;
+      const pa = projectData.problemAnalysis;
+      if (pa?.coreProblem?.title && pa.coreProblem.title.trim()) filled++;
+      if (arrayHasContent(pa?.causes)) filled++;
+      if (arrayHasContent(pa?.consequences)) filled++;
+      return Math.round((filled / total) * 100);
+    }
+    if (stepKey === 'projectIdea') {
+      let filled = 0; const total = 5;
+      const pi = projectData.projectIdea;
+      if (pi?.mainAim?.trim()) filled++;
+      if (pi?.stateOfTheArt?.trim()) filled++;
+      if (pi?.proposedSolution?.trim()) filled++;
+      if (pi?.readinessLevels && Object.values(pi.readinessLevels).some((rl: any) => rl?.level > 0)) filled++;
+      if (arrayHasContent(pi?.policies)) filled++;
+      return Math.round((filled / total) * 100);
+    }
+    if (stepKey === 'generalObjectives') {
+      const objs = safeArray(projectData.generalObjectives);
+      if (!arrayHasContent(objs)) return 0;
+      const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim()).length;
+      const minRequired = 3;
+      if (withContent >= minRequired) return 100;
+      return Math.round((withContent / minRequired) * 100);
+    }
+    if (stepKey === 'specificObjectives') {
+      const objs = safeArray(projectData.specificObjectives);
+      if (!arrayHasContent(objs)) return 0;
+      const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim() && o.indicator?.trim()).length;
+      return Math.round((Math.min(withContent, 5) / 5) * 100);
+    }
+    if (stepKey === 'activities') {
+      let filled = 0; const total = 3;
+      const acts = safeArray(projectData.activities);
+      if (acts.length > 0 && acts.some((wp: any) =>
+        (wp.title && wp.title.trim()) ||
+        (safeArray(wp.tasks).some((t: any) => t.title && t.title.trim()))
+      )) filled++;
+      if (projectData.projectManagement?.description?.trim()) filled++;
+      if (arrayHasContent(projectData.risks)) filled++;
+      return Math.round((filled / total) * 100);
+    }
+    if (stepKey === 'expectedResults') {
+      let filled = 0; const total = 4;
+      if (arrayHasContent(projectData.outputs)) filled++;
+      if (arrayHasContent(projectData.outcomes)) filled++;
+      if (arrayHasContent(projectData.impacts)) filled++;
+      if (arrayHasContent(projectData.kers)) filled++;
+      return Math.round((filled / total) * 100);
+    }
+    return 0;
+  } catch (e) {
+    // ★ v3.2: Never crash on data inspection
+    console.warn(`[Sidebar] Error checking ${stepKey}:`, e);
+    return 0;
   }
-  if (stepKey === 'projectIdea') {
-    let filled = 0; const total = 5;
-    const pi = projectData.projectIdea;
-    if (pi?.mainAim?.trim()) filled++;
-    if (pi?.stateOfTheArt?.trim()) filled++;
-    if (pi?.proposedSolution?.trim()) filled++;
-    if (pi?.readinessLevels && Object.values(pi.readinessLevels).some((rl: any) => rl?.level > 0)) filled++;
-    if (arrayHasContent(pi?.policies)) filled++;
-    return Math.round((filled / total) * 100);
-  }
-  if (stepKey === 'generalObjectives') {
-    const objs = projectData.generalObjectives;
-    if (!arrayHasContent(objs)) return 0;
-    const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim()).length;
-    const minRequired = 3;
-    if (withContent >= minRequired) return 100;
-    return Math.round((withContent / minRequired) * 100);
-  }
-  if (stepKey === 'specificObjectives') {
-    const objs = projectData.specificObjectives;
-    if (!arrayHasContent(objs)) return 0;
-    const withContent = objs.filter((o: any) => o.title?.trim() && o.description?.trim() && o.indicator?.trim()).length;
-    return Math.round((Math.min(withContent, 5) / 5) * 100);
-  }
-  if (stepKey === 'activities') {
-    let filled = 0; const total = 3;
-    if (projectData.activities && projectData.activities.some((wp: any) =>
-      (wp.title && wp.title.trim()) ||
-      (wp.tasks && wp.tasks.some((t: any) => t.title && t.title.trim()))
-    )) filled++;
-    if (projectData.projectManagement?.description?.trim()) filled++;
-    if (arrayHasContent(projectData.risks)) filled++;
-    return Math.round((filled / total) * 100);
-  }
-  if (stepKey === 'expectedResults') {
-    let filled = 0; const total = 4;
-    if (arrayHasContent(projectData.outputs)) filled++;
-    if (arrayHasContent(projectData.outcomes)) filled++;
-    if (arrayHasContent(projectData.impacts)) filled++;
-    if (arrayHasContent(projectData.kers)) filled++;
-    return Math.round((filled / total) * 100);
-  }
-  return 0;
 }
 
 function getOverallCompletion(projectData: ProjectData): number {
@@ -175,10 +195,8 @@ interface SidebarProps {
   onSubStepClick: (subStepId: string) => void;
   isLoading: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
-  // ★ v3.0: Dashboard integration
   activeView: 'dashboard' | 'project';
   onOpenDashboard: () => void;
-  // ★ v3.1: Disable steps when no project is active
   hasActiveProject?: boolean;
 }
 
@@ -191,8 +209,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   isSidebarOpen, onCloseSidebar,
   onBackToWelcome, onOpenProjectList, onOpenAdminPanel, onLogout, onLanguageSwitch,
   onSubStepClick, isLoading, onCollapseChange,
-  activeView, onOpenDashboard, // ★ v3.0
-  hasActiveProject = true, // ★ v3.1
+  activeView, onOpenDashboard,
+  hasActiveProject = true,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => getThemeMode() === 'dark');
@@ -249,7 +267,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       ? (language === 'si' ? 'Admin / Nastavitve' : 'Admin / Settings')
       : (language === 'si' ? 'Nastavitve' : 'Settings');
 
-  // ★ v3.0: Dashboard active state
   const isDashboardActive = activeView === 'dashboard';
 
   return (
@@ -286,7 +303,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ) : (
             <>
-              {/* Organization Switcher */}
               {activeOrg && (
                 <div style={{
                   background: tc.surface.card, borderRadius: radii.lg,
@@ -313,7 +329,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
 
-              {/* Project card */}
               <div style={{ background: tc.surface.card, borderRadius: radii.lg, padding: spacing.md, border: `1px solid ${tc.border.light}`, marginBottom: spacing.md }}>
                 <p style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: typography.fontWeight.bold, color: tc.text.muted, marginBottom: '4px', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>{t.projects.currentProject}</p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -342,7 +357,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Organization badge — collapsed mode */}
         {isCollapsed && activeOrg && (
           <div title={activeOrg.name} style={{ padding: spacing.sm, textAlign: 'center', borderBottom: `1px solid ${tc.border.light}` }}>
             <div style={{
@@ -361,7 +375,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         <nav style={{ flex: 1, overflowY: 'auto', padding: isCollapsed ? `${spacing.sm} ${spacing.xs}` : `${spacing.md} ${spacing.md}`, minHeight: 0 }} className="custom-scrollbar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: isCollapsed ? spacing.sm : '2px' }}>
 
-            {/* ★ v3.0: DASHBOARD BUTTON */}
             <button
               onClick={onOpenDashboard}
               style={{
@@ -402,7 +415,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               )}
             </button>
 
-            {/* Separator between Dashboard and Steps */}
             {!isCollapsed && (
               <div style={{
                 height: 1, background: tc.border.light,
@@ -413,7 +425,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div style={{ height: 1, background: tc.border.light, margin: `0 ${spacing.xs} ${spacing.xs}` }} />
             )}
 
-            {/* Step navigation label */}
             {!isCollapsed && (
               <p style={{
                 fontSize: '10px', textTransform: 'uppercase', fontWeight: typography.fontWeight.bold,
@@ -424,13 +435,11 @@ const Sidebar: React.FC<SidebarProps> = ({
               </p>
             )}
 
-            {/* STEP NAVIGATION */}
             {STEPS.map((step: any, idx: number) => {
               const stepKey = step.key as StepColorKey;
               const stepColor = stepColors[stepKey];
               const isActive = activeView === 'project' && currentStepId === step.id;
               const isCompleted = completedStepsStatus[idx];
-              // ★ v3.1: Steps are only clickable when a project is active
               const isClickable = hasActiveProject && (step.id === 1 || completedStepsStatus[0]);
               const completionPct = getStepCompletionPercent(projectData, step.key);
               const StepIcon = STEP_ICONS[step.key];
@@ -484,7 +493,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </button>
 
-                  {/* Sub-steps */}
                   {!isCollapsed && isActive && SUB_STEPS[step.key as keyof typeof SUB_STEPS] && (SUB_STEPS[step.key as keyof typeof SUB_STEPS] as any[]).length > 0 && (
                     <div style={{
                       paddingLeft: spacing['2xl'], marginTop: '2px', marginBottom: spacing.sm,
@@ -527,7 +535,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* ═══ FOOTER ═══ */}
         <div style={{ padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : spacing.lg, borderTop: `1px solid ${tc.border.light}`, flexShrink: 0 }}>
-          {/* Admin/SuperAdmin button — expanded */}
           {!isCollapsed && (
             <button onClick={() => onOpenAdminPanel()} style={{
               width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
@@ -540,7 +547,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               {footerLabel}
             </button>
           )}
-          {/* Admin/SuperAdmin button — collapsed */}
           {isCollapsed && (
             <button onClick={() => onOpenAdminPanel()} style={{
               width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
@@ -550,7 +556,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          {/* Theme toggle — expanded */}
           {!isCollapsed && (
             <button onClick={() => { toggleTheme(); }} style={{
               width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
@@ -565,7 +570,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               <span>{isDark ? (language === 'si' ? 'Svetli način' : 'Light Mode') : (language === 'si' ? 'Temni način' : 'Dark Mode')}</span>
             </button>
           )}
-          {/* Theme toggle — collapsed */}
           {isCollapsed && (
             <button onClick={() => { toggleTheme(); }} style={{
               width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
@@ -579,7 +583,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          {/* Logout */}
           <button onClick={onLogout} style={{
             width: '100%', textAlign: isCollapsed ? 'center' : 'left',
             padding: `${spacing.sm} ${isCollapsed ? '0' : spacing.lg}`, borderRadius: radii.lg, border: 'none',
@@ -591,14 +594,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             {!isCollapsed && <span>{t.auth.logout}</span>}
           </button>
 
-          {/* Copyright */}
           {!isCollapsed && (
             <p style={{ fontSize: '10px', color: tc.text.muted, textAlign: 'center', marginTop: spacing.sm, opacity: 0.6 }}>© 2026 INFINITA d.o.o.</p>
           )}
         </div>
       </aside>
 
-      {/* Collapse/Expand button */}
       {(isDesktop || isSidebarOpen) && (
         <button
           onClick={() => { const next = !isCollapsed; setIsCollapsed(next); onCollapseChange?.(next); }}
