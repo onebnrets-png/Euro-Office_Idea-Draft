@@ -1145,9 +1145,32 @@ export const generateSectionContent = async (
     }));
   }
 
-  if (mode === 'fill' && currentSectionData) {
+    if (mode === 'fill' && currentSectionData) {
     return smartMerge(currentSectionData, parsed);
   }
+
+  // ★ v7.6: UNIVERSAL POST-PROCESSING — ensure ALL fields are non-empty
+  // Applies to EVERY section, EVERY field — no exceptions.
+  const ensureNonEmptyFields = (obj: any): any => {
+    if (Array.isArray(obj)) {
+      return obj.map((item: any) => ensureNonEmptyFields(item));
+    }
+    if (obj && typeof obj === 'object') {
+      const fixed: any = { ...obj };
+      for (const [key, value] of Object.entries(fixed)) {
+        if (typeof value === 'string' && value.trim() === '') {
+          fixed[key] = `[AI did not generate this field — please fill manually or regenerate]`;
+          console.warn(`[geminiService] ★ Empty field detected: "${key}" in section "${sectionKey}" — placeholder inserted.`);
+        } else if (typeof value === 'object' && value !== null) {
+          fixed[key] = ensureNonEmptyFields(value);
+        }
+      }
+      return fixed;
+    }
+    return obj;
+  };
+
+  parsed = ensureNonEmptyFields(parsed);
 
   return parsed;
 };
