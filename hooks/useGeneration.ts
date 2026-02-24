@@ -1548,259 +1548,528 @@ export const useGeneration = ({
     ]
   );
 
-  // ─── Composite generation (outputs + outcomes + impacts + KERs) ─
+    // ─── Composite generation (expectedResults OR activities) ───────
 
   const handleGenerateCompositeSection = useCallback(
-    async (_sectionKey: string) => {
+    async (compositeSectionKey: string) => {
       if (!ensureApiKey()) {
         setIsSettingsOpen(true);
         return;
       }
 
-      const allSections = ['outputs', 'outcomes', 'impacts', 'kers'];
+      // ── Determine which sub-sections to process ──
+      const COMPOSITE_MAP: Record<string, string[]> = {
+        expectedResults: ['outputs', 'outcomes', 'impacts', 'kers'],
+        activities: ['projectManagement', 'partners', 'activities', 'partnerAllocations', 'risks'],
+      };
 
-      const hasContentInSections = allSections.some((s) =>
+      const allSections = COMPOSITE_MAP[compositeSectionKey];
+      if (!allSections) {
+        console.error(`[handleGenerateCompositeSection] Unknown composite key: ${compositeSectionKey}`);
+        return;
+      }
+
+      const isActivities = compositeSectionKey === 'activities';
+
+      // ── Check existing content ──
+      const checkableSections = isActivities
+        ? ['projectManagement', 'partners', 'activities', 'risks']  // partnerAllocations not checkable standalone
+        : allSections;
+
+      const hasContentInSections = checkableSections.some((s) =>
         robustCheckSectionHasContent(s)
       );
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
       let otherLangData: any = null;
-      for (const s of allSections) {
+      for (const s of checkableSections) {
         otherLangData = await checkOtherLanguageHasContent(s);
         if (otherLangData) break;
       }
 
+      // ── Main composite runner ──
       const runComposite = async (mode: string) => {
+        if (!preGenerationGuard(`composite-${compositeSectionKey}`)) return;
+
+        isGeneratingRef.current = true;
+        sessionCallCountRef.current++;
+
+        // ★ v7.5: Create AbortController
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        const signal = abortController.signal;
+
         closeModal();
         setIsLoading(true);
         setError(null);
 
-        let successCount = 0;
-        let skippedCount = 0;
-        let lastError: any = null;
+        try {
+          if (isActivities) {
+            // ═══════════════════════════════════════════════
+            // ACTIVITIES COMPOSITE — sequential with dependencies
+            // Order: projectManagement → partners → activities (WP) → partnerAllocations → risks
+            // ═══════════════════════════════════════════════
 
-        let sectionsToProcess: { key: string; action: 'fill' | 'generate' | 'enhance' | 'regenerate'; emptyIndices: number[] }[] = [];
+            let newData = { ...projectData };
+            const totalSteps = 5;
+            let currentStep = 0;
 
-        if (mode === 'fill') {
-          for (const s of allSections) {
-            const status = sectionNeedsGeneration(s);
-            if (status.needsFullGeneration) {
-              sectionsToProcess.push({ key: s, action: 'generate', emptyIndices: [] });
-            } else if (status.needsFill) {
-              sectionsToProcess.push({ key: s, action: 'fill', emptyIndices: status.emptyIndices });
-            }
-          }
+            const stepLabel = (stepNum: number, siText: string, enText: string) => {
+              return language === 'si'
+                ? `${siText} (${stepNum}/${totalSteps})...`
+                : `${enText} (${stepNum}/${totalSteps})...`;
+            };
 
-          if (sectionsToProcess.length === 0) {
-            setModalConfig({
-              isOpen: true,
-              title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
-              message: language === 'si'
-                ? 'Vsi razdelki pričakovanih rezultatov so že izpolnjeni. Če želite izboljšati vsebino, uporabite možnost "Izboljšaj obstoječe".'
-                : 'All expected results sections are already filled. To improve content, use the "Enhance existing" option.',
-              confirmText: language === 'si' ? 'V redu' : 'OK',
-              secondaryText: '',
-              cancelText: '',
-              onConfirm: () => closeModal(),
-              onSecondary: null,
-              onCancel: () => closeModal(),
-            });
-            setIsLoading(false);
-            return;
-          }
-        } else if (mode === 'enhance') {
-          for (const s of allSections) {
-            const status = sectionNeedsGeneration(s);
-            if (!status.needsFullGeneration) {
-              sectionsToProcess.push({ key: s, action: 'enhance', emptyIndices: [] });
-            }
-          }
-          if (sectionsToProcess.length === 0) {
-            setModalConfig({
-              isOpen: true,
-              title: language === 'si' ? 'Ni vsebine za izboljšanje' : 'No content to enhance',
-              message: language === 'si'
-                ? 'Nobeden razdelek nima vsebine za izboljšanje. Uporabite možnost "Generiraj vse na novo".'
-                : 'No sections have content to enhance. Use the "Regenerate all" option.',
-              confirmText: language === 'si' ? 'V redu' : 'OK',
-              secondaryText: '',
-              cancelText: '',
-              onConfirm: () => closeModal(),
-              onSecondary: null,
-              onCancel: () => closeModal(),
-            });
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          sectionsToProcess = allSections.map(s => ({ key: s, action: 'regenerate' as const, emptyIndices: [] }));
-        }
+            // ── Step 1: Project Management ──
+            currentStep++;
+            if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+            setIsLoading(stepLabel(currentStep, 'Generiram implementacijo', 'Generating implementation'));
 
-        const totalToProcess = sectionsToProcess.length;
-        skippedCount = allSections.length - totalToProcess;
-
-        const modeLabels: Record<string, { si: string; en: string }> = {
-          fill: { si: 'Dopolnjujem', en: 'Filling' },
-          generate: { si: 'Generiram', en: 'Generating' },
-          enhance: { si: 'Izboljšujem', en: 'Enhancing' },
-          regenerate: { si: 'Generiram na novo', en: 'Regenerating' },
-        };
-
-        const waitLabel = language === 'si' ? 'Čakam na API kvoto' : 'Waiting for API quota';
-
-        for (let idx = 0; idx < sectionsToProcess.length; idx++) {
-          const { key: s, action, emptyIndices } = sectionsToProcess[idx];
-          const label = modeLabels[action]?.[language] || modeLabels['generate'][language];
-          const sectionLabel = s.charAt(0).toUpperCase() + s.slice(1);
-
-          setIsLoading(`${label} ${sectionLabel} (${idx + 1}/${totalToProcess})...`);
-
-          let success = false;
-          let retries = 0;
-          const maxRetries = 3;
-
-          while (!success && retries <= maxRetries) {
             try {
-              let generatedData: any;
-
-              if (action === 'fill' && emptyIndices.length > 0) {
-                generatedData = await generateTargetedFill(
-                  s,
-                  projectData,
-                  projectData[s],
-                  language
-                );
-              } else {
-                const genMode = action === 'generate' ? 'regenerate' : action;
-                generatedData = await generateSectionContent(
-                  s,
-                  projectData,
-                  language,
-                  genMode
-                );
-              }
-
-              setProjectData((prev: any) => {
-                const next = { ...prev };
-                next[s] = generatedData;
-                return next;
-              });
-              successCount++;
-              success = true;
+              const pmContent = await generateSectionContent(
+                'projectManagement', newData, language, mode, null, signal
+              );
+              newData.projectManagement = {
+                ...newData.projectManagement,
+                ...pmContent,
+                structure: {
+                  ...(newData.projectManagement?.structure || {}),
+                  ...(pmContent?.structure || {}),
+                },
+              };
+              console.log('[Composite/activities] Step 1/5: projectManagement ✅');
             } catch (e: any) {
-              const emsg = e.message || '';
-              const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+              if (e.name === 'AbortError') throw e;
+              console.error('[Composite/activities] projectManagement failed:', e);
+              // Non-fatal: continue
+            }
 
-              if (isRateLimit && retries < maxRetries) {
-                retries++;
-                const waitSeconds = retries * 20;
-                console.warn(`[runComposite] Rate limit on ${s}, retry ${retries}/${maxRetries} in ${waitSeconds}s...`);
-                for (let countdown = waitSeconds; countdown > 0; countdown--) {
-                  setIsLoading(`${waitLabel}... ${countdown}s → ${sectionLabel}`);
-                  await new Promise((r) => setTimeout(r, 1000));
-                }
-              } else {
-                console.error(`[runComposite] Failed to generate ${s}:`, e);
-                lastError = e;
-                break;
+            await new Promise(r => setTimeout(r, 3000));
+
+            // ── Step 2: Partners (Consortium) ──
+            currentStep++;
+            if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+            setIsLoading(stepLabel(currentStep, 'Generiram konzorcij', 'Generating consortium'));
+
+            try {
+              let partnersResult = await generateSectionContent(
+                'partners', newData, language, mode, null, signal
+              );
+              if (Array.isArray(partnersResult)) {
+                partnersResult = partnersResult.map((p: any, idx: number) => ({
+                  ...p,
+                  id: p.id || `partner-${idx + 1}`,
+                  code: p.code || (idx === 0 ? (language === 'si' ? 'KO' : 'CO') : `P${idx + 1}`),
+                  partnerType: (p.partnerType && isValidPartnerType(p.partnerType))
+                    ? p.partnerType
+                    : 'other',
+                }));
+                newData.partners = partnersResult;
+                console.log(`[Composite/activities] Step 2/5: partners ✅ (${partnersResult.length} partners)`);
               }
+            } catch (e: any) {
+              if (e.name === 'AbortError') throw e;
+              console.error('[Composite/activities] partners failed:', e);
+              // Non-fatal: continue — partnerAllocations will be skipped if no partners
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+
+            // ── Step 3: Activities (WP per-WP generation) ──
+            currentStep++;
+            if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+            try {
+              const existingWPs = Array.isArray(newData.activities) ? newData.activities : [];
+
+              let activitiesResult;
+              if (mode === 'regenerate' || existingWPs.length === 0) {
+                activitiesResult = await generateActivitiesPerWP(
+                  newData, language, mode,
+                  (wpIndex: number, wpTotal: number, wpTitle: string) => {
+                    if (wpIndex === -1) {
+                      setIsLoading(stepLabel(currentStep, 'Generiram strukturo DS', 'Generating WP structure'));
+                    } else {
+                      setIsLoading(
+                        language === 'si'
+                          ? `Generiram DS ${wpIndex + 1}/${wpTotal}: ${wpTitle} (${currentStep}/${totalSteps})...`
+                          : `Generating WP ${wpIndex + 1}/${wpTotal}: ${wpTitle} (${currentStep}/${totalSteps})...`
+                      );
+                    }
+                  },
+                  undefined, undefined, signal
+                );
+              } else if (mode === 'enhance') {
+                activitiesResult = await generateSectionContent(
+                  'activities', newData, language, 'enhance', null, signal
+                );
+              } else {
+                // fill mode
+                const emptyWPIndices: number[] = [];
+                existingWPs.forEach((wp: any, idx: number) => {
+                  const hasTasks = wp.tasks?.length > 0 && wp.tasks.some((t: any) => t.title?.trim());
+                  const hasMilestones = wp.milestones?.length > 0;
+                  const hasDeliverables = wp.deliverables?.length > 0 && wp.deliverables.some((d: any) => d.title?.trim());
+                  if (!hasTasks || !hasMilestones || !hasDeliverables) emptyWPIndices.push(idx);
+                });
+
+                if (emptyWPIndices.length > 0) {
+                  activitiesResult = await generateActivitiesPerWP(
+                    newData, language, 'fill',
+                    (wpIndex: number, wpTotal: number, wpTitle: string) => {
+                      if (wpIndex === -1) {
+                        setIsLoading(stepLabel(currentStep, `Dopolnjujem ${emptyWPIndices.length} DS`, `Filling ${emptyWPIndices.length} WPs`));
+                      } else {
+                        setIsLoading(
+                          language === 'si'
+                            ? `Dopolnjujem DS ${wpIndex + 1}/${wpTotal}: ${wpTitle} (${currentStep}/${totalSteps})...`
+                            : `Filling WP ${wpIndex + 1}/${wpTotal}: ${wpTitle} (${currentStep}/${totalSteps})...`
+                        );
+                      }
+                    },
+                    existingWPs, emptyWPIndices, signal
+                  );
+                } else {
+                  activitiesResult = existingWPs;
+                }
+              }
+
+              // Insert activities
+              if (Array.isArray(activitiesResult)) {
+                newData.activities = activitiesResult;
+              } else if (activitiesResult && Array.isArray(activitiesResult.activities)) {
+                newData.activities = activitiesResult.activities;
+              }
+
+              // Recalculate schedule
+              const schedResult = recalculateProjectSchedule(newData);
+              newData = schedResult.projectData;
+
+              console.log(`[Composite/activities] Step 3/5: activities ✅ (${(newData.activities || []).length} WPs)`);
+            } catch (e: any) {
+              if (e.name === 'AbortError') throw e;
+              console.error('[Composite/activities] activities failed:', e);
+              // Fatal for partnerAllocations — but we still try risks
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+
+            // ── Step 4: Partner Allocations ──
+            currentStep++;
+            if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+            const pa_partners = Array.isArray(newData.partners) ? newData.partners : [];
+            const pa_activities = Array.isArray(newData.activities) ? newData.activities : [];
+
+            if (pa_partners.length > 0 && pa_activities.length > 0) {
+              setIsLoading(stepLabel(currentStep, 'Generiram alokacije partnerjev', 'Generating partner allocations'));
+
+              try {
+                const allocResult = await generatePartnerAllocations(
+                  newData, language,
+                  (msg: string) => setIsLoading(`${msg} (${currentStep}/${totalSteps})`),
+                  signal
+                );
+
+                const updatedActivities = pa_activities.map((wp: any) => ({
+                  ...wp,
+                  tasks: (wp.tasks || []).map((task: any) => {
+                    const taskAlloc = allocResult.find((a: any) => a.taskId === task.id);
+                    if (taskAlloc?.allocations?.length > 0) {
+                      return { ...task, partnerAllocations: taskAlloc.allocations };
+                    }
+                    return task;
+                  }),
+                }));
+                newData.activities = updatedActivities;
+
+                const totalAllocations = allocResult.reduce((s: number, t: any) => s + (t.allocations?.length || 0), 0);
+                console.log(`[Composite/activities] Step 4/5: partnerAllocations ✅ (${totalAllocations} allocations)`);
+              } catch (e: any) {
+                if (e.name === 'AbortError') throw e;
+                console.error('[Composite/activities] partnerAllocations failed:', e);
+                // Non-fatal: finance will just be empty
+              }
+            } else {
+              console.log(`[Composite/activities] Step 4/5: partnerAllocations ⏭ SKIPPED (partners: ${pa_partners.length}, activities: ${pa_activities.length})`);
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+
+            // ── Step 5: Risks ──
+            currentStep++;
+            if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+            setIsLoading(stepLabel(currentStep, 'Generiram tveganja', 'Generating risks'));
+
+            try {
+              const risksContent = await generateSectionContent(
+                'risks', newData, language, mode, null, signal
+              );
+              if (Array.isArray(risksContent)) {
+                newData.risks = risksContent;
+              } else if (risksContent && Array.isArray((risksContent as any).risks)) {
+                newData.risks = (risksContent as any).risks;
+              }
+              console.log(`[Composite/activities] Step 5/5: risks ✅`);
+            } catch (e: any) {
+              if (e.name === 'AbortError') throw e;
+              console.error('[Composite/activities] risks failed:', e);
+              // Non-fatal
+            }
+
+            // ── Save all ──
+            setProjectData(newData);
+            setHasUnsavedTranslationChanges(true);
+            console.log('[Composite/activities] ALL STEPS COMPLETE ✅');
+
+          } else {
+            // ═══════════════════════════════════════════════
+            // EXPECTED RESULTS COMPOSITE — original logic
+            // ═══════════════════════════════════════════════
+
+            let successCount = 0;
+            let skippedCount = 0;
+            let lastError: any = null;
+
+            let sectionsToProcess: { key: string; action: 'fill' | 'generate' | 'enhance' | 'regenerate'; emptyIndices: number[] }[] = [];
+
+            if (mode === 'fill') {
+              for (const s of allSections) {
+                const status = sectionNeedsGeneration(s);
+                if (status.needsFullGeneration) {
+                  sectionsToProcess.push({ key: s, action: 'generate', emptyIndices: [] });
+                } else if (status.needsFill) {
+                  sectionsToProcess.push({ key: s, action: 'fill', emptyIndices: status.emptyIndices });
+                }
+              }
+
+              if (sectionsToProcess.length === 0) {
+                setModalConfig({
+                  isOpen: true,
+                  title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
+                  message: language === 'si'
+                    ? 'Vsi razdelki pričakovanih rezultatov so že izpolnjeni. Če želite izboljšati vsebino, uporabite možnost "Izboljšaj obstoječe".'
+                    : 'All expected results sections are already filled. To improve content, use the "Enhance existing" option.',
+                  confirmText: language === 'si' ? 'V redu' : 'OK',
+                  secondaryText: '',
+                  cancelText: '',
+                  onConfirm: () => closeModal(),
+                  onSecondary: null,
+                  onCancel: () => closeModal(),
+                });
+                setIsLoading(false);
+                isGeneratingRef.current = false;
+                abortControllerRef.current = null;
+                return;
+              }
+            } else if (mode === 'enhance') {
+              for (const s of allSections) {
+                const status = sectionNeedsGeneration(s);
+                if (!status.needsFullGeneration) {
+                  sectionsToProcess.push({ key: s, action: 'enhance', emptyIndices: [] });
+                }
+              }
+              if (sectionsToProcess.length === 0) {
+                setModalConfig({
+                  isOpen: true,
+                  title: language === 'si' ? 'Ni vsebine za izboljšanje' : 'No content to enhance',
+                  message: language === 'si'
+                    ? 'Nobeden razdelek nima vsebine za izboljšanje. Uporabite možnost "Generiraj vse na novo".'
+                    : 'No sections have content to enhance. Use the "Regenerate all" option.',
+                  confirmText: language === 'si' ? 'V redu' : 'OK',
+                  secondaryText: '',
+                  cancelText: '',
+                  onConfirm: () => closeModal(),
+                  onSecondary: null,
+                  onCancel: () => closeModal(),
+                });
+                setIsLoading(false);
+                isGeneratingRef.current = false;
+                abortControllerRef.current = null;
+                return;
+              }
+            } else {
+              sectionsToProcess = allSections.map(s => ({ key: s, action: 'regenerate' as const, emptyIndices: [] }));
+            }
+
+            const totalToProcess = sectionsToProcess.length;
+            skippedCount = allSections.length - totalToProcess;
+
+            const modeLabels: Record<string, { si: string; en: string }> = {
+              fill: { si: 'Dopolnjujem', en: 'Filling' },
+              generate: { si: 'Generiram', en: 'Generating' },
+              enhance: { si: 'Izboljšujem', en: 'Enhancing' },
+              regenerate: { si: 'Generiram na novo', en: 'Regenerating' },
+            };
+
+            const waitLabel = language === 'si' ? 'Čakam na API kvoto' : 'Waiting for API quota';
+
+            for (let idx = 0; idx < sectionsToProcess.length; idx++) {
+              if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+              const { key: s, action, emptyIndices } = sectionsToProcess[idx];
+              const label = modeLabels[action]?.[language] || modeLabels['generate'][language];
+              const sectionLabel = s.charAt(0).toUpperCase() + s.slice(1);
+
+              setIsLoading(`${label} ${sectionLabel} (${idx + 1}/${totalToProcess})...`);
+
+              let success = false;
+              let retries = 0;
+              const maxRetries = 3;
+
+              while (!success && retries <= maxRetries) {
+                try {
+                  let generatedData: any;
+
+                  if (action === 'fill' && emptyIndices.length > 0) {
+                    generatedData = await generateTargetedFill(
+                      s, projectData, projectData[s], language, signal
+                    );
+                  } else {
+                    const genMode = action === 'generate' ? 'regenerate' : action;
+                    generatedData = await generateSectionContent(
+                      s, projectData, language, genMode, null, signal
+                    );
+                  }
+
+                  setProjectData((prev: any) => {
+                    const next = { ...prev };
+                    next[s] = generatedData;
+                    return next;
+                  });
+                  successCount++;
+                  success = true;
+                } catch (e: any) {
+                  if (e.name === 'AbortError') throw e;
+
+                  const emsg = e.message || '';
+                  const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+
+                  if (isRateLimit && retries < maxRetries) {
+                    retries++;
+                    const waitSeconds = retries * 20;
+                    console.warn(`[runComposite] Rate limit on ${s}, retry ${retries}/${maxRetries} in ${waitSeconds}s...`);
+                    for (let countdown = waitSeconds; countdown > 0; countdown--) {
+                      if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+                      setIsLoading(`${waitLabel}... ${countdown}s → ${sectionLabel}`);
+                      await new Promise((r) => setTimeout(r, 1000));
+                    }
+                  } else {
+                    console.error(`[runComposite] Failed to generate ${s}:`, e);
+                    lastError = e;
+                    break;
+                  }
+                }
+              }
+
+              if (success) {
+                await new Promise((r) => setTimeout(r, 3000));
+              }
+            }
+
+            if (successCount > 0) {
+              setHasUnsavedTranslationChanges(true);
+            }
+
+            if (!lastError && successCount === totalToProcess) {
+              if (skippedCount > 0) {
+                const skippedNames = allSections
+                  .filter(s => !sectionsToProcess.find(sp => sp.key === s))
+                  .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+                  .join(', ');
+
+                setModalConfig({
+                  isOpen: true,
+                  title: language === 'si' ? 'Dopolnjevanje končano' : 'Fill complete',
+                  message: language === 'si'
+                    ? `Uspešno dopolnjeno: ${successCount} razdelkov.\n\nPreskočeni razdelki (že izpolnjeni): ${skippedNames}.`
+                    : `Successfully filled: ${successCount} sections.\n\nSkipped sections (already complete): ${skippedNames}.`,
+                  confirmText: language === 'si' ? 'V redu' : 'OK',
+                  secondaryText: '',
+                  cancelText: '',
+                  onConfirm: () => closeModal(),
+                  onSecondary: null,
+                  onCancel: () => closeModal(),
+                });
+              }
+            } else if (lastError && successCount < totalToProcess) {
+              const failedCount = totalToProcess - successCount;
+              const emsg = lastError.message || '';
+              const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+              const isCredits = emsg.includes('afford') || emsg.includes('credits') || emsg.includes('402');
+              const isJSON = emsg.includes('JSON') || emsg.includes('Unexpected token') || emsg.includes('parse');
+              const isNetwork = emsg.includes('fetch') || emsg.includes('network') || emsg.includes('Failed to fetch') || emsg.includes('ERR_');
+
+              let modalTitle: string;
+              let modalMessage: string;
+
+              if (isRateLimit) {
+                modalTitle = language === 'si' ? 'Omejitev API klicev' : 'API Rate Limit Reached';
+                modalMessage = language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker je bil dosežen limit AI ponudnika.\n\nPočakajte 1–2 minuti in poskusite ponovno, ali preklopite na drug model v Nastavitvah.`
+                  : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to AI provider rate limits.\n\nWait 1–2 minutes and try again, or switch models in Settings.`;
+              } else if (isCredits) {
+                modalTitle = language === 'si' ? 'Nezadostna sredstva AI' : 'Insufficient AI Credits';
+                modalMessage = language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker vaš AI ponudnik nima dovolj sredstev.`
+                  : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to insufficient AI credits.`;
+              } else if (isJSON) {
+                modalTitle = language === 'si' ? 'Napaka formata' : 'Format Error';
+                modalMessage = language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker je AI vrnil nepravilen format.\n\nPoskusite ponovno.`
+                  : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated because the AI returned an invalid format.\n\nPlease try again.`;
+              } else if (isNetwork) {
+                modalTitle = language === 'si' ? 'Omrežna napaka' : 'Network Error';
+                modalMessage = language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati zaradi omrežne napake.`
+                  : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to a network error.`;
+              } else {
+                modalTitle = language === 'si' ? 'Delna generacija' : 'Partial Generation';
+                modalMessage = language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati.`
+                  : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated.`;
+              }
+
+              setModalConfig({
+                isOpen: true,
+                title: modalTitle,
+                message: modalMessage,
+                confirmText: language === 'si' ? 'V redu' : 'OK',
+                secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+                cancelText: '',
+                onConfirm: () => closeModal(),
+                onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+                onCancel: () => closeModal(),
+              });
             }
           }
 
-          if (success) {
-            await new Promise((r) => setTimeout(r, 3000));
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            handleAIError(e, `compositeGeneration(${compositeSectionKey})`);
           }
+        } finally {
+          setIsLoading(false);
+          isGeneratingRef.current = false;
+          abortControllerRef.current = null;
         }
-
-        if (successCount > 0) {
-          setHasUnsavedTranslationChanges(true);
-        }
-
-        if (!lastError && successCount === totalToProcess) {
-          if (skippedCount > 0) {
-            const skippedNames = allSections
-              .filter(s => !sectionsToProcess.find(sp => sp.key === s))
-              .map(s => s.charAt(0).toUpperCase() + s.slice(1))
-              .join(', ');
-
-            setModalConfig({
-              isOpen: true,
-              title: language === 'si' ? 'Dopolnjevanje končano' : 'Fill complete',
-              message: language === 'si'
-                ? `Uspešno dopolnjeno: ${successCount} razdelkov.\n\nPreskočeni razdelki (že izpolnjeni): ${skippedNames}.`
-                : `Successfully filled: ${successCount} sections.\n\nSkipped sections (already complete): ${skippedNames}.`,
-              confirmText: language === 'si' ? 'V redu' : 'OK',
-              secondaryText: '',
-              cancelText: '',
-              onConfirm: () => closeModal(),
-              onSecondary: null,
-              onCancel: () => closeModal(),
-            });
-          }
-        } else if (lastError && successCount < totalToProcess) {
-          const failedCount = totalToProcess - successCount;
-          const emsg = lastError.message || '';
-          const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
-          const isCredits = emsg.includes('afford') || emsg.includes('credits') || emsg.includes('402');
-          const isJSON = emsg.includes('JSON') || emsg.includes('Unexpected token') || emsg.includes('parse');
-          const isNetwork = emsg.includes('fetch') || emsg.includes('network') || emsg.includes('Failed to fetch') || emsg.includes('ERR_');
-
-          let modalTitle: string;
-          let modalMessage: string;
-
-          if (isRateLimit) {
-            modalTitle = language === 'si' ? 'Omejitev API klicev' : 'API Rate Limit Reached';
-            modalMessage = language === 'si'
-              ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker je bil dosežen limit AI ponudnika (15 zahtevkov/minuto).\n\nPočakajte 1–2 minuti in poskusite ponovno, ali preklopite na drug model v Nastavitvah.`
-              : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to AI provider rate limits (15 requests/minute).\n\nWait 1–2 minutes and try again, or switch models in Settings.`;
-          } else if (isCredits) {
-            modalTitle = language === 'si' ? 'Nezadostna sredstva AI' : 'Insufficient AI Credits';
-            modalMessage = language === 'si'
-              ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker vaš AI ponudnik nima dovolj sredstev.\n\nDopolnite kredit pri vašem ponudniku ali preklopite na drug model v Nastavitvah.`
-              : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to insufficient AI credits.\n\nTop up your credits or switch models in Settings.`;
-          } else if (isJSON) {
-            modalTitle = language === 'si' ? 'Napaka formata' : 'Format Error';
-            modalMessage = language === 'si'
-              ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati, ker je AI vrnil nepravilen format.\n\nPoskusite ponovno — AI modeli občasno vrnejo nepopoln odgovor.`
-              : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated because the AI returned an invalid format.\n\nPlease try again — AI models occasionally return incomplete responses.`;
-          } else if (isNetwork) {
-            modalTitle = language === 'si' ? 'Omrežna napaka' : 'Network Error';
-            modalMessage = language === 'si'
-              ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati zaradi omrežne napake.\n\nPreverite internetno povezavo in poskusite ponovno.`
-              : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated due to a network error.\n\nCheck your internet connection and try again.`;
-          } else {
-            modalTitle = language === 'si' ? 'Delna generacija' : 'Partial Generation';
-            modalMessage = language === 'si'
-              ? `Uspešno generirano: ${successCount} od ${totalToProcess} razdelkov.\n\n${failedCount} razdelkov ni bilo mogoče generirati.\n\nPoskusite ponovno ali preklopite na drug AI model v Nastavitvah.`
-              : `Successfully generated: ${successCount} of ${totalToProcess} sections.\n\n${failedCount} sections could not be generated.\n\nPlease try again or switch to a different AI model in Settings.`;
-          }
-
-          setModalConfig({
-            isOpen: true,
-            title: modalTitle,
-            message: modalMessage,
-            confirmText: language === 'si' ? 'V redu' : 'OK',
-            secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
-            cancelText: '',
-            onConfirm: () => closeModal(),
-            onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
-            onCancel: () => closeModal(),
-          });
-        }
-
-        setIsLoading(false);
       };
+
+      // ── Translation vs Generation decision ──
+      const sectionLabel = isActivities
+        ? (language === 'si' ? 'Aktivnosti' : 'Activities')
+        : (language === 'si' ? 'Rezultati' : 'Results');
 
       if (otherLangData && !hasContentInSections) {
         setModalConfig({
           isOpen: true,
           title: language === 'si'
-            ? `Rezultati obstajajo v ${otherLang}`
-            : `Results exist in ${otherLang}`,
+            ? `${sectionLabel} obstajajo v ${otherLang}`
+            : `${sectionLabel} exist in ${otherLang}`,
           message: language === 'si'
-            ? `Pričakovani rezultati že obstajajo v ${otherLang} jeziku. Želite prevesti ali generirati na novo?`
-            : `Expected results already exist in ${otherLang}. Would you like to translate or generate new?`,
+            ? `${sectionLabel} že obstajajo v ${otherLang} jeziku. Želite prevesti ali generirati na novo?`
+            : `${sectionLabel} already exist in ${otherLang}. Would you like to translate or generate new?`,
           confirmText: language === 'si'
             ? `Prevedi iz ${otherLang}`
             : `Translate from ${otherLang}`,
@@ -1814,11 +2083,11 @@ export const useGeneration = ({
         setModalConfig({
           isOpen: true,
           title: language === 'si'
-            ? `Rezultati obstajajo v obeh jezikih`
-            : `Results exist in both languages`,
+            ? `${sectionLabel} obstajajo v obeh jezikih`
+            : `${sectionLabel} exist in both languages`,
           message: language === 'si'
-            ? `Rezultati obstajajo v slovenščini in angleščini. Kaj želite storiti?`
-            : `Results exist in both SI and EN. What would you like to do?`,
+            ? `${sectionLabel} obstajajo v slovenščini in angleščini. Kaj želite storiti?`
+            : `${sectionLabel} exist in both SI and EN. What would you like to do?`,
           confirmText: language === 'si'
             ? 'Generiraj / izboljšaj trenutno'
             : 'Generate / enhance current',
@@ -1865,6 +2134,7 @@ export const useGeneration = ({
       handleAIError,
       performTranslationFromOther,
       show3OptionModal,
+      preGenerationGuard,
     ]
   );
 
