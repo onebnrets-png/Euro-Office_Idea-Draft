@@ -711,6 +711,10 @@ export const storageService = {
       }
     }
 
+        const goCheck = projectData?.generalObjectives;
+    const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
+    console.log(`[storageService.saveProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items, first="' + (goCheck[0]?.title || '').substring(0, 40) + '")' : '⚠️ EMPTY'}`);
+
     const { error: dataError } = await supabase
       .from('project_data')
       .upsert(
