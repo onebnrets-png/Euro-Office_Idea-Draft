@@ -1,10 +1,10 @@
 // components/PrintLayout.tsx
 // ═══════════════════════════════════════════════════════════════
-// v6.1 — 2026-02-22 — NEW: Partnership & Finance sections in Print
-//   - Partner summary table
-//   - Funding model info
-//   - Task-level partner allocations in workplan
-//   - Finance budget overview tables (per WP, per Partner)
+// v6.2 — 2026-02-24 — DEFENSIVE ARRAY HANDLING (safeArray)
+//   ★ v6.2: NEW safeArray() utility — handles AI returning objects
+//           instead of arrays (e.g. { objectives: [...] } vs [...])
+//   ★ v6.2: ResultsList, activities, risks, kers all use safeArray()
+//   - v6.1: Partnership & Finance sections in Print
 //   - All previous changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
@@ -21,6 +21,16 @@ import {
     DECENTRALIZED_DIRECT_COSTS,
     DECENTRALIZED_INDIRECT_COSTS
 } from '../types.ts';
+
+const safeArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+};
 
 interface SectionProps {
     title: string;
@@ -79,7 +89,7 @@ interface ResultsListProps {
 
 const ResultsList: React.FC<ResultsListProps> = ({ items, prefix, indicatorLabel }) => (
     <>
-        {items.map((item, index) => item.title && (
+        {safeArray(items).map((item, index) => item.title && (
             <Item key={index} title={`${prefix}${index + 1}: ${item.title}`} description={item.description} indicator={item.indicator} indicatorLabel={indicatorLabel} />
         ))}
     </>
@@ -240,7 +250,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
 
                     {/* Workplan */}
                     <SubSection title={t.subSteps.workplan}>
-                        {activities.map((wp) => wp.title && (
+                        {safeArray(activities).map((wp) => wp.title && (
                             <div key={wp.id} className="mb-6">
                                 <h4 className="text-lg font-bold text-gray-800">{wp.id}: {wp.title}</h4>
                                 <h5 className="font-bold text-gray-700 mt-2 mb-1">{t.tasks}</h5>
@@ -457,7 +467,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
 
                     {/* Risks */}
                     <SubSection title={t.subSteps.riskMitigation}>
-                        {risks.map((risk, i) => risk.description && (
+                        {safeArray(risks).map((risk, i) => risk.description && (
                             <div key={i} className="mb-4 border-b border-gray-100 pb-2">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
@@ -490,7 +500,7 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                         <ResultsList items={impacts} prefix="I" indicatorLabel={t.indicator} />
                     </SubSection>
                     <SubSection title={t.kers.kerTitle}>
-                        {kers.map((ker, i) => ker.title && (
+                        {safeArray(kers).map((ker, i) => ker.title && (
                             <Item 
                                 key={i} 
                                 title={`${ker.id || `KER${i+1}`}: ${ker.title}`} 
