@@ -1681,20 +1681,29 @@ export const useGeneration = ({
         setError(null);
 
         try {
-          if (isActivities) {
+                    if (isActivities) {
             // ═══════════════════════════════════════════════
             // ACTIVITIES COMPOSITE — sequential with dependencies
             // Order: projectManagement → partners → activities (WP) → partnerAllocations → risks
+            // ★ FIX: Track success/failure, show error modal if ALL fail
             // ═══════════════════════════════════════════════
 
             let newData = { ...projectData };
             const totalSteps = 5;
             let currentStep = 0;
+            let successCount = 0;
+            let firstFatalError: any = null;
 
             const stepLabel = (stepNum: number, siText: string, enText: string) => {
               return language === 'si'
                 ? `${siText} (${stepNum}/${totalSteps})...`
                 : `${enText} (${stepNum}/${totalSteps})...`;
+            };
+
+            // ★ Helper: detect RATE_LIMIT from error
+            const isRateLimitError = (e: any): boolean => {
+              const msg = e?.message || e?.toString() || '';
+              return msg.includes('RATE_LIMIT') || msg.includes('429') || msg.includes('Quota') || msg.includes('RESOURCE_EXHAUSTED');
             };
 
             // ── Step 1: Project Management ──
@@ -1714,11 +1723,21 @@ export const useGeneration = ({
                   ...(pmContent?.structure || {}),
                 },
               };
+              successCount++;
               console.log('[Composite/activities] Step 1/5: projectManagement ✅');
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
               console.error('[Composite/activities] projectManagement failed:', e);
-              // Non-fatal: continue
+              if (!firstFatalError) firstFatalError = e;
+              // ★ FIX: If RATE_LIMIT on very first step, abort early — no point continuing
+              if (isRateLimitError(e)) {
+                console.error('[Composite/activities] ★ RATE_LIMIT on step 1 — aborting composite');
+                handleAIError(e, 'compositeActivities');
+                setIsLoading(false);
+                isGeneratingRef.current = false;
+                abortControllerRef.current = null;
+                return;
+              }
             }
 
             await new Promise(r => setTimeout(r, 3000));
@@ -1742,12 +1761,22 @@ export const useGeneration = ({
                     : 'other',
                 }));
                 newData.partners = partnersResult;
+                successCount++;
                 console.log(`[Composite/activities] Step 2/5: partners ✅ (${partnersResult.length} partners)`);
               }
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
               console.error('[Composite/activities] partners failed:', e);
-              // Non-fatal: continue — partnerAllocations will be skipped if no partners
+              if (!firstFatalError) firstFatalError = e;
+              // ★ FIX: If RATE_LIMIT and no success so far, abort
+              if (isRateLimitError(e) && successCount === 0) {
+                console.error('[Composite/activities] ★ RATE_LIMIT, 0 successes — aborting composite');
+                handleAIError(e, 'compositeActivities');
+                setIsLoading(false);
+                isGeneratingRef.current = false;
+                abortControllerRef.current = null;
+                return;
+              }
             }
 
             await new Promise(r => setTimeout(r, 3000));
@@ -1822,11 +1851,12 @@ export const useGeneration = ({
               const schedResult = recalculateProjectSchedule(newData);
               newData = schedResult.projectData;
 
+              successCount++;
               console.log(`[Composite/activities] Step 3/5: activities ✅ (${(newData.activities || []).length} WPs)`);
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
               console.error('[Composite/activities] activities failed:', e);
-              // Fatal for partnerAllocations — but we still try risks
+              if (!firstFatalError) firstFatalError = e;
             }
 
             await new Promise(r => setTimeout(r, 3000));
@@ -1861,11 +1891,12 @@ export const useGeneration = ({
                 newData.activities = updatedActivities;
 
                 const totalAllocations = allocResult.reduce((s: number, t: any) => s + (t.allocations?.length || 0), 0);
+                successCount++;
                 console.log(`[Composite/activities] Step 4/5: partnerAllocations ✅ (${totalAllocations} allocations)`);
               } catch (e: any) {
                 if (e.name === 'AbortError') throw e;
                 console.error('[Composite/activities] partnerAllocations failed:', e);
-                // Non-fatal: finance will just be empty
+                if (!firstFatalError) firstFatalError = e;
               }
             } else {
               console.log(`[Composite/activities] Step 4/5: partnerAllocations ⏭ SKIPPED (partners: ${pa_partners.length}, activities: ${pa_activities.length})`);
@@ -1887,14 +1918,26 @@ export const useGeneration = ({
               } else if (risksContent && Array.isArray((risksContent as any).risks)) {
                 newData.risks = (risksContent as any).risks;
               }
+              successCount++;
               console.log(`[Composite/activities] Step 5/5: risks ✅`);
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
               console.error('[Composite/activities] risks failed:', e);
-              // Non-fatal
+              if (!firstFatalError) firstFatalError = e;
             }
 
-            // ── Save all ──
+            // ── Post-processing: check results ──
+            console.log(`[Composite/activities] Result: ${successCount}/${totalSteps} steps succeeded`);
+
+            if (successCount === 0 && firstFatalError) {
+              // ★ ALL STEPS FAILED — show error modal to user
+              console.error('[Composite/activities] ★ ALL STEPS FAILED — showing error modal');
+              handleAIError(firstFatalError, 'compositeActivities');
+              // Don't save empty data
+              return;
+            }
+
+            // ── Save (only if at least 1 step succeeded) ──
             setProjectData((prev: any) => {
               const savedData = { ...prev, ...newData };
               if (currentProjectId) {
@@ -1905,7 +1948,28 @@ export const useGeneration = ({
               return savedData;
             });
             setHasUnsavedTranslationChanges(true);
-            console.log('[Composite/activities] ALL STEPS COMPLETE ✅');
+            console.log(`[Composite/activities] DONE — ${successCount}/${totalSteps} steps succeeded ✅`);
+
+            // ★ FIX: Show partial success modal if some steps failed
+            if (successCount > 0 && successCount < totalSteps && firstFatalError) {
+              const failedCount = totalSteps - successCount;
+              const isRL = isRateLimitError(firstFatalError);
+              setModalConfig({
+                isOpen: true,
+                title: language === 'si'
+                  ? (isRL ? 'Omejitev API klicev' : 'Delna generacija aktivnosti')
+                  : (isRL ? 'API Rate Limit Reached' : 'Partial Activities Generation'),
+                message: language === 'si'
+                  ? `Uspešno generirano: ${successCount} od ${totalSteps} korakov.\n\n${failedCount} korakov ni uspelo${isRL ? ' zaradi omejitve API ponudnika.\n\nPočakajte 1–2 minuti in poskusite ponovno za manjkajoče dele, ali preklopite na drug model v Nastavitvah.' : '.\n\nPoskusite ponovno za manjkajoče dele.'}`
+                  : `Successfully generated: ${successCount} of ${totalSteps} steps.\n\n${failedCount} steps failed${isRL ? ' due to API rate limits.\n\nWait 1–2 minutes and try again for missing parts, or switch models in Settings.' : '.\n\nTry again for missing parts.'}`,
+                confirmText: language === 'si' ? 'V redu' : 'OK',
+                secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+                cancelText: '',
+                onConfirm: () => closeModal(),
+                onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+                onCancel: () => closeModal(),
+              });
+            }
 
           } else {
             // ═══════════════════════════════════════════════
