@@ -1,10 +1,10 @@
 // services/docxGenerator.ts
 // ═══════════════════════════════════════════════════════════════
-// v6.1 — 2026-02-22 — NEW: Partnership & Finance sections in DOCX export
-//   - Partner table with code, name, expertise, type, PM rate
-//   - Funding model info
-//   - Finance budget overview tables (per WP, per Partner)
-//   - Task-level partner allocations in workplan tables
+// v6.2 — 2026-02-24 — DEFENSIVE ARRAY HANDLING (safeArray)
+//   ★ v6.2: NEW safeArray() utility — handles AI returning objects
+//           instead of arrays (e.g. { objectives: [...] } vs [...])
+//   ★ v6.2: renderResultList, activities, risks, kers all use safeArray()
+//   - v6.1: Partnership & Finance sections in DOCX export
 //   - All previous changes preserved.
 // ═══════════════════════════════════════════════════════════════
 
@@ -18,6 +18,16 @@ import {
     DECENTRALIZED_DIRECT_COSTS,
     DECENTRALIZED_INDIRECT_COSTS
 } from '../types.ts';
+
+const safeArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+};
 
 const { Document, Packer, Paragraph, HeadingLevel, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, AlignmentType, VerticalAlign, ImageRun, TableOfContents } = docx;
 
@@ -59,7 +69,7 @@ const renderProblemNode = (node, title) => [
 
 const renderResultList = (items, title, prefix, indicatorLabel, descriptionLabel) => [
   H2(title),
-  ...items.flatMap((item, index) => item.title ? [
+  ...safeArray(items).flatMap((item, index) => item.title ? [
     H3(`${prefix}${index + 1}: ${item.title}`),
     new Paragraph({ children: [Bold(`${descriptionLabel}: `), ...splitText(item.description)] }),
     new Paragraph({ children: [Bold(`${indicatorLabel}: `), new TextRun(item.indicator)] }),
@@ -332,7 +342,7 @@ export const generateDocx = async (projectData, language = 'en', ganttData = nul
 
   // Workplan
   children.push(H2(t.subSteps.workplan));
-  activities.forEach(wp => {
+  safeArray(activities).forEach(wp => {
     if (!wp.title) return;
     children.push(H3(`${wp.id}: ${wp.title}`));
     
@@ -499,9 +509,9 @@ export const generateDocx = async (projectData, language = 'en', ganttData = nul
   }
 
   // Risks
-  if (risks && risks.length > 0) {
+  if (safeArray(risks).length > 0) {
       children.push(H2(t.subSteps.riskMitigation));
-      risks.forEach((risk, i) => {
+      safeArray(risks).forEach((risk, i) => {
           if (!risk.description) return;
           const categoryLabel = t.risks.categories[risk.category.toLowerCase()] || risk.category;
           children.push(H3(`${risk.id || `Risk ${i+1}`}: ${risk.title} (${categoryLabel})`));
@@ -519,9 +529,9 @@ export const generateDocx = async (projectData, language = 'en', ganttData = nul
   children.push(...renderResultList(outcomes, t.outcomes, 'R', t.indicator, t.description));
   children.push(...renderResultList(impacts, t.impacts, 'I', t.indicator, t.description));
 
-  if (kers && kers.length > 0) {
+  if (safeArray(kers).length > 0) {
       children.push(H2(t.kers.kerTitle)); 
-      kers.forEach((ker, i) => {
+      safeArray(kers).forEach((ker, i) => {
           if (!ker.title) return;
           children.push(H3(`${ker.id || `KER${i+1}`}: ${ker.title}`));
           children.push(new Paragraph({ children: [Bold(`${t.description}: `), ...splitText(ker.description)] }));
