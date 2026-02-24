@@ -589,7 +589,8 @@ const App = () => {
                   missingApiKey={auth.showAiWarning}
                   completedStepsStatus={completedStepsStatus}
                   onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
-                />
+                  onCancelGeneration={generation.cancelGeneration}
+              />
               )}
             </div>
           </main>
