@@ -2158,12 +2158,16 @@ export const useGeneration = ({
 
       try {
         const fieldPathStr = path.map(String).join('.');
+        console.log('[handleGenerateField] ▶ fieldPathStr:', fieldPathStr);
         const content = await generateFieldContent(fieldPathStr, projectData, language, fieldAbort.signal);
+        console.log('[handleGenerateField] ◀ content:', JSON.stringify(content).substring(0, 300), '| type:', typeof content, '| length:', content?.length);
         handleUpdateData(path, content);
+        console.log('[handleGenerateField] ✅ handleUpdateData DONE');
       } catch (e: any) {
         if (e.name !== 'AbortError') {
           handleAIError(e, `generateField(${String(fieldName)})`);
         }
+
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;  // ★ v7.5
