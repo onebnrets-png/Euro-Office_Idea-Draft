@@ -1652,8 +1652,19 @@ export const useGeneration = ({
         ? ['projectManagement', 'partners', 'activities', 'risks']
         : allSections;
 
-            const hasContentInSections = checkableSections.some((s) => {
+        const hasContentInSections = checkableSections.some((s) => {
         if (isActivities) {
+          // ★ FIX: projectManagement is NOT considered "has content" unless
+          // activities and partners actually exist with real data
+          if (s === 'projectManagement') {
+            const hasActualWPs = Array.isArray(projectData.activities) && projectData.activities.some(
+              (wp: any) => wp.title?.trim() && wp.tasks?.length > 0 && wp.tasks.some((t: any) => t.title?.trim())
+            );
+            const hasActualPartners = Array.isArray(projectData.partners) && projectData.partners.some(
+              (p: any) => p.name?.trim()
+            );
+            if (!hasActualWPs && !hasActualPartners) return false;
+          }
           return hasRealContent(projectData, s);
         }
         return robustCheckSectionHasContent(s);
