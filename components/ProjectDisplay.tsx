@@ -26,7 +26,18 @@ import {
     DECENTRALIZED_DIRECT_COSTS,
 } from '../types.ts';
 
+const safeArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+};
+
 const FieldHeader = ({ title, description, id = '', accentColor = '' }) => (
+
     <div className="mb-3 pt-5 animate-fadeIn" id={id}>
         <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
             {accentColor && <span style={{ width: 3, height: 20, borderRadius: 2, background: accentColor, flexShrink: 0 }} />}
