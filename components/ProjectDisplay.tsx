@@ -1659,9 +1659,10 @@ const ProjectDisplay = (props) => {
                 ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
             </button>
         )}
-    </div>
+        </div>
 )}
- 
+
+            <div 
                 id="main-scroll-container" 
                 className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
                 style={{
