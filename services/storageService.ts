@@ -688,12 +688,17 @@ export const storageService = {
       .eq('language', language)
       .single();
 
-    if (error || !data) {
+        if (error || !data) {
+      console.log(`[storageService.loadProject] ⚠️ No data found for lang=${language}, projectId=${targetId}`);
       return createEmptyProjectData();
     }
 
+    const goCheck = data.data?.generalObjectives;
+    const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
+    console.log(`[storageService.loadProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items)' : '⚠️ EMPTY'}`);
+
     return data.data;
-  },
+
 
   async saveProject(projectData: any, language: string = 'en', projectId: string | null = null) {
     const userId = await this.getCurrentUserId();
