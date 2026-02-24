@@ -1,9 +1,12 @@
 // components/ProjectDashboard.tsx
 // ═══════════════════════════════════════════════════════════════
-// v2.4 — 2026-02-21
+// v2.5 — 2026-02-24 — DEFENSIVE ARRAY HANDLING
+//   ★ v2.5: NEW safeArray() utility — handles AI returning objects
+//           instead of arrays (e.g. { objectives: [...] } vs [...])
+//   ★ v2.5: All .filter/.some/.length calls now use safeArray()
+//   ★ v2.5: calculateOverallCompleteness uses safeArray() for
+//           activities, risks, generalObjectives, specificObjectives
 //   ★ v2.4: Responsive — charts grid adapts to screen width
-//           Stats grid adapts from 3-col to 1-col on mobile
-//           Modal maxWidth and padding responsive
 // ═══════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo } from 'react';
 import { extractStructuralData } from '../services/DataExtractionService.ts';
@@ -77,9 +80,25 @@ const SKIP_KEYS = new Set([
 
 const hasRealStr = (v: any): boolean => typeof v === 'string' && v.trim().length > 0;
 
-const arrHasContent = (arr: any[]): boolean => {
-  if (!Array.isArray(arr) || arr.length === 0) return false;
-  return arr.some((item: any) => {
+// ★ v2.5: Safe array extractor — AI sometimes returns { objectives: [...] }
+// instead of [...]. This function always returns a proper array.
+const safeArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    // Look for first array property inside the object
+    const keys = Object.keys(v);
+    for (const k of keys) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+};
+
+// ★ v2.5: arrHasContent now accepts any type safely
+const arrHasContent = (arr: any): boolean => {
+  const safe = safeArray(arr);
+  if (safe.length === 0) return false;
+  return safe.some((item: any) => {
     if (typeof item === 'string') return item.trim().length > 0;
     if (typeof item !== 'object' || item === null) return false;
     return Object.entries(item).some(([k, v]) => {
@@ -103,6 +122,7 @@ const objHasContent = (obj: any): boolean => {
   });
 };
 
+// ★ v2.5: calculateOverallCompleteness uses safeArray for array sections
 const calculateOverallCompleteness = (projectData: any): number => {
   if (!projectData) return 0;
   const sectionChecks: { key: string; check: (data: any) => boolean }[] = [
@@ -111,11 +131,11 @@ const calculateOverallCompleteness = (projectData: any): number => {
     { key: 'generalObjectives', check: (d) => arrHasContent(d) },
     { key: 'specificObjectives', check: (d) => arrHasContent(d) },
     { key: 'projectManagement', check: (d) => { if (!d) return false; return hasRealStr(d.description) || objHasContent(d.structure); } },
-    { key: 'activities', check: (d) => { if (!Array.isArray(d)) return false; return d.some((wp: any) => hasRealStr(wp.title) || arrHasContent(wp.tasks) || arrHasContent(wp.milestones) || arrHasContent(wp.deliverables)); } },
+    { key: 'activities', check: (d) => { const safe = safeArray(d); return safe.some((wp: any) => hasRealStr(wp.title) || arrHasContent(wp.tasks) || arrHasContent(wp.milestones) || arrHasContent(wp.deliverables)); } },
     { key: 'outputs', check: (d) => arrHasContent(d) },
     { key: 'outcomes', check: (d) => arrHasContent(d) },
     { key: 'impacts', check: (d) => arrHasContent(d) },
-    { key: 'risks', check: (d) => { if (!Array.isArray(d)) return false; return d.some((r: any) => hasRealStr(r.title) || hasRealStr(r.description) || hasRealStr(r.mitigation)); } },
+    { key: 'risks', check: (d) => { const safe = safeArray(d); return safe.some((r: any) => hasRealStr(r.title) || hasRealStr(r.description) || hasRealStr(r.mitigation)); } },
     { key: 'kers', check: (d) => arrHasContent(d) },
   ];
   let filledCount = 0;
@@ -124,7 +144,12 @@ const calculateOverallCompleteness = (projectData: any): number => {
     const data = projectData?.[key];
     if (data === undefined || data === null) continue;
     totalCount++;
-    if (check(data)) filledCount++;
+    try {
+      if (check(data)) filledCount++;
+    } catch (e) {
+      // ★ v2.5: Never crash on data inspection
+      console.warn(`[ProjectDashboard] Error checking ${key}:`, e);
+    }
   }
   return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
 };
@@ -158,10 +183,11 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ isOpen, onClose, pr
   const overallCompleteness = useMemo(() => calculateOverallCompleteness(projectData), [projectData]);
 
   const pi = projectData?.projectIdea;
-  const wpCount = Array.isArray(projectData?.activities) ? projectData.activities.filter((wp: any) => hasRealStr(wp.title)).length : 0;
-  const riskCount = Array.isArray(projectData?.risks) ? projectData.risks.filter((r: any) => hasRealStr(r.title)).length : 0;
-  const genObjCount = Array.isArray(projectData?.generalObjectives) ? projectData.generalObjectives.filter((o: any) => hasRealStr(o.title)).length : 0;
-  const specObjCount = Array.isArray(projectData?.specificObjectives) ? projectData.specificObjectives.filter((o: any) => hasRealStr(o.title)).length : 0;
+  // ★ v2.5: All stat counts use safeArray() — never crashes
+  const wpCount = safeArray(projectData?.activities).filter((wp: any) => hasRealStr(wp.title)).length;
+  const riskCount = safeArray(projectData?.risks).filter((r: any) => hasRealStr(r.title)).length;
+  const genObjCount = safeArray(projectData?.generalObjectives).filter((o: any) => hasRealStr(o.title)).length;
+  const specObjCount = safeArray(projectData?.specificObjectives).filter((o: any) => hasRealStr(o.title)).length;
   const objCount = genObjCount + specObjCount;
 
   if (!isOpen) return null;
