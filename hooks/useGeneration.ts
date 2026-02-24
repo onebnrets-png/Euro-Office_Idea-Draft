@@ -1018,12 +1018,26 @@ export const useGeneration = ({
               if (!item || !hasDeepContent(item)) {
                 emptyIndices.push(index);
               } else {
-                const hasEmptyFields = Object.entries(item).some(([key, val]) => {
-                  if (key === 'id') return false;
-                  return typeof val === 'string' && (val as string).trim().length === 0;
-                });
-                if (hasEmptyFields) {
-                  emptyIndices.push(index);
+            const hasEmptyFields = Object.entries(item).some(([key, val]) => {
+              if (key === 'id') return false;
+              if (val === undefined || val === null) return true;
+              if (typeof val === 'string' && (val.trim().length === 0 || val.includes('[AI did not generate'))) return true;
+              return false;
+            });
+            // ★ FIX: Also detect MISSING expected fields (e.g., indicator not returned by AI)
+            const EXPECTED_FIELDS_MAP: Record<string, string[]> = {
+              generalObjectives: ['title', 'description', 'indicator'],
+              specificObjectives: ['title', 'description', 'indicator'],
+              outputs: ['title', 'description', 'indicator'],
+              outcomes: ['title', 'description', 'indicator'],
+              impacts: ['title', 'description', 'indicator'],
+              kers: ['title', 'description', 'exploitationStrategy'],
+              risks: ['title', 'description', 'mitigation'],
+            };
+            const _expectedKeys = EXPECTED_FIELDS_MAP[sectionKey] || [];
+            const hasMissingFields = _expectedKeys.length > 0 && _expectedKeys.some(k => !(k in item) || item[k] === undefined || item[k] === null || (typeof item[k] === 'string' && item[k].trim().length === 0));
+            if (hasEmptyFields || hasMissingFields) {
+              emptyIndices.push(index);
                 }
               }
             });
