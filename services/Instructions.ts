@@ -426,6 +426,83 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'ZERO EMPTY FIELDS: Every field in the JSON output MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   },
+  generalObjectives: {
+    en: [
+      'Each objective has a title starting with an INFINITIVE VERB (e.g., "Strengthen...", "Develop...")',
+      'Each description has 3 or more substantive sentences linking to broader EU goals',
+      'EVERY objective has a non-empty "indicator" field with a specific, measurable KPI — NO exceptions',
+      'Indicators are quantitative where possible (include numbers, percentages, timeframes)',
+      'No markdown formatting, no banned AI phrases',
+      'Sentence lengths vary naturally',
+      'ZERO EMPTY FIELDS: title, description, AND indicator MUST ALL contain substantive content for EVERY objective. An empty indicator is a FATAL error.',
+    ]
+  },
+  specificObjectives: {
+    en: [
+      'Each objective has a title starting with an INFINITIVE VERB (e.g., "Develop...", "Increase...")',
+      'Each description has 3 or more substantive sentences',
+      'EVERY objective has a non-empty "indicator" field with a S.M.A.R.T. KPI — NO exceptions',
+      'Indicators include: quantitative target, baseline reference, and timeframe (e.g., "from X% to Y% by M24")',
+      'No markdown formatting, no banned AI phrases',
+      'CROSS-CHECK: Each KPI maps to at least one Output or Outcome',
+      'ZERO EMPTY FIELDS: title, description, AND indicator MUST ALL contain substantive content for EVERY objective. An empty indicator is a FATAL error.',
+    ]
+  },
+  outputs: {
+    en: [
+      'Each output has a concise noun phrase title',
+      'Each description has 3 or more substantive sentences',
+      'EVERY output has a non-empty "indicator" field with a BINARY, verifiable proof of completion — NO exceptions',
+      'Indicators include quantity/format, scope, and verification method (Lump Sum compliant)',
+      'No markdown formatting, no banned AI phrases',
+      'CROSS-CHECK: Each output links to a specific WP/Task',
+      'ZERO EMPTY FIELDS: title, description, AND indicator MUST ALL contain substantive content. An empty indicator is a FATAL error.',
+    ]
+  },
+  outcomes: {
+    en: [
+      'Each outcome has a concise noun phrase title',
+      'Each description has 3 or more substantive sentences',
+      'EVERY outcome has a non-empty "indicator" field with a measurable change indicator — NO exceptions',
+      'Indicators include quantitative target and measurement method',
+      'No markdown formatting, no banned AI phrases',
+      'CROSS-CHECK: Each outcome links to at least one Output and one Specific Objective',
+      'ZERO EMPTY FIELDS: title, description, AND indicator MUST ALL contain substantive content. An empty indicator is a FATAL error.',
+    ]
+  },
+  impacts: {
+    en: [
+      'Each impact has a concise noun phrase title',
+      'Each description has 3 or more substantive sentences linking to EU policy',
+      'EVERY impact has a non-empty "indicator" field with a long-term measurable indicator — NO exceptions',
+      'Indicators include quantitative target, timeframe (3-5 years post-project), and data source',
+      'Each impact specifies its Key Impact Pathway (KIP): Scientific, Societal, or Economic',
+      'No markdown formatting, no banned AI phrases',
+      'CROSS-CHECK: Each impact links to a Consequence from Problem Analysis',
+      'ZERO EMPTY FIELDS: title, description, AND indicator MUST ALL contain substantive content. An empty indicator is a FATAL error.',
+    ]
+  },
+  kers: {
+    en: [
+      'Each KER has a concise noun phrase title',
+      'Each description has 3 or more substantive sentences',
+      'EVERY KER has a non-empty "exploitationStrategy" field covering all 3 sustainability pillars — NO exceptions',
+      'exploitationStrategy covers: Financial sustainability, Institutional sustainability, Political sustainability',
+      'No markdown formatting, no banned AI phrases',
+      'CROSS-CHECK: Each KER originates from an identifiable Output',
+      'ZERO EMPTY FIELDS: title, description, AND exploitationStrategy MUST ALL contain substantive content. An empty exploitationStrategy is a FATAL error.',
+    ]
+  },
+  risks: {
+    en: [
+      'Each risk has id, category, title, description, likelihood, impact, and mitigation',
+      'Categories are from: technical, social, economic, environmental',
+      'At least 1 risk per category, at least 6 risks total',
+      'Mitigation strategies are CONCRETE and ACTIONABLE with 2-4 sentences (not generic)',
+      'No markdown formatting, no banned AI phrases',
+      'ZERO EMPTY FIELDS: ALL fields including mitigation MUST contain substantive content. An empty mitigation is a FATAL error.',
+    ]
+  },
   _default: {
     en: [
       'Every description has ≥3 substantive sentences',
