@@ -728,10 +728,11 @@ Outcomes represent the medium-term changes that Outputs generate. They bridge
 the gap between what the project delivers and the long-term Impacts.
 
 MANDATORY:
-- Each outcome: title (result-oriented noun phrase), description (3–5 sentences), indicator with target value and timeline.
 - Title MUST be result-oriented noun phrase: "Increased Digital Literacy Among Rural Youth" NOT "Increase digital literacy".
+- Each description: 3–5 substantive sentences explaining the expected change, who is affected, and the evidence base.
+- Each outcome MUST have an "indicator" field containing a SPECIFIC, MEASURABLE indicator that demonstrates the change has occurred. Include a quantitative target and measurement method. Examples: "75% of trained educators report increased confidence in applying mediation techniques, measured via post-training survey at M20" or "30% reduction in disciplinary incidents in pilot schools compared to baseline, verified by school administration records at M24". NEVER leave the indicator field empty — this is a FATAL error.
 - Clearly distinguish Target Groups (those involved during the project) from End Users (those adopting results post-project).
-- No markdown. Vary sentence structures.
+- No markdown. Vary sentence structures. No banned AI phrases.
 - CROSS-CHECK: Each outcome should link to at least one Specific Objective KPI.`
   },
   impacts: {
