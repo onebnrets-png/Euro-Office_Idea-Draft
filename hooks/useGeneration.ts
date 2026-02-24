@@ -1193,6 +1193,19 @@ export const useGeneration = ({
           '| isArray:', Array.isArray(generatedData),
           '| length:', Array.isArray(generatedData) ? generatedData.length : 'N/A'
         );
+        // ★ GUARD: If AI returned nothing, don't overwrite existing data
+        if (generatedData === undefined || generatedData === null) {
+          console.error(`[executeGeneration] ★ CRITICAL: generatedData is ${generatedData} for "${sectionKey}" — aborting data insertion`);
+          setError(
+            language === 'si'
+              ? 'AI ni vrnil podatkov. Poskusite ponovno.'
+              : 'AI returned no data. Please try again.'
+          );
+          setIsLoading(false);
+          isGeneratingRef.current = false;
+          abortControllerRef.current = null;
+          return;
+        }
 
         // ═══ DATA INSERTION ═══
         let newData = { ...projectData };
