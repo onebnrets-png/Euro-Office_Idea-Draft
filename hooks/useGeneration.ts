@@ -1,27 +1,22 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.5 — 2026-02-24 — ABORT/CANCEL SUPPORT + TOKEN OPTIMIZATION ALIGNMENT
+//
+// CHANGES v7.5:
+//   ★ NEW: abortControllerRef — stores active AbortController
+//   ★ NEW: cancelGeneration() — aborts current generation, resets state
+//   ★ CHANGED: executeGeneration() creates AbortController, passes signal
+//     to all generate* functions
+//   ★ CHANGED: handleGenerateField() creates AbortController, passes signal
+//   ★ CHANGED: runSummaryGeneration() creates AbortController, passes signal
+//   ★ CHANGED: handleAIError() recognizes AbortError — no modal shown
+//   ★ EXPORTED: cancelGeneration from hook return
+//   ★ All previous v7.2 changes preserved.
+//
 // v7.2 — 2026-02-23 — SMART AI CREDIT PROTECTION
-//   - NEW: Global isGenerating lock — prevents double-clicks and parallel generations
-//   - NEW: Pre-generation rate limit check with user-facing warning modal
-//   - NEW: Session usage counter (calls this session)
-//   - NEW: Import getRateLimitStatus from aiProvider.ts
-//   - All previous v7.0 changes preserved.
-//
 // v7.0 — 2026-02-22 — FULL v7.0 ALIGNMENT
-//   - CHANGED: Partners post-processing includes partnerType validation
-//     via isValidPartnerType() from Instructions.ts
-//   - CHANGED: Partner code fallback: idx===0 → 'CO', else P{idx+1}
-//   - NEW: Import isValidPartnerType from Instructions.ts
-//   - All previous v5.0 / v4.2 changes preserved.
-//
 // v5.0 — 2026-02-22 — PARTNERS (CONSORTIUM) AI GENERATION
-//   - NEW: executeGeneration handles sectionKey='partners'
-//     → generates partner types, expertise, PM rates via AI
-//     → post-processing ensures IDs and codes
-//   - NEW: Data insertion for 'partners' → handleUpdateData(['partners'], data)
-//   - All previous v4.2 changes preserved.
-//
 // v4.2 — 2026-02-16 — SUB-SECTION GENERATION
 // v3.9 — 2026-02-16 — PER-WP GENERATION COMPLETE
 // v3.8 — 2026-02-16 — PER-WP GENERATION
@@ -38,15 +33,14 @@ import {
   generateTargetedFill,
   generateActivitiesPerWP,
   generateObjectFill,
-  generatePartnerAllocations,  // ★ v7.1: NEW
+  generatePartnerAllocations,
 } from '../services/geminiService.ts';
-import { getRateLimitStatus } from '../services/aiProvider.ts';  // ★ v7.2
+import { getRateLimitStatus } from '../services/aiProvider.ts';
 import { generateSummaryDocx } from '../services/docxGenerator.ts';
 import { recalculateProjectSchedule, downloadBlob } from '../utils.ts';
 import { TEXT } from '../locales.ts';
 import { storageService } from '../services/storageService.ts';
 import { smartTranslateProject } from '../services/translationDiffService.ts';
-// ★ v7.0: Import partnerType validator from Instructions.ts
 import { isValidPartnerType } from '../services/Instructions.ts';
 
 interface UseGenerationProps {
@@ -90,22 +84,39 @@ export const useGeneration = ({
   const [summaryText, setSummaryText] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  // ★ v7.2: Global generation lock — prevents double-clicks and parallel section generations
+  // ★ v7.2: Global generation lock
   const isGeneratingRef = useRef(false);
   const sessionCallCountRef = useRef(0);
+  // ★ v7.5: AbortController for cancellation
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const t = TEXT[language] || TEXT['en'];
 
-  // ★ v7.2: Pre-generation guard — checks lock + client-side rate limit
+  // ★ v7.5: Cancel active generation
+  const cancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      console.log('[useGeneration] Cancelling active generation...');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    isGeneratingRef.current = false;
+    setIsLoading(false);
+    setError(
+      language === 'si'
+        ? 'Generiranje preklicano.'
+        : 'Generation cancelled.'
+    );
+    setTimeout(() => setError(null), 3000);
+  }, [language]);
+
+  // ★ v7.2: Pre-generation guard
   const preGenerationGuard = useCallback(
     (context: string): boolean => {
-      // Block if already generating
       if (isGeneratingRef.current) {
         console.warn(`[useGeneration] Blocked: already generating (${context})`);
         return false;
       }
 
-      // Check client-side rate limit status
       const status = getRateLimitStatus();
       if (status.requestsInWindow >= status.maxRequests - 1) {
         const waitSec = Math.ceil(status.windowMs / 1000);
@@ -130,7 +141,7 @@ export const useGeneration = ({
     [language, setModalConfig, closeModal]
   );
 
-  // ─── DEEP CONTENT CHECKER (shared utility) ─────────────────────
+  // ─── DEEP CONTENT CHECKER ─────────────────────────────────────
 
   const hasDeepContent = useCallback((data: any): boolean => {
     if (!data) return false;
@@ -144,7 +155,7 @@ export const useGeneration = ({
     return false;
   }, []);
 
-  // ─── ROBUST content checker (v3.4 FIX) ─────────────────────────
+  // ─── ROBUST content checker ────────────────────────────────────
 
   const robustCheckSectionHasContent = useCallback(
     (sectionKey: string): boolean => {
@@ -155,7 +166,7 @@ export const useGeneration = ({
     [projectData, hasDeepContent]
   );
 
-  // ─── v3.7: Check if a section needs generation (has empty items) ──
+  // ─── Check if a section needs generation ───────────────────────
 
   const sectionNeedsGeneration = useCallback(
     (sectionKey: string): { needsFill: boolean; needsFullGeneration: boolean; emptyIndices: number[] } => {
@@ -218,7 +229,7 @@ export const useGeneration = ({
     [projectData, hasDeepContent]
   );
 
-  // ─── ★ v4.2: Sub-section mapping ──
+  // ─── Sub-section mapping ───────────────────────────────────────
 
   const SUB_SECTION_MAP: Record<string, { parent: string; path: string[]; isString?: boolean }> = {
     coreProblem:        { parent: 'problemAnalysis', path: ['problemAnalysis', 'coreProblem'] },
@@ -232,11 +243,19 @@ export const useGeneration = ({
     policies:           { parent: 'projectIdea',     path: ['projectIdea', 'policies'] },
   };
 
-  // ─── ★ v4.0: Comprehensive error handler with specific modals ──
+  // ─── Comprehensive error handler ───────────────────────────────
+  // ★ v7.5: AbortError recognition added at the top
 
   const handleAIError = useCallback(
     (e: any, context: string = '') => {
       const msg = e.message || e.toString();
+
+      // ★ v7.5: AbortError — user cancelled, don't show error modal
+      if (e.name === 'AbortError' || msg.includes('abort') || msg.includes('cancelled') || msg.includes('Generation cancelled')) {
+        console.log(`[useGeneration] Generation cancelled by user (${context})`);
+        return;
+      }
+
       const parts = msg.split('|');
       const errorCode = parts[0] || '';
       const provider = parts[1] || '';
@@ -434,7 +453,8 @@ export const useGeneration = ({
     },
     [language, setIsSettingsOpen, setModalConfig, closeModal]
   );
-  // ─── Check if other language has content FOR THIS SECTION (v3.5) ──
+
+  // ─── Check other language content ──────────────────────────────
 
   const checkOtherLanguageHasContent = useCallback(
     async (sectionKey: string): Promise<any | null> => {
@@ -521,20 +541,20 @@ export const useGeneration = ({
   );
 
   // ─── Execute section generation ────────────────────────────────
-  // ★ v7.0: Partners post-processing includes partnerType validation
-  // ★ v5.0: Added partners generation
-  // ★ v4.2: Added sub-section support via SUB_SECTION_MAP
-  // v3.9 FIX: Fill mode now uses generateActivitiesPerWP() with
-  // existingScaffold + onlyIndices. Mandatory WP detection adds
-  // only missing WPs instead of destroying existing ones.
+  // ★ v7.5: Creates AbortController, passes signal to all generate* calls
 
     const executeGeneration = useCallback(
     async (sectionKey: string, mode: string = 'regenerate') => {
-      // ★ v7.2: Pre-generation guard — block double-clicks and rate limit overflow
       if (!preGenerationGuard(sectionKey)) return;
 
       isGeneratingRef.current = true;
       sessionCallCountRef.current++;
+
+      // ★ v7.5: Create AbortController for this generation
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const signal = abortController.signal;
+
       closeModal();
       setIsLoading(`${t.generating} ${sectionKey}...`);
       setError(null);
@@ -542,20 +562,18 @@ export const useGeneration = ({
       try {
         let generatedData;
 
-        // ★ v4.2: Check if this is a sub-section key
         const subMapping = SUB_SECTION_MAP[sectionKey];
 
-        // ★ v4.2: Sub-section generation — generate ONLY a specific sub-part
-        // ★ v4.2: Sub-section generation — generate ONLY a specific sub-part
         if (subMapping) {
           generatedData = await generateSectionContent(
             sectionKey,
             projectData,
             language,
-            mode
+            mode,
+            null,
+            signal  // ★ v7.5
           );
 
-        // ★ v7.1: Partner Allocations — AI generates allocations for all tasks
         } else if (sectionKey === 'partnerAllocations') {
           const pa_partners = Array.isArray(projectData.partners) ? projectData.partners : [];
           const pa_activities = Array.isArray(projectData.activities) ? projectData.activities : [];
@@ -575,8 +593,8 @@ export const useGeneration = ({
               onCancel: () => closeModal(),
             });
             setIsLoading(false);
-            // ★ v7.2: Release generation lock on early return
             isGeneratingRef.current = false;
+            abortControllerRef.current = null;  // ★ v7.5
             return;
           }
 
@@ -589,10 +607,10 @@ export const useGeneration = ({
           const allocResult = await generatePartnerAllocations(
             projectData,
             language,
-            (msg: string) => setIsLoading(msg)
+            (msg: string) => setIsLoading(msg),
+            signal  // ★ v7.5
           );
 
-          // Merge allocations into activities
           const updatedActivities = pa_activities.map((wp: any) => ({
             ...wp,
             tasks: (wp.tasks || []).map((task: any) => {
@@ -617,11 +635,10 @@ export const useGeneration = ({
           console.log(`[useGeneration] Partner allocations applied: ${totalAllocations} allocations across ${allocResult.length} tasks`);
 
           setIsLoading(false);
-          // ★ v7.2: Release generation lock on early return
           isGeneratingRef.current = false;
+          abortControllerRef.current = null;  // ★ v7.5
           return;
 
-        // ★ v5.0 / v7.0: Partners (Consortium) generation
         } else if (sectionKey === 'partners') {
           const existingPartners = projectData.partners || [];
 
@@ -635,7 +652,9 @@ export const useGeneration = ({
               'partners',
               projectData,
               language,
-              'regenerate'
+              'regenerate',
+              null,
+              signal  // ★ v7.5
             );
           } else if (mode === 'enhance') {
             setIsLoading(
@@ -647,10 +666,11 @@ export const useGeneration = ({
               'partners',
               projectData,
               language,
-              'enhance'
+              'enhance',
+              null,
+              signal  // ★ v7.5
             );
           } else {
-            // fill mode — check for empty fields
             const needsFill = existingPartners.some((p: any) =>
               !p.name || p.name.trim() === '' || !p.expertise || p.expertise.trim() === '' || !p.pmRate
             );
@@ -664,14 +684,15 @@ export const useGeneration = ({
                 'partners',
                 { ...projectData, partners: existingPartners },
                 language,
-                'fill'
+                'fill',
+                null,
+                signal  // ★ v7.5
               );
             } else {
               generatedData = existingPartners;
             }
           }
 
-          // ★ v7.0: Post-processing — ensure IDs, codes, and validated partnerType
           if (Array.isArray(generatedData)) {
             generatedData = generatedData.map((p: any, idx: number) => ({
               ...p,
@@ -684,14 +705,10 @@ export const useGeneration = ({
             console.log(`[useGeneration] Partners post-processed: ${generatedData.length} partners, types: ${generatedData.map((p: any) => p.partnerType).join(', ')}`);
           }
 
-        // ★ v3.8/v3.9: Smart per-WP generation for activities
         } else if (sectionKey === 'activities') {
           const existingWPs = projectData.activities || [];
           const emptyWPIndices: number[] = [];
 
-          // ────────────────────────────────────────────────────────
-          // ★ v3.9: Mandatory WP detection — PM and Dissemination
-          // ────────────────────────────────────────────────────────
           const hasPMWP = existingWPs.some((wp: any) => {
             const title = (wp.title || '').toLowerCase();
             return title.includes('management') || title.includes('coordination')
@@ -707,7 +724,6 @@ export const useGeneration = ({
           const missingDiss = !hasDissWP && existingWPs.length > 0;
           const hasMissingMandatory = missingPM || missingDiss;
 
-          // Detect which WPs are empty or missing content
           existingWPs.forEach((wp: any, idx: number) => {
             const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0
               && wp.tasks.some((t: any) => t.title && t.title.trim().length > 0);
@@ -724,7 +740,7 @@ export const useGeneration = ({
               projectData,
               language,
               mode,
-              (wpIndex, wpTotal, wpTitle) => {
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
                 if (wpIndex === -1) {
                   setIsLoading(language === 'si' ? 'Generiranje strukture DS...' : 'Generating WP structure...');
                 } else {
@@ -734,7 +750,10 @@ export const useGeneration = ({
                       : `Generating WP ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
                   );
                 }
-              }
+              },
+              undefined,
+              undefined,
+              signal  // ★ v7.5
             );
 
           } else if (hasMissingMandatory && mode !== 'enhance') {
@@ -812,7 +831,7 @@ export const useGeneration = ({
               { ...projectData, activities: augmentedWPs },
               language,
               'fill',
-              (wpIndex, wpTotal, wpTitle) => {
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
                 if (wpIndex === -1) {
                   setIsLoading(
                     language === 'si'
@@ -828,7 +847,8 @@ export const useGeneration = ({
                 }
               },
               augmentedWPs,
-              finalIndicesToGenerate
+              finalIndicesToGenerate,
+              signal  // ★ v7.5
             );
 
           } else if (emptyWPIndices.length > 0) {
@@ -836,7 +856,7 @@ export const useGeneration = ({
               projectData,
               language,
               'fill',
-              (wpIndex, wpTotal, wpTitle) => {
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
                 if (wpIndex === -1) {
                   setIsLoading(
                     language === 'si'
@@ -852,7 +872,8 @@ export const useGeneration = ({
                 }
               },
               existingWPs,
-              emptyWPIndices
+              emptyWPIndices,
+              signal  // ★ v7.5
             );
 
           } else if (mode === 'enhance') {
@@ -860,7 +881,9 @@ export const useGeneration = ({
               sectionKey,
               projectData,
               language,
-              mode
+              mode,
+              null,
+              signal  // ★ v7.5
             );
 
           } else {
@@ -949,8 +972,10 @@ export const useGeneration = ({
             generatedData = await generateObjectFill(
               sectionKey,
               projectData,
+              projectData[sectionKey],  // currentData
+              emptyFields,
               language,
-              emptyFields
+              signal  // ★ v7.5
             );
           }
 
@@ -968,7 +993,9 @@ export const useGeneration = ({
               sectionKey,
               projectData,
               language,
-              'regenerate'
+              'regenerate',
+              null,
+              signal  // ★ v7.5
             );
 
           } else if (Array.isArray(sectionData)) {
@@ -1013,8 +1040,9 @@ export const useGeneration = ({
               generatedData = await generateTargetedFill(
                 sectionKey,
                 projectData,
+                sectionData,  // currentData
                 language,
-                emptyIndices
+                signal  // ★ v7.5
               );
             }
 
@@ -1130,8 +1158,10 @@ export const useGeneration = ({
               generatedData = await generateObjectFill(
                 sectionKey,
                 projectData,
+                sectionData,  // currentData
+                emptyFields,
                 language,
-                emptyFields
+                signal  // ★ v7.5
               );
             }
 
@@ -1140,7 +1170,9 @@ export const useGeneration = ({
               sectionKey,
               projectData,
               language,
-              mode
+              mode,
+              null,
+              signal  // ★ v7.5
             );
           }
 
@@ -1149,17 +1181,16 @@ export const useGeneration = ({
             sectionKey,
             projectData,
             language,
-            mode
+            mode,
+            null,
+            signal  // ★ v7.5
           );
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // ★ v5.0 / v4.2: DATA INSERTION — sub-section + partners aware
-        // ═══════════════════════════════════════════════════════════
+        // ═══ DATA INSERTION ═══
         let newData = { ...projectData };
 
         if (subMapping) {
-          // ★ v4.2: Sub-section data insertion
           if (sectionKey === 'projectTitleAcronym') {
             newData.projectIdea = {
               ...newData.projectIdea,
@@ -1182,7 +1213,6 @@ export const useGeneration = ({
             };
           }
         } else if (sectionKey === 'partners') {
-          // ★ v5.0: Partners data insertion
           newData.partners = generatedData;
         } else if (['problemAnalysis', 'projectIdea'].includes(sectionKey)) {
           newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
@@ -1219,7 +1249,9 @@ export const useGeneration = ({
               'projectManagement',
               newData,
               language,
-              mode
+              mode,
+              null,
+              signal  // ★ v7.5
             );
             newData.projectManagement = {
               ...newData.projectManagement,
@@ -1230,6 +1262,9 @@ export const useGeneration = ({
               },
             };
           } catch (e: any) {
+            // ★ v7.5: If cancelled, re-throw immediately
+            if (e.name === 'AbortError') throw e;
+
             console.error('[Auto-gen projectManagement]:', e);
             const emsg = e.message || '';
             const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
@@ -1241,9 +1276,11 @@ export const useGeneration = ({
                   : 'Waiting for API quota... 20s → Implementation'
               );
               await new Promise(r => setTimeout(r, 20000));
+              // ★ v7.5: Check abort after wait
+              if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
               setIsLoading(`${t.generating} ${t.subSteps.implementation}...`);
               try {
-                const pmRetry = await generateSectionContent('projectManagement', newData, language, mode);
+                const pmRetry = await generateSectionContent('projectManagement', newData, language, mode, null, signal);
                 newData.projectManagement = {
                   ...newData.projectManagement,
                   ...pmRetry,
@@ -1252,7 +1289,8 @@ export const useGeneration = ({
                     ...(pmRetry?.structure || {}),
                   },
                 };
-              } catch (e2) {
+              } catch (e2: any) {
+                if (e2.name === 'AbortError') throw e2;  // ★ v7.5
                 console.error('[Auto-gen projectManagement] Retry also failed:', e2);
                 setError(
                   language === 'si'
@@ -1270,13 +1308,17 @@ export const useGeneration = ({
           }
 
           await new Promise(r => setTimeout(r, 3000));
+          // ★ v7.5: Check abort before risks generation
+          if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
           setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
           try {
             const risksContent = await generateSectionContent(
               'risks',
               newData,
               language,
-              mode
+              mode,
+              null,
+              signal  // ★ v7.5
             );
             if (Array.isArray(risksContent)) {
               newData.risks = risksContent;
@@ -1286,6 +1328,9 @@ export const useGeneration = ({
               console.warn('[executeGeneration] risks: unexpected format, keeping original');
             }
           } catch (e: any) {
+            // ★ v7.5: If cancelled, re-throw immediately
+            if (e.name === 'AbortError') throw e;
+
             console.error('[Auto-gen risks]:', e);
             const emsg = e.message || '';
             const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
@@ -1297,15 +1342,17 @@ export const useGeneration = ({
                   : 'Waiting for API quota... 20s → Risk Mitigation'
               );
               await new Promise(r => setTimeout(r, 20000));
+              if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');  // ★ v7.5
               setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
               try {
-                const risksRetry = await generateSectionContent('risks', newData, language, mode);
+                const risksRetry = await generateSectionContent('risks', newData, language, mode, null, signal);
                 if (Array.isArray(risksRetry)) {
                   newData.risks = risksRetry;
                 } else if (risksRetry && Array.isArray((risksRetry as any).risks)) {
                   newData.risks = (risksRetry as any).risks;
                 }
-              } catch (e2) {
+              } catch (e2: any) {
+                if (e2.name === 'AbortError') throw e2;  // ★ v7.5
                 console.error('[Auto-gen risks] Retry also failed:', e2);
                 setModalConfig({
                   isOpen: true,
@@ -1336,7 +1383,6 @@ export const useGeneration = ({
                 onCancel: () => closeModal(),
               });
             }
-
           }
         }
 
@@ -1346,8 +1392,8 @@ export const useGeneration = ({
         handleAIError(e, `generateSection(${sectionKey})`);
       } finally {
         setIsLoading(false);
-        // ★ v7.2: Release generation lock
         isGeneratingRef.current = false;
+        abortControllerRef.current = null;  // ★ v7.5: Cleanup
       }
     },
     [
@@ -1361,7 +1407,6 @@ export const useGeneration = ({
       preGenerationGuard,
     ]
   );
-
   // ─── 3-option generation modal helper ──────────────────────────
 
   const show3OptionModal = useCallback(
@@ -1390,8 +1435,7 @@ export const useGeneration = ({
     [t, language, setModalConfig, closeModal]
   );
 
-  // ─── SMART Handle generate (4-level logic — v3.5.1) ────────────
-  // ★ v4.2: Sub-section aware — checks sub-section content specifically
+  // ─── SMART Handle generate (4-level logic) ─────────────────────
 
   const handleGenerateSection = useCallback(
     async (sectionKey: string) => {
@@ -1402,15 +1446,11 @@ export const useGeneration = ({
 
       const otherLang = language === 'en' ? 'SI' : 'EN';
 
-      // ★ v4.2: For sub-sections, check content of the specific sub-part
-      // but use parent key for cross-language storage lookup
       const subMapping = SUB_SECTION_MAP[sectionKey];
       const contentCheckKey = subMapping ? subMapping.parent : sectionKey;
 
-      // v3.4/3.5 FIX: Use robust check — for sub-sections, check specific sub-part
       const currentHasContent = subMapping
         ? (() => {
-            // Check if THIS specific sub-section has content
             let data: any = projectData;
             for (const key of subMapping.path) {
               data = data?.[key];
@@ -1419,7 +1459,6 @@ export const useGeneration = ({
           })()
         : robustCheckSectionHasContent(sectionKey);
 
-      // Check if other language has content — use parent key for storage lookup
       const otherLangData = await checkOtherLanguageHasContent(contentCheckKey);
 
       if (otherLangData && !currentHasContent) {
@@ -1629,8 +1668,8 @@ export const useGeneration = ({
                 generatedData = await generateTargetedFill(
                   s,
                   projectData,
-                  language,
-                  emptyIndices
+                  projectData[s],
+                  language
                 );
               } else {
                 const genMode = action === 'generate' ? 'regenerate' : action;
@@ -1830,6 +1869,7 @@ export const useGeneration = ({
   );
 
   // ─── Single field generation ───────────────────────────────────
+  // ★ v7.5: AbortController support
 
   const handleGenerateField = useCallback(
     async (path: (string | number)[]) => {
@@ -1842,44 +1882,64 @@ export const useGeneration = ({
       setIsLoading(`${t.generating} ${String(fieldName)}...`);
       setError(null);
 
+      // ★ v7.5: Create abort controller for field generation
+      const fieldAbort = new AbortController();
+      abortControllerRef.current = fieldAbort;
+
       try {
-        const content = await generateFieldContent(path, projectData, language);
+        const content = await generateFieldContent(path, projectData, language, fieldAbort.signal);
         handleUpdateData(path, content);
       } catch (e: any) {
-        handleAIError(e, `generateField(${String(fieldName)})`);
+        if (e.name !== 'AbortError') {
+          handleAIError(e, `generateField(${String(fieldName)})`);
+        }
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;  // ★ v7.5
       }
     },
     [ensureApiKey, projectData, language, t, handleUpdateData, setIsSettingsOpen, handleAIError]
   );
 
   // ─── Summary generation ────────────────────────────────────────
+  // ★ v7.5: AbortController support
 
   const runSummaryGeneration = useCallback(async () => {
     setIsGeneratingSummary(true);
     setSummaryText('');
+
+    // ★ v7.5: Create abort controller for summary
+    const summaryAbort = new AbortController();
+    abortControllerRef.current = summaryAbort;
+
     try {
-      const text = await generateProjectSummary(projectData, language);
+      const text = await generateProjectSummary(projectData, language, summaryAbort.signal);
       setSummaryText(text);
     } catch (e: any) {
-      const msg = e.message || '';
-      if (msg.includes('credits') || msg.includes('Quota') || msg.includes('afford')) {
+      if (e.name === 'AbortError') {
         setSummaryText(
-          language === 'si'
-            ? 'Nezadostna sredstva AI. Dopolnite kredit ali zamenjajte model v Nastavitvah.'
-            : 'Insufficient AI credits. Top up credits or switch model in Settings.'
+          language === 'si' ? 'Generiranje preklicano.' : 'Generation cancelled.'
         );
       } else {
-        setSummaryText(
-          language === 'si'
-            ? 'Napaka pri generiranju povzetka. Poskusite ponovno.'
-            : 'Error generating summary. Please try again.'
-        );
+        const msg = e.message || '';
+        if (msg.includes('credits') || msg.includes('Quota') || msg.includes('afford')) {
+          setSummaryText(
+            language === 'si'
+              ? 'Nezadostna sredstva AI. Dopolnite kredit ali zamenjajte model v Nastavitvah.'
+              : 'Insufficient AI credits. Top up credits or switch model in Settings.'
+          );
+        } else {
+          setSummaryText(
+            language === 'si'
+              ? 'Napaka pri generiranju povzetka. Poskusite ponovno.'
+              : 'Error generating summary. Please try again.'
+          );
+        }
+        console.error('[Summary Error]:', e);
       }
-      console.error('[Summary Error]:', e);
     } finally {
       setIsGeneratingSummary(false);
+      abortControllerRef.current = null;  // ★ v7.5
     }
   }, [projectData, language]);
 
@@ -1911,6 +1971,7 @@ export const useGeneration = ({
     }
   }, [summaryText, projectData, language]);
 
+  // ★ v7.5: cancelGeneration exported
   return {
     isLoading,
     setIsLoading,
@@ -1926,5 +1987,6 @@ export const useGeneration = ({
     handleExportSummary,
     runSummaryGeneration,
     handleDownloadSummaryDocx,
+    cancelGeneration,
   };
 };
