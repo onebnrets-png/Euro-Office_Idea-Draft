@@ -612,7 +612,7 @@ const renderKERs = (props) => {
 
     return (
         <div id="kers" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${(kers || []).length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${safeArray(kers).length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
                 <GenerateButton onClick={() => onGenerateSection('kers')} isLoading={isLoading === `${t.generating} kers...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             {(kers || []).map((ker, index) => (
