@@ -560,6 +560,7 @@ be traceable back to the problem analysis and forward to the expected impacts.
 MANDATORY:
 - Title MUST use INFINITIVE VERB (e.g., "Strengthen…", "Develop…", "Enhance…").
 - Each description: 3–5 substantive sentences linking to broader EU goals.
+- Each objective MUST have an "indicator" field containing a SPECIFIC, MEASURABLE KPI (Key Performance Indicator) that demonstrates progress toward the objective. The indicator MUST be quantitative where possible (e.g., "Reduction in early school leaving rates by 15% across pilot regions by project end") or clearly verifiable (e.g., "Adoption of the developed methodology by at least 10 regional education authorities within 2 years post-project"). NEVER leave the indicator field empty.
 - No markdown. Vary sentence structures.
 - No banned AI phrases.`
   },
