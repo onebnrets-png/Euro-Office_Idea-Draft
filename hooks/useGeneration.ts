@@ -37,7 +37,7 @@ import {
 } from '../services/geminiService.ts';
 import { getRateLimitStatus } from '../services/aiProvider.ts';
 import { generateSummaryDocx } from '../services/docxGenerator.ts';
-import { recalculateProjectSchedule, downloadBlob } from '../utils.ts';
+import { recalculateProjectSchedule, downloadBlob, set } from '../utils.ts';
 import { TEXT } from '../locales.ts';
 import { storageService } from '../services/storageService.ts';
 import { smartTranslateProject } from '../services/translationDiffService.ts';
