@@ -2205,7 +2205,7 @@ export const useGeneration = ({
         abortControllerRef.current = null;  // ★ v7.5
       }
     },
-    [ensureApiKey, projectData, language, t, handleUpdateData, setIsSettingsOpen, handleAIError]
+    [ensureApiKey, projectData, language, t, handleUpdateData, setIsSettingsOpen, handleAIError, currentProjectId]
   );
 
   // ─── Summary generation ────────────────────────────────────────
