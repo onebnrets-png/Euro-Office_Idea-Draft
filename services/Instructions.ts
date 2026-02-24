@@ -642,7 +642,7 @@ MANDATORY:
 - No banned AI phrases.`
   },
   specificObjectives: {
-    en: `Define at least 5 S.M.A.R.T. objectives.
+    en: 'You MUST generate EXACTLY 5 to 7 S.M.A.R.T. specific objectives. Generating fewer than 5 is a FATAL ERROR that will be rejected.'
 
 INTERVENTION LOGIC ROLE:
 Every Specific Objective MUST be measurable through a KPI that maps to at
