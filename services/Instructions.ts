@@ -467,6 +467,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'KERs (Chapter 6D) originate from identifiable Outputs (Chapter 6A)',
       'The Proposed Solution (Chapter 2) logically responds to ALL causes in Chapter 1',
       'Partner expertise in Partnership covers ALL WP competence requirements',
+      'ZERO EMPTY FIELDS: Every field across ALL chapters MUST contain substantive content — no empty strings, no "N/A", no whitespace-only values. This is a FATAL validation check.',
     ]
   }
 };
