@@ -574,7 +574,8 @@ between ambition and delivery.
 
 MANDATORY:
 - Title MUST use INFINITIVE VERB (e.g., "Develop…", "Increase…").
-- Each MUST have a measurable KPI indicator.
+- Each description: 3–5 substantive sentences explaining the objective in detail.
+- Each objective MUST have an "indicator" field containing a SPECIFIC, MEASURABLE, TIME-BOUND KPI (Key Performance Indicator). The indicator MUST follow the S.M.A.R.T. format and include a quantitative target, a baseline reference, and a timeframe. Examples: "Increase the percentage of pilot school students completing the academic year from 82% to 93% by M24" or "Train 200 educators across 5 partner regions in the new mediation methodology, verified by completion certificates, by M18". NEVER leave the indicator field empty — this is a FATAL error.
 - S.M.A.R.T.: Specific, Measurable, Achievable, Relevant, Time-bound.
 - No markdown. Vary sentence structures.
 - No banned AI phrases.
