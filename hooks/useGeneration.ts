@@ -2241,11 +2241,28 @@ export const useGeneration = ({
         }
       };
 
-      // ── Translation vs Generation decision ──
+  // ── Translation vs Generation decision ──
       const sectionLabel = isActivities
         ? (language === 'si' ? 'Aktivnosti' : 'Activities')
         : (language === 'si' ? 'Rezultati' : 'Results');
 
+      if (isActivities) {
+        // ★ FIX: For activities composite, skip "other language" check entirely.
+        // Activities composite generates 5 interdependent sections — translation 
+        // is not meaningful. Always offer generate options directly.
+        if (hasContentInSections) {
+          show3OptionModal(
+            () => runComposite('enhance'),
+            () => runComposite('fill'),
+            () => runComposite('regenerate')
+          );
+        } else {
+          runComposite('regenerate');
+        }
+        return;
+      }
+
+      // ── expectedResults: keep translation logic ──
       if (otherLangData && !hasContentInSections) {
         setModalConfig({
           isOpen: true,
@@ -2302,28 +2319,6 @@ export const useGeneration = ({
       } else {
         runComposite('regenerate');
       }
-    },
-    [
-      ensureApiKey,
-      robustCheckSectionHasContent,
-      sectionNeedsGeneration,
-      checkOtherLanguageHasContent,
-      projectData,
-      language,
-      t,
-      closeModal,
-      setProjectData,
-      setHasUnsavedTranslationChanges,
-      setIsSettingsOpen,
-      setModalConfig,
-      handleAIError,
-      performTranslationFromOther,
-      show3OptionModal,
-      preGenerationGuard,
-      currentProjectId,
-    ]
-  );
-
   // ─── Single field generation ───────────────────────────────────
   // ★ v7.5: AbortController support
 
