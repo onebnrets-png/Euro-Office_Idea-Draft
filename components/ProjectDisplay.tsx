@@ -545,10 +545,10 @@ const renderRisks = (props) => {
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${(risks || []).length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${safeArray(risks).length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
                 <GenerateButton onClick={() => onGenerateSection('risks')} isLoading={isLoading === `${t.generating} risks...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
-            {(risks || []).map((risk, index) => {
+            {safeArray(risks).map((risk, index) => {
                 const likelihoodLoading = isLoading === `${t.generating} likelihood...`;
                 const impactLoading = isLoading === `${t.generating} impact...`;
                 return (
