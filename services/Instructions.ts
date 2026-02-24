@@ -765,10 +765,11 @@ MANDATORY:
 - environmental (climate events, regulatory changes, environmental compliance)
 
 MANDATORY:
-- Each risk: id, category (lowercase: technical/social/economic/environmental), title, description (2–4 sentences), likelihood (low/medium/high), impact (low/medium/high), mitigation strategy (2–4 sentences).
+- Each risk MUST have ALL fields filled: id, category (lowercase: technical/social/economic/environmental), title, description (2–4 sentences), likelihood (low/medium/high), impact (low/medium/high), and mitigation strategy.
+- The "mitigation" field MUST contain 2–4 sentences with CONCRETE, ACTIONABLE countermeasures — not generic statements. Include who is responsible, what triggers the mitigation, and what the backup plan is. NEVER leave the mitigation field empty — this is a FATAL error.
 - Use NOUN PHRASES for titles: "Insufficient Partner Engagement" NOT "Partners might not engage".
 - If the project includes digital/AI components, MUST include an "Ethical and Regulatory Compliance (AI Act/GDPR)" risk with appropriate mitigation strategy.
-- No markdown. Vary sentence structures.`
+- No markdown. Vary sentence structures. No banned AI phrases.`
   },
   kers: {
     en: `Generate 4–6 Key Exploitable Results (KERs).
@@ -787,9 +788,10 @@ Every KER exploitation strategy MUST address all three pillars:
    policies and regulatory frameworks (alignment with directives, endorsement paths)
 
 MANDATORY:
-- Each KER: id, title (specific noun phrase — the product/asset name), description (3–5 sentences about what it is, who will use it, and how it differs from existing solutions), exploitation strategy (3–5 sentences covering ALL THREE sustainability pillars above).
 - Title MUST be a specific asset/product name: "GreenGrid Decision Support Tool" NOT "Development of a tool".
-- No markdown. Vary sentence structures.
+- Each description: 3–5 sentences about what it is, who will use it, and how it differs from existing solutions.
+- Each KER MUST have an "exploitationStrategy" field containing 3–5 substantive sentences covering ALL THREE sustainability pillars above. The exploitationStrategy MUST specifically address: (1) how the KER will be financially sustained post-project, (2) which institution takes ownership, and (3) how it aligns with policy frameworks. NEVER leave the exploitationStrategy field empty — this is a FATAL error.
+- No markdown. Vary sentence structures. No banned AI phrases.
 - CROSS-CHECK: Each KER must originate from a concrete Output produced by a specific WP.`
   },
   partners: {
