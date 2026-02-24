@@ -1867,7 +1867,15 @@ export const useGeneration = ({
             }
 
             // ── Save all ──
-            setProjectData(newData);
+            setProjectData((prev: any) => {
+              const savedData = { ...prev, ...newData };
+              if (currentProjectId) {
+                storageService.saveProject(savedData, language, currentProjectId)
+                  .then(() => console.log(`[Composite/activities] ★ Explicit save — SUCCESS`))
+                  .catch((e: any) => console.error(`[Composite/activities] ★ Explicit save failed:`, e));
+              }
+              return savedData;
+            });
             setHasUnsavedTranslationChanges(true);
             console.log('[Composite/activities] ALL STEPS COMPLETE ✅');
 
