@@ -1615,9 +1615,9 @@ const ProjectDisplay = (props) => {
                 </div>
 
                 <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
-                    {showGenerateButton && (
-                        sectionKey === 'expectedResults'
-                            ? <GenerateButton onClick={() => props.onGenerateCompositeSection('expectedResults')} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                        {showGenerateButton && (
+                        (sectionKey === 'expectedResults' || sectionKey === 'activities')
+                            ? <GenerateButton onClick={() => props.onGenerateCompositeSection(sectionKey)} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                             : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                     )}
                 </div>
