@@ -337,9 +337,34 @@ const App = () => {
                   borderTopColor: 'transparent', borderRadius: '50%',
                   animation: 'spin 1s linear infinite', margin: '0 auto 16px',
                 }} />
-                <p style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.heading, margin: 0 }}>
-                  {typeof generation.isLoading === 'string' ? generation.isLoading : t.loading}
-                </p>
+                <p style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.heading, margin: '0 0 16px 0' }}>
+  {typeof generation.isLoading === 'string' ? generation.isLoading : t.loading}
+</p>
+{generation.cancelGeneration && (
+  <button
+    onClick={generation.cancelGeneration}
+    style={{
+      marginTop: 4,
+      padding: '8px 24px',
+      fontSize: '14px',
+      fontWeight: 700,
+      color: '#fff',
+      background: '#ef4444',
+      border: 'none',
+      borderRadius: radii.lg,
+      cursor: 'pointer',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      transition: 'background 0.15s ease',
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = '#dc2626'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = '#ef4444'; }}
+  >
+    ✕ {language === 'si' ? 'Prekliči generiranje' : 'Cancel generation'}
+  </button>
+)}
+
               </div>
             </div>
           )}
