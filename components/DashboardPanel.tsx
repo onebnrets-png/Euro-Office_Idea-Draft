@@ -1,11 +1,13 @@
 // components/DashboardPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Persistent right-side dashboard panel
-// v2.3 — 2026-02-18
-//   - FIX: Collapse button now works! Internal state management
-//   - FIX: Toggle button styled as matching pill (same as Sidebar)
-//   - FIX: Props simplified — panel manages its own isCollapsed state
-//   - Previous (v2.2): completeness fix, SKIP_KEYS, drag-and-drop
+// v2.4 — 2026-02-24 — DEFENSIVE ARRAY HANDLING
+//   ★ v2.4: NEW safeArray() utility — handles AI returning objects
+//           instead of arrays (e.g. { objectives: [...] } vs [...])
+//   ★ v2.4: arrayHasRealContent, calculateCompleteness, STAT_DEFINITIONS
+//           all use safeArray() — never crash on non-array data
+//   - v2.3: Collapse button, internal state management
+//   - v2.2: completeness fix, SKIP_KEYS, drag-and-drop
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -57,9 +59,22 @@ const SKIP_KEYS = new Set([
 const hasRealStringContent = (v: any): boolean =>
   typeof v === 'string' && v.trim().length > 0;
 
-const arrayHasRealContent = (arr: any[]): boolean => {
-  if (!Array.isArray(arr) || arr.length === 0) return false;
-  return arr.some((item: any) => {
+// ★ v2.4: Safe array extractor — AI sometimes returns { objectives: [...] } instead of [...]
+const safeArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      if (Array.isArray(v[k])) return v[k];
+    }
+  }
+  return [];
+};
+
+// ★ v2.4: Accepts any type safely — never crashes
+const arrayHasRealContent = (arr: any): boolean => {
+  const safe = safeArray(arr);
+  if (safe.length === 0) return false;
+  return safe.some((item: any) => {
     if (typeof item === 'string') return item.trim().length > 0;
     if (typeof item !== 'object' || item === null) return false;
     return Object.entries(item).some(([k, v]) => {
@@ -84,6 +99,7 @@ const objectHasRealContent = (obj: any): boolean => {
 };
 
 // ─── Completeness calculation ────────────────────────────────
+// ★ v2.4: activities + risks use safeArray(), try/catch for safety
 
 const calculateCompleteness = (projectData: any): number => {
   if (!projectData) return 0;
@@ -133,8 +149,8 @@ const calculateCompleteness = (projectData: any): number => {
     {
       key: 'activities',
       check: (d) => {
-        if (!Array.isArray(d)) return false;
-        return d.some((wp: any) =>
+        const safe = safeArray(d);
+        return safe.some((wp: any) =>
           hasRealStringContent(wp.title) ||
           arrayHasRealContent(wp.tasks) ||
           arrayHasRealContent(wp.milestones) ||
@@ -148,8 +164,8 @@ const calculateCompleteness = (projectData: any): number => {
     {
       key: 'risks',
       check: (d) => {
-        if (!Array.isArray(d)) return false;
-        return d.some((r: any) =>
+        const safe = safeArray(d);
+        return safe.some((r: any) =>
           hasRealStringContent(r.title) ||
           hasRealStringContent(r.description) ||
           hasRealStringContent(r.mitigation)
@@ -166,13 +182,19 @@ const calculateCompleteness = (projectData: any): number => {
     const data = projectData?.[key];
     if (data === undefined || data === null) continue;
     totalCount++;
-    if (check(data)) filledCount++;
+    try {
+      if (check(data)) filledCount++;
+    } catch (e) {
+      // ★ v2.4: Never crash on data inspection
+      console.warn(`[DashboardPanel] Error checking ${key}:`, e);
+    }
   }
 
   return totalCount === 0 ? 0 : Math.round((filledCount / totalCount) * 100);
 };
 
 // ─── Stat definitions ────────────────────────────────────────
+// ★ v2.4: All getValue functions use safeArray() — never crash
 
 interface StatItem {
   id: string;
@@ -184,15 +206,15 @@ interface StatItem {
 }
 
 const STAT_DEFINITIONS: StatItem[] = [
-  { id: 'genObj', labelEn: 'General Objectives', labelSi: 'Splošni cilji', icon: icons.crosshair, getValue: (d) => d?.generalObjectives?.filter((o: any) => hasRealStringContent(o.title)).length || 0, color: theme.colors.primary[500] },
-  { id: 'specObj', labelEn: 'Specific Objectives', labelSi: 'Specifični cilji', icon: icons.flag, getValue: (d) => d?.specificObjectives?.filter((o: any) => hasRealStringContent(o.title)).length || 0, color: theme.colors.secondary[500] },
-  { id: 'wp', labelEn: 'Work Packages', labelSi: 'Delovni sklopi', icon: icons.layers, getValue: (d) => d?.activities?.filter((wp: any) => hasRealStringContent(wp.title)).length || 0, color: theme.colors.success[500] },
-  { id: 'tasks', labelEn: 'Tasks', labelSi: 'Naloge', icon: icons.checkSquare, getValue: (d) => { let c = 0; d?.activities?.forEach((wp: any) => { c += wp.tasks?.filter((t: any) => hasRealStringContent(t.title)).length || 0; }); return c; }, color: theme.colors.warning[500] },
-  { id: 'outputs', labelEn: 'Outputs', labelSi: 'Rezultati', icon: icons.package, getValue: (d) => d?.outputs?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.error[500] },
-  { id: 'outcomes', labelEn: 'Outcomes', labelSi: 'Učinki', icon: icons.trending, getValue: (d) => d?.outcomes?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.primary[300] },
-  { id: 'impacts', labelEn: 'Impacts', labelSi: 'Vplivi', icon: icons.zap, getValue: (d) => d?.impacts?.filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length || 0, color: theme.colors.secondary[300] },
-  { id: 'kers', labelEn: 'KERs', labelSi: 'KER-i', icon: icons.key, getValue: (d) => d?.kers?.filter((k: any) => hasRealStringContent(k.title) || hasRealStringContent(k.result)).length || 0, color: theme.colors.success[300] },
-  { id: 'risks', labelEn: 'Risks', labelSi: 'Tveganja', icon: icons.shield, getValue: (d) => d?.risks?.filter((r: any) => hasRealStringContent(r.title)).length || 0, color: theme.colors.warning[300] },
+  { id: 'genObj', labelEn: 'General Objectives', labelSi: 'Splošni cilji', icon: icons.crosshair, getValue: (d) => safeArray(d?.generalObjectives).filter((o: any) => hasRealStringContent(o.title)).length, color: theme.colors.primary[500] },
+  { id: 'specObj', labelEn: 'Specific Objectives', labelSi: 'Specifični cilji', icon: icons.flag, getValue: (d) => safeArray(d?.specificObjectives).filter((o: any) => hasRealStringContent(o.title)).length, color: theme.colors.secondary[500] },
+  { id: 'wp', labelEn: 'Work Packages', labelSi: 'Delovni sklopi', icon: icons.layers, getValue: (d) => safeArray(d?.activities).filter((wp: any) => hasRealStringContent(wp.title)).length, color: theme.colors.success[500] },
+  { id: 'tasks', labelEn: 'Tasks', labelSi: 'Naloge', icon: icons.checkSquare, getValue: (d) => { let c = 0; safeArray(d?.activities).forEach((wp: any) => { c += safeArray(wp.tasks).filter((t: any) => hasRealStringContent(t.title)).length; }); return c; }, color: theme.colors.warning[500] },
+  { id: 'outputs', labelEn: 'Outputs', labelSi: 'Rezultati', icon: icons.package, getValue: (d) => safeArray(d?.outputs).filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length, color: theme.colors.error[500] },
+  { id: 'outcomes', labelEn: 'Outcomes', labelSi: 'Učinki', icon: icons.trending, getValue: (d) => safeArray(d?.outcomes).filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length, color: theme.colors.primary[300] },
+  { id: 'impacts', labelEn: 'Impacts', labelSi: 'Vplivi', icon: icons.zap, getValue: (d) => safeArray(d?.impacts).filter((o: any) => hasRealStringContent(o.title) || hasRealStringContent(o.description)).length, color: theme.colors.secondary[300] },
+  { id: 'kers', labelEn: 'KERs', labelSi: 'KER-i', icon: icons.key, getValue: (d) => safeArray(d?.kers).filter((k: any) => hasRealStringContent(k.title) || hasRealStringContent(k.result)).length, color: theme.colors.success[300] },
+  { id: 'risks', labelEn: 'Risks', labelSi: 'Tveganja', icon: icons.shield, getValue: (d) => safeArray(d?.risks).filter((r: any) => hasRealStringContent(r.title)).length, color: theme.colors.warning[300] },
 ];
 
 const STORAGE_KEY = 'dashboard_stat_order';
@@ -207,7 +229,6 @@ const EXPANDED_WIDTH = 300;
 const DashboardPanel: React.FC<DashboardPanelProps> = ({
   projectData, language, onCollapseChange,
 }) => {
-  // ★ v2.3: Internal collapse state — panel manages itself
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
 
@@ -219,14 +240,12 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
   const activeColors = isDark ? darkColors : lightColors;
   const panelWidth = isCollapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
 
-  // ★ v2.3: Toggle handler — updates internal state + notifies parent
   const handleToggle = useCallback(() => {
     const next = !isCollapsed;
     setIsCollapsed(next);
     onCollapseChange?.(next);
   }, [isCollapsed, onCollapseChange]);
 
-  // Drag-and-drop stat order
   const [statOrder, setStatOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -298,7 +317,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
           ))}
         </div>
 
-        {/* ★ v2.3: External toggle pill — same style as Sidebar */}
         <button
           onClick={handleToggle}
           style={{
@@ -370,7 +388,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-         {/* Project meta — ★ v2.4: Acronym as primary title */}
+          {/* Project meta */}
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#8080a0' : theme.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
               {t ? 'Projekt' : 'Project'}
@@ -452,7 +470,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
         </div>
       </div>
 
-      {/* ★ v2.3: External toggle pill — same style as Sidebar */}
       <button
         onClick={handleToggle}
         style={{
