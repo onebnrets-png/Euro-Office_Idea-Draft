@@ -269,6 +269,7 @@ const SECTION_MAX_TOKENS: Record<string, number> = {
   summary:             4096,
   translation:         8192,
   partnerAllocations:  8192,  // ★ v5.5: Added for partner allocations
+  chartExtraction:     1024,   // ★ NEW: Low token budget for data extraction
 };
 
 const DEFAULT_MAX_TOKENS = 4096;
