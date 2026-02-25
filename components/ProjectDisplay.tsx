@@ -1569,114 +1569,116 @@ const ProjectDisplay = (props) => {
         }
     };
 
-    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
+    Copy    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
 
     return (
         <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-    <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-        <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
-            <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
-                <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
-                <div style={{ minWidth: 0 }}>
-                    <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
-                </div>
-            </div>
-
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
-                <StepNavigationBar
-                    language={language}
-                    currentStepId={activeStepId}
-                    completedStepsStatus={completedStepsStatus || []}
-                    onStepClick={onStepClick || (() => {})}
-                    isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
-                />
-            </div>
-
-            <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
-                    {showGenerateButton && (
-                    (sectionKey === 'expectedResults' || sectionKey === 'activities')
-                        ? <GenerateButton onClick={() => props.onGenerateCompositeSection(sectionKey)} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                        : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                )}
-            </div>
-        </header>
-
-        {showVizPrompt && (
-            <div className="mx-6 mt-4 mb-2 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 shadow-sm animate-fadeIn">
-                <span className="text-lg flex-shrink-0">📊</span>
-                <p className="text-sm text-indigo-800 font-medium flex-1">
-                    {language === 'si'
-                        ? 'Generiranje zakljuceno. Zelite generirati vizualizacije za vse sekcije?'
-                        : 'Generation complete. Would you like to generate visualizations for all sections?'}
-                </p>
-                <button
-                    onClick={function () { setVizTrigger(function (v) { return v + 1; }); setShowVizPrompt(false); }}
-                    className="px-3 py-1.5 text-sm font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:scale-95 transition-all shadow-sm flex-shrink-0"
-                >
-                    {language === 'si' ? 'Da, generiraj' : 'Yes, generate'}
-                </button>
-                <button
-                    onClick={function () { setShowVizPrompt(false); }}
-                    className="px-3 py-1.5 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 active:scale-95 transition-all flex-shrink-0"
-                >
-                    {language === 'si' ? 'Ne, hvala' : 'No, thanks'}
-                </button>
-            </div>
-        )}
-
-        {error && (() => {
-            const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
-            return (
-                <div
-                    className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
-                        isWarning
-                            ? 'bg-amber-50 border-amber-200 text-amber-800'
-                            : 'bg-red-50 border-red-200 text-red-800'
-                    }`}
-                    role="alert"
-                >
-                    <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold mb-0.5">
-                            {isWarning
-                                ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
-                                : 'Error'}
-                        </p>
-                        <p className="text-sm leading-relaxed">{error}</p>
+            <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
+                <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
+                    <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ minWidth: 0 }}>
+                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
+                        <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
                     </div>
                 </div>
-            );
-        })()}
-        
-        {isLoading && (
-            <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
-                <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
-                <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
-                {props.onCancelGeneration && (
-                    <button
-                        onClick={props.onCancelGeneration}
-                        className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
-                    >
-                        ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
-                    </button>
-                )}
-            </div>
-        )}
 
-        <div 
-            id="main-scroll-container" 
-            className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
-            style={{
-                '--step-card-bg': stepColors[sectionKey as keyof typeof stepColors]?.light || '#FFFFFF',
-                '--step-card-border': stepColors[sectionKey as keyof typeof stepColors]?.border || '#E2E8F0',
-            } as React.CSSProperties}
-        >
-            <div className="max-w-5xl mx-auto pb-20">
-                <div className="animate-fadeIn" key={activeStepId}>
-                    {renderContent()}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
+                    <StepNavigationBar
+                        language={language}
+                        currentStepId={activeStepId}
+                        completedStepsStatus={completedStepsStatus || []}
+                        onStepClick={onStepClick || (() => {})}
+                        isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
+                    />
+                </div>
+
+                <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
+                    {showGenerateButton && (
+                        (sectionKey === 'expectedResults' || sectionKey === 'activities')
+                            ? <GenerateButton onClick={() => props.onGenerateCompositeSection(sectionKey)} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                            : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                    )}
+                </div>
+            </header>
+
+            {showVizPrompt && (
+                <div className="mx-6 mt-4 mb-2 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 shadow-sm animate-fadeIn">
+                    <span className="text-lg flex-shrink-0">📊</span>
+                    <p className="text-sm text-indigo-800 font-medium flex-1">
+                        {language === 'si'
+                            ? 'Generiranje zakljuceno. Zelite generirati vizualizacije za vse sekcije?'
+                            : 'Generation complete. Would you like to generate visualizations for all sections?'}
+                    </p>
+                    <button
+                        onClick={function () { setVizTrigger(function (v) { return v + 1; }); setShowVizPrompt(false); }}
+                        className="px-3 py-1.5 text-sm font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:scale-95 transition-all shadow-sm flex-shrink-0"
+                    >
+                        {language === 'si' ? 'Da, generiraj' : 'Yes, generate'}
+                    </button>
+                    <button
+                        onClick={function () { setShowVizPrompt(false); }}
+                        className="px-3 py-1.5 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 active:scale-95 transition-all flex-shrink-0"
+                    >
+                        {language === 'si' ? 'Ne, hvala' : 'No, thanks'}
+                    </button>
+                </div>
+            )}
+
+            {error && (() => {
+                const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
+                return (
+                    <div
+                        className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
+                            isWarning
+                                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                : 'bg-red-50 border-red-200 text-red-800'
+                        }`}
+                        role="alert"
+                    >
+                        <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold mb-0.5">
+                                {isWarning
+                                    ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
+                                    : 'Error'}
+                            </p>
+                            <p className="text-sm leading-relaxed">{error}</p>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {isLoading && (
+                <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
+                    <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
+                    <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
+                    {props.onCancelGeneration && (
+                        <button
+                            onClick={props.onCancelGeneration}
+                            className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
+                        >
+                            ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
+                        </button>
+                    )}
+                </div>
+            )}
+
+            <div
+                id="main-scroll-container"
+                className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
+                style={{
+                    '--step-card-bg': stepColors[sectionKey as keyof typeof stepColors]?.light || '#FFFFFF',
+                    '--step-card-border': stepColors[sectionKey as keyof typeof stepColors]?.border || '#E2E8F0',
+                } as React.CSSProperties}
+            >
+                <div className="max-w-5xl mx-auto pb-20">
+                    <div className="animate-fadeIn" key={activeStepId}>
+                        {renderContent()}
+                    </div>
                 </div>
             </div>
-        </div>
-    </main>
-);
+        </main>
+    );
+};
+
+export default ProjectDisplay;
