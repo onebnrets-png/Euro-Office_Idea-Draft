@@ -1,5 +1,6 @@
 // services/DataExtractionService.ts
 // ═══════════════════════════════════════════════════════════════
+// v1.7 — 2026-02-25 — Reduced token budget via sectionKey 'chartExtraction' (1024 tokens)
 // v1.6 — 2026-02-25 — Lowered extraction thresholds + expanded prompt for objectives/results
 // v1.5 — 2026-02-25 — FIX: Re-throw RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
 // v1.4 — 2026-02-21 — Risk severity/category normalization
@@ -118,12 +119,13 @@ export var extractEmpiricalData = async function (
     : '';
 
   var prompt = EXTRACTION_PROMPT + contextNote + '\n---\n' + text + '\n---' + textSchemaStr;
-
+    
   try {
     var result = await generateContent({
       prompt: prompt,
       jsonSchema: config.provider === 'gemini' ? extractionSchema : undefined,
       temperature: 0.2,
+      sectionKey: 'chartExtraction',
     });
 
     if (!result || !result.text) return [];
