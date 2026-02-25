@@ -117,6 +117,9 @@ const InlineChart: React.FC<InlineChartProps> = ({
   // ─── Trigger extraction on text change ────────────────────
 
   useEffect(() => {
+    // ★ DIAGNOSTIC 2
+    console.log('[InlineChart] useEffect TEXT — fieldContext:', fieldContext, '| text===lastRef:', text === lastTextRef.current, '| textLen:', text?.length, '| lastRefLen:', lastTextRef.current?.length);
+
     if (text === lastTextRef.current) return;
 
     const lengthDiff = Math.abs(text.length - lastTextRef.current.length);
