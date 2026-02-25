@@ -25,6 +25,7 @@ interface InlineChartProps {
   language?: 'en' | 'si';
   minTextLength?: number;
   maxCharts?: number;
+  onRateLimitError?: () => void;
 }
 
 // ─── Chart icon SVG ──────────────────────────────────────────
