@@ -1324,16 +1324,49 @@ If partner data is NOT available:
 // RESOURCE COHERENCE RULES — ★ v7.0 NEW (Section 17)
 // ───────────────────────────────────────────────────────────────
 
-export const RESOURCE_COHERENCE_RULES = `═══ RESOURCE COHERENCE RULES (conditional — when budget data is present) ═══
+export const RESOURCE_COHERENCE_RULES = `═══ RESOURCE COHERENCE RULES (MANDATORY FOR AI-GENERATED ALLOCATIONS) ═══
 
-If the project includes budget or person-month data:
-1. Person-months per WP should be proportional to its scope and duration.
-2. Project Management WP typically consumes 5–10% of total person-months.
-3. Dissemination WP typically consumes 8–15% of total person-months.
-4. No single content WP should exceed 30% of total person-months unless justified.
-5. LUMP SUM RULE: If budget is specified, deliverables and activities must be
-   achievable within the allocated resources and strictly tied to 100% completion
-   verified by binary indicators.
+These rules are BINDING when generating partner allocations with AI.
+They are NOT UI validation rules — they are AI prompt instructions only.
+
+RULE 1 — PROJECT MANAGEMENT WP (LAST WP) — MAXIMUM BUDGET SHARE:
+The last WP is ALWAYS Project Management and Coordination.
+Its total budget (sum of all partner allocations in that WP) MUST NOT exceed
+the percentage below, based on the total project budget:
+
+  Total project budget         | Max % for PM WP
+  up to 500,000 EUR            | 15%
+  500,001 - 1,000,000 EUR      | 10%
+  1,000,001 - 3,000,000 EUR    | 10%
+  3,000,001 - 5,000,000 EUR    | 7%
+  5,000,001 - 10,000,000 EUR   | 7%
+  over 10,000,000 EUR          | 5%
+
+RULE 2 — DISSEMINATION WP (SECOND-TO-LAST WP) — BUDGET SHARE:
+The second-to-last WP is ALWAYS Dissemination, Communication and Exploitation.
+Its total budget should be approximately 15% of the total project budget.
+This applies to ALL project sizes.
+
+RULE 3 — CONTENT/THEMATIC WPs — REMAINING BUDGET:
+The remaining budget (after PM WP and Dissemination WP) is distributed across
+content/thematic WPs proportionally to their scope, complexity, and duration.
+No single content WP should exceed 30% of total budget unless justified.
+
+RULE 4 — PERSON-MONTHS COHERENCE:
+Person-months per WP should be proportional to its scope and duration.
+1 PM = 143 hours (EU standard).
+
+RULE 5 — LUMP SUM COMPLIANCE:
+If budget is specified, deliverables and activities must be achievable within
+the allocated resources and strictly tied to 100% completion verified by
+binary indicators.
+
+HOW TO APPLY:
+1. First, estimate the total project budget from all partner allocations.
+2. Calculate the PM WP budget ceiling using the table in Rule 1.
+3. Allocate approximately 15% to the Dissemination WP.
+4. Distribute the rest across content/thematic WPs.
+5. Adjust partner hours and costs to stay within these limits.
 ═══════════════════════════════════════════════════════════════════`;
 
 // ───────────────────────────────────────────────────────────────
