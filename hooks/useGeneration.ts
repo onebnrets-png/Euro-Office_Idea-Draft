@@ -1262,8 +1262,27 @@ export const useGeneration = ({
           }
         } else if (sectionKey === 'partners') {
           newData.partners = generatedData;
-        } else if (['problemAnalysis', 'projectIdea'].includes(sectionKey)) {
-          newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
+        } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
+  // ★ FIX: projectManagement is an OBJECT {description, structure} — never an array
+  if (sectionKey === 'projectManagement') {
+    // Guard: AI sometimes returns activities array instead of PM object
+    if (Array.isArray(generatedData)) {
+      console.error(`[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (${generatedData.length} items) — this is activities data, NOT PM! Keeping original.`);
+      // Don't overwrite — keep existing projectManagement
+    } else if (generatedData && typeof generatedData === 'object') {
+      newData[sectionKey] = {
+        ...newData[sectionKey],
+        ...generatedData,
+        structure: {
+          ...(newData[sectionKey]?.structure || {}),
+          ...(generatedData?.structure || {}),
+        },
+      };
+    }
+  } else {
+    newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
+  }
+}
         } else if (sectionKey === 'activities') {
           if (Array.isArray(generatedData)) {
             newData[sectionKey] = generatedData;
