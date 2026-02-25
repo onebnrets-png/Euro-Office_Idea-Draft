@@ -62,6 +62,10 @@ const InlineChart: React.FC<InlineChartProps> = ({
   const [hasExtracted, setHasExtracted] = useState(false);
   const lastTextRef = useRef<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ★ DIAGNOSTIC: Log every mount
+  useEffect(() => {
+    console.log('[InlineChart] ★ MOUNTED — fieldContext:', fieldContext, '| text length:', text?.length, '| text preview:', text?.substring(0, 50));
+  }, []);
 
   // ─── Extract data on text change (debounced) ─────────────
 
