@@ -2166,6 +2166,13 @@ export const useGeneration = ({
                       id: item.id && item.id.trim() ? item.id : `KER${idx + 1}`,
                     }));
                   }
+                  // ★ FIX: Auto-assign IDs for risks if missing
+                  if (s === 'risks' && Array.isArray(generatedData)) {
+                    generatedData = generatedData.map((item: any, idx: number) => ({
+                      ...item,
+                      id: (item.id && item.id.trim()) ? item.id : `RISK${idx + 1}`,
+                    }));
+                  }
                   next[s] = generatedData;
                     return next;
                   });
