@@ -151,8 +151,18 @@ export const safeMerge = (importedData: any): any => {
   if (!merged.projectIdea.readinessLevels) merged.projectIdea.readinessLevels = defaultData.projectIdea.readinessLevels;
   if (!Array.isArray(merged.projectIdea.policies)) merged.projectIdea.policies = defaultData.projectIdea.policies;
 
-  if (!merged.projectManagement) merged.projectManagement = defaultData.projectManagement;
-
+  // ★ FIX: projectManagement MUST be an object {description, structure}, never an array
+if (!merged.projectManagement || Array.isArray(merged.projectManagement) || typeof merged.projectManagement !== 'object') {
+  if (Array.isArray(merged.projectManagement)) {
+    console.warn(`[safeMerge] ★ projectManagement was ARRAY (${merged.projectManagement.length} items) — resetting to default object`);
+  }
+  merged.projectManagement = defaultData.projectManagement;
+} else {
+  // Ensure structure sub-object exists
+  if (!merged.projectManagement.structure || typeof merged.projectManagement.structure !== 'object') {
+    merged.projectManagement.structure = defaultData.projectManagement.structure;
+  }
+}
     ['activities', 'generalObjectives', 'specificObjectives', 'outputs', 'outcomes', 'impacts', 'risks', 'kers'].forEach(key => {
     if (!Array.isArray(merged[key])) {
       // ★ FIX: AI sometimes returns {objectives: [...]} or {key: [...]} instead of [...]
