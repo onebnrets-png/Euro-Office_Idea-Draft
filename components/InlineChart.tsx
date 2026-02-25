@@ -183,15 +183,52 @@ var InlineChart = function (props: InlineChartProps) {
           backgroundColor: '#fffbeb',
           border: '1px solid #fde68a',
           borderRadius: '9999px',
+          flexWrap: 'wrap',
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          {language === 'si'
-            ? 'API kvota izcrpana \u2014 pocakajte 1-2 minuti in poskusite ponovno.'
-            : 'API quota exceeded \u2014 wait 1-2 minutes and try again.'}
+          <span>
+            {language === 'si'
+              ? 'API kvota izcrpana.'
+              : 'API quota exceeded.'}
+          </span>
+          <button
+            onClick={function () { setStatus('idle'); }}
+            style={{
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#0369a1',
+              backgroundColor: '#e0f2fe',
+              border: '1px solid #7dd3fc',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              marginLeft: '4px',
+            }}
+          >
+            {language === 'si' ? 'Poskusi ponovno' : 'Retry'}
+          </button>
+          {onRateLimitError && (
+            <button
+              onClick={onRateLimitError}
+              style={{
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#7c3aed',
+                backgroundColor: '#ede9fe',
+                border: '1px solid #c4b5fd',
+                borderRadius: '9999px',
+                cursor: 'pointer',
+                marginLeft: '2px',
+              }}
+            >
+              {language === 'si' ? 'Nastavitve' : 'Settings'}
+            </button>
+          )}
         </div>
       )}
 
