@@ -1279,10 +1279,9 @@ export const useGeneration = ({
         },
       };
     }
-  } else {
+    } else {
     newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
   }
-}
         } else if (sectionKey === 'activities') {
           if (Array.isArray(generatedData)) {
             newData[sectionKey] = generatedData;
