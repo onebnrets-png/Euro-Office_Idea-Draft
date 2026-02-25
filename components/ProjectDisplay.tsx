@@ -1,6 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs
+// v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs + batch viz trigger
 // v7.3 — 2026-02-23 — Language-aware WP/Task prefixes + partners.map bugfix
 //   - FIX: WP prefix: EN=WP, SI=DS (was hardcoded WP)
 //   - FIX: Task prefix: EN=T, SI=N (was hardcoded T)
@@ -160,7 +160,6 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
     );
 };
 
-// ★ v7.0: Auto-resize textarea helper for partner fields
 const AutoResizeTextarea = ({ value, onChange, placeholder, className = '', rows = 1 }) => {
     const ref = useRef<HTMLTextAreaElement>(null);
     const adjust = useCallback(() => {
@@ -307,7 +306,7 @@ const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependenc
 
 // --- Section Renderers ---
 const renderProblemAnalysis = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const { coreProblem, causes, consequences } = projectData.problemAnalysis;
     const path = ['problemAnalysis'];
     const t = TEXT[language] || TEXT['en'];
@@ -322,7 +321,7 @@ const renderProblemAnalysis = (props) => {
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <TextArea label={t.title} path={[...path, 'coreProblem', 'title']} value={coreProblem.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.coreProblemTitlePlaceholder} generateTitle={`${t.generateField} ${t.coreProblem}`} missingApiKey={missingApiKey} />
                     <TextArea label={t.description} path={[...path, 'coreProblem', 'description']} value={coreProblem.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.coreProblemDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={coreProblem.description || ''} fieldContext="coreProblem" language={language} onRateLimitError={onOpenSettings} />
+                    <InlineChart text={coreProblem.description || ''} fieldContext="coreProblem" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
 
@@ -335,7 +334,7 @@ const renderProblemAnalysis = (props) => {
                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'causes'], index)} text={t.remove} /></div>
                         <TextArea label={`${t.causeTitle} #${index + 1}`} path={[...path, 'causes', index, 'title']} value={cause.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.causePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         <TextArea label={t.description} path={[...path, 'causes', index, 'description']} value={cause.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.causeDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                        <InlineChart text={cause.description || ''} fieldContext={'cause_' + index} language={language} onRateLimitError={onOpenSettings} />
+                        <InlineChart text={cause.description || ''} fieldContext={'cause_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     </div>
                 ))}
             </div>
@@ -349,7 +348,7 @@ const renderProblemAnalysis = (props) => {
                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'consequences'], index)} text={t.remove} /></div>
                         <TextArea label={`${t.consequenceTitle} #${index + 1}`} path={[...path, 'consequences', index, 'title']} value={consequence.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.consequencePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         <TextArea label={t.description} path={[...path, 'consequences', index, 'description']} value={consequence.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.consequenceDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                        <InlineChart text={consequence.description || ''} fieldContext={'consequence_' + index} language={language} onRateLimitError={onOpenSettings} />
+                        <InlineChart text={consequence.description || ''} fieldContext={'consequence_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     </div>
                 ))}
             </div>
@@ -358,7 +357,7 @@ const renderProblemAnalysis = (props) => {
 };
 
 const renderProjectIdea = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const { mainAim, stateOfTheArt, proposedSolution, policies, readinessLevels, projectTitle, projectAcronym, startDate } = projectData.projectIdea;
     const path = ['projectIdea'];
     const t = TEXT[language] || TEXT['en'];
@@ -426,7 +425,7 @@ const renderProjectIdea = (props) => {
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.stateOfTheArtDesc}</p>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                     <TextArea label={t.stateOfTheArt} path={[...path, 'stateOfTheArt']} value={stateOfTheArt} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.stateOfTheArtPlaceholder} generateTitle={`${t.generateField} ${t.stateOfTheArt}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={stateOfTheArt || ''} fieldContext="stateOfTheArt" language={language} onRateLimitError={onOpenSettings} />
+                    <InlineChart text={stateOfTheArt || ''} fieldContext="stateOfTheArt" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
 
@@ -437,7 +436,7 @@ const renderProjectIdea = (props) => {
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.proposedSolutionDesc}</p>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                     <TextArea label={t.proposedSolution} path={[...path, 'proposedSolution']} value={proposedSolution} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.proposedSolutionPlaceholder} generateTitle={`${t.generateField} ${t.proposedSolution}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={proposedSolution || ''} fieldContext="proposedSolution" language={language} onRateLimitError={onOpenSettings} />
+                    <InlineChart text={proposedSolution || ''} fieldContext="proposedSolution" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
             
@@ -460,7 +459,7 @@ const renderProjectIdea = (props) => {
 };
 
 const renderGenericResults = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const items = projectData[sectionKey];
     const t = TEXT[language] || TEXT['en'];
     const title = t[sectionKey];
@@ -477,7 +476,7 @@ const renderGenericResults = (props, sectionKey) => {
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
                     <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                     <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} />
+                    <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
                 </div>
             ))}
@@ -486,7 +485,7 @@ const renderGenericResults = (props, sectionKey) => {
 };
 
 const renderObjectives = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const items = projectData[sectionKey];
     const t = TEXT[language] || TEXT['en'];
     const title = sectionKey === 'generalObjectives' ? t.generalObjectives : t.specificObjectives;
@@ -501,8 +500,8 @@ const renderObjectives = (props, sectionKey) => {
                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
                     <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                                        <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} />
+                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                    <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
                 </div>
             ))}
@@ -538,7 +537,7 @@ const renderProjectManagement = (props) => {
 };
 
 const renderRisks = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const { risks } = projectData;
     const path = ['risks'];
     const t = TEXT[language] || TEXT['en'];
@@ -600,7 +599,7 @@ const renderRisks = (props) => {
                         </div>
                     </div>
                     <TextArea label={t.risks.mitigation} path={[...path, index, 'mitigation']} value={risk.mitigation} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.mitigationPlaceholder} generateTitle={`${t.generateField} ${t.risks.mitigation}`} missingApiKey={missingApiKey} />
-                    <InlineChart text={(risk.description || '') + ' ' + (risk.mitigation || '')} fieldContext={'risk_' + index} language={language} onRateLimitError={onOpenSettings} />
+                    <InlineChart text={(risk.description || '') + ' ' + (risk.mitigation || '')} fieldContext={'risk_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             )})}
         </div>
@@ -608,7 +607,7 @@ const renderRisks = (props) => {
 };
 
 const renderKERs = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
     const { kers } = projectData;
     const path = ['kers'];
     const t = TEXT[language] || TEXT['en'];
@@ -632,7 +631,7 @@ const renderKERs = (props) => {
                      </div>
                      <TextArea label={t.kers.kerDesc} path={[...path, index, 'description']} value={ker.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
                      <TextArea label={t.kers.exploitationStrategy} path={[...path, index, 'exploitationStrategy']} value={ker.exploitationStrategy} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.strategyPlaceholder} generateTitle={`${t.generateField} ${t.kers.exploitationStrategy}`} missingApiKey={missingApiKey} />
-                     <InlineChart text={(ker.description || '') + ' ' + (ker.exploitationStrategy || '')} fieldContext={'ker_' + index} language={language} onRateLimitError={onOpenSettings} />
+                     <InlineChart text={(ker.description || '') + ' ' + (ker.exploitationStrategy || '')} fieldContext={'ker_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             ))}
         </div>
@@ -641,9 +640,6 @@ const renderKERs = (props) => {
 
 // ═══════════════════════════════════════════════════════════════
 // ★ v7.0.1: Partnership (Consortium) renderer — BUGFIX
-//   - FIX: partners.map restored to proper JSX {expression}
-//   - FIX: summary table .map restored to proper JSX {expression}
-//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderPartners = (props) => {
     const { projectData, onUpdateData, onAddItem, onRemoveItem, onGenerateSection, isLoading, language, missingApiKey } = props;
@@ -664,11 +660,9 @@ const renderPartners = (props) => {
             </SectionHeader>
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tp.titleDesc || ''}</p>
 
-            {/* Partner List Header + Add Button */}
             <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">{tp.partnerName || 'Partners'}</h4>
                 <div className="flex gap-2">
-                    {/* Generate Partner Allocations Button */}
                     {partners.length > 0 && (Array.isArray(projectData.activities) ? projectData.activities : []).length > 0 && (
                         <button
                             onClick={() => onGenerateSection('partnerAllocations')}
@@ -705,20 +699,17 @@ const renderPartners = (props) => {
                 </div>
             )}
 
-            {/* ★ v7.0.1 FIX: Proper JSX expression for partner cards */}
             {partners.map((partner, index) => (
                 <div key={partner.id || index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <RemoveButton onClick={() => onRemoveItem(['partners'], index)} text={tp.removePartner || t.remove} />
                     </div>
 
-                    {/* Badge: Code + Coordinator label */}
                     <div className="flex items-center gap-3 mb-4">
                         <span className={`px-3 py-1 rounded-lg text-sm font-bold ${index === 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-sky-100 text-sky-800 border border-sky-200'}`}>
                             {partner.code || (index === 0 ? 'CO' : `P${index + 1}`)}
                         </span>
                         {index === 0 && <span className="text-xs text-amber-600 font-semibold">{tp.coordinator || 'Coordinator'}</span>}
-                        {/* Partner Type Badge (if set) */}
                         {partner.partnerType && (
                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
                                 {(tp.partnerTypes || {})[partner.partnerType] || partner.partnerType}
@@ -726,7 +717,6 @@ const renderPartners = (props) => {
                         )}
                     </div>
 
-                    {/* Row 1: Code + Partner Type */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.code || 'Code'}</label>
@@ -764,7 +754,6 @@ const renderPartners = (props) => {
                         </div>
                     </div>
 
-                    {/* Row 2: Name (auto-resize) */}
                     <div className="mb-4">
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerName || 'Name'}</label>
                         <AutoResizeTextarea
@@ -775,7 +764,6 @@ const renderPartners = (props) => {
                         />
                     </div>
 
-                    {/* Row 3: Expertise (auto-resize) */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.expertise || 'Expertise'}</label>
                         <AutoResizeTextarea
@@ -788,7 +776,6 @@ const renderPartners = (props) => {
                 </div>
             ))}
 
-            {/* Summary Table */}
             {partners.length > 0 && (
                 <div className="mt-6 bg-slate-50 rounded-xl border border-slate-200 p-4">
                     <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">{tp.projectSummary || 'Project Partner Summary'}</h4>
@@ -804,7 +791,6 @@ const renderPartners = (props) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {/* ★ v7.0.1 FIX: Proper JSX expression for summary table rows */}
                                 {partners.map((p, i) => (
                                     <tr key={i} className="border-b border-slate-100 hover:bg-white transition-colors">
                                         <td className="py-2 px-3 font-bold text-sky-700">{p.code}</td>
@@ -831,10 +817,6 @@ const renderPartners = (props) => {
 
 // ═══════════════════════════════════════════════════════════════
 // ★ v7.2: Finance (Budget) renderer
-//   - NEW: Combined Direct + Indirect cost categories table at top
-//   - NEW: Indirect % and applies-to in same row
-//   - NEW: European number formatting (1.234,56)
-//   - FIX: partners now uses Array.isArray guard
 // ═══════════════════════════════════════════════════════════════
 const renderFinance = (props) => {
     const { projectData, onUpdateData, language } = props;
@@ -849,13 +831,11 @@ const renderFinance = (props) => {
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
     const lang = language === 'si' ? 'si' : 'en';
 
-    // ★ v7.2: European number formatting — 1.234,56
     const fmtEur = (n: number): string => {
         if (n === 0) return '€0';
         return '€' + n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     };
 
-    // ★ v7.0: Calculate indirect costs dynamically from settings
     const calcIndirectForAllocation = (alloc: any): number => {
         if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
         const applicableCategories = indirectSettings.appliesToCategories || [];
@@ -872,7 +852,6 @@ const renderFinance = (props) => {
         return Math.round(applicableDirectSum * (indirectSettings.percentage / 100));
     };
 
-    // Collect all partner allocations from all tasks
     const allAllocations: any[] = [];
     activities.forEach((wp: any) => {
         (wp.tasks || []).forEach((task: any) => {
@@ -895,14 +874,12 @@ const renderFinance = (props) => {
     const grandIndirectTotal = allAllocations.reduce((s, a) => s + a.indirectTotal, 0);
     const grandTotal = grandDirectTotal + grandIndirectTotal;
 
-    // Group by WP
     const wpGroups: Record<string, any[]> = {};
     allAllocations.forEach(a => {
         if (!wpGroups[a.wpId]) wpGroups[a.wpId] = [];
         wpGroups[a.wpId].push(a);
     });
 
-    // Group by Partner
     const partnerGroups: Record<string, any[]> = {};
     allAllocations.forEach(a => {
         if (!partnerGroups[a.partnerCode]) partnerGroups[a.partnerCode] = [];
@@ -911,7 +888,6 @@ const renderFinance = (props) => {
 
     const hasData = allAllocations.length > 0;
 
-    // ★ v7.2: Indirect cost reference categories for display
     const indirectCostReferenceDefs = [
         { key: 'rent', en: 'Rent', si: 'Najemnina' },
         { key: 'operatingCosts', en: 'Operating costs', si: 'Obratovalni stroški' },
@@ -925,7 +901,6 @@ const renderFinance = (props) => {
             <SectionHeader title={tf.title || 'Finance (Budget)'} />
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
 
-            {/* ★ v7.3: Funding Model + Unified Cost Categories Table */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <div className="flex flex-wrap items-end gap-6 mb-6">
                     <div>
@@ -941,9 +916,7 @@ const renderFinance = (props) => {
                     </div>
                 </div>
 
-                {/* Unified table: Direct (left, with checkboxes) + Indirect (right, with %) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border border-slate-200 rounded-xl overflow-hidden">
-                    {/* LEFT: Direct Costs with checkboxes */}
                     <div className="p-4 bg-green-50/30">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span>
@@ -988,7 +961,6 @@ const renderFinance = (props) => {
                         </div>
                     </div>
 
-                    {/* RIGHT: Indirect Costs with % input */}
                     <div className="p-4 bg-amber-50/30 border-t lg:border-t-0 lg:border-l border-slate-200">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></span>
@@ -1027,7 +999,6 @@ const renderFinance = (props) => {
                     </div>
                 </div>
 
-                {/* Summary line */}
                 {indirectSettings.percentage > 0 && (indirectSettings.appliesToCategories || []).length > 0 && (
                     <div className="mt-4 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 font-medium">
                         {language === 'si'
@@ -1038,7 +1009,6 @@ const renderFinance = (props) => {
                 )}
             </div>
 
-            {/* Budget Overview */}
             {!hasData ? (
                 <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                     <div className="text-slate-400 text-4xl mb-3">📊</div>
@@ -1051,7 +1021,6 @@ const renderFinance = (props) => {
                 </div>
             ) : (
                 <>
-                    {/* Grand Totals */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
                             <p className="text-xs text-green-600 font-semibold uppercase tracking-wider mb-1">{tf.totalDirectCosts || 'Total Direct'}</p>
@@ -1070,7 +1039,6 @@ const renderFinance = (props) => {
                         </div>
                     </div>
 
-                    {/* By WP */}
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
                         <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">{tf.perWP || 'Per Work Package'}</h4>
                         <div className="overflow-x-auto">
@@ -1117,7 +1085,6 @@ const renderFinance = (props) => {
                         </div>
                     </div>
 
-                    {/* By Partner */}
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                         <h4 className="text-sm font-bold text-slate-700 mb-4 uppercase tracking-wider">{tf.perPartner || 'Per Partner'}</h4>
                         <div className="overflow-x-auto">
@@ -1168,10 +1135,9 @@ const renderFinance = (props) => {
         </div>
     );
 };
+
 // ═══════════════════════════════════════════════════════════════
 // ★ v7.0.1: renderActivities — BUGFIX
-//   - FIX: taskPartnersList now uses Array.isArray guard
-//   - All v7.0 features preserved
 // ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
     const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
@@ -1189,7 +1155,6 @@ const renderActivities = (props) => {
 
     const allTasks = activities.flatMap(wp => wp.tasks || []);
 
-    // ★ v7.3: Language-aware prefixes for WP/Task IDs
     const wpPrefix = language === 'si' ? 'DS' : 'WP';
     const taskPrefix = language === 'si' ? 'N' : 'T';
 
@@ -1208,7 +1173,6 @@ const renderActivities = (props) => {
         }
     };
 
-    // ★ v7.0.1 FIX: Array.isArray guard for partners
     const taskPartnersList = Array.isArray(projectData.partners) ? projectData.partners : [];
     const fundingModel = projectData.fundingModel || 'centralized';
     const directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
@@ -1217,7 +1181,6 @@ const renderActivities = (props) => {
     const tf = t.finance || {};
     const indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
 
-    // ★ v7.0: Calculate indirect cost for a single allocation
     const calcIndirectForAlloc = (alloc: any): number => {
         if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
         const applicableCats = indirectSettings.appliesToCategories || [];
@@ -1232,8 +1195,6 @@ const renderActivities = (props) => {
     return (
         <>
             {renderProjectManagement(props)}
-
-            {/* ★ v7.0: Partnership section (no funding model here anymore) */}
             {renderPartners(props)}
 
             <div id="workplan">
@@ -1253,7 +1214,6 @@ const renderActivities = (props) => {
                         </div>
                         <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
                         
-                        {/* ═══ TASKS ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
                             <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `${taskPrefix}${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
@@ -1280,7 +1240,6 @@ const renderActivities = (props) => {
                                         onRemoveDependency={(depIdx) => { const deps = task.dependencies || []; handleTaskUpdate([...path, wpIndex, 'tasks', taskIndex, 'dependencies'], deps.filter((_, i) => i !== depIdx)); }}
                                     />
 
-                                    {/* ★ v7.0: Partner Allocations per Task — SIMPLIFIED */}
                                     {(() => {
                                         const taskAllocations = task.partnerAllocations || [];
                                         const allocPath = [...path, wpIndex, 'tasks', taskIndex, 'partnerAllocations'];
@@ -1299,7 +1258,6 @@ const renderActivities = (props) => {
                                                         {tp.partnerAllocation || 'Partner Allocations'}
                                                     </h6>
                                                     <div className="flex gap-2">
-                                                        {/* Generate allocations for THIS task */}
                                                         <button
                                                             onClick={() => onGenerateSection('partnerAllocations')}
                                                             disabled={!!isLoading}
@@ -1347,7 +1305,6 @@ const renderActivities = (props) => {
                                                                 <RemoveButton onClick={() => onRemoveItem(allocPath, allocIdx)} text={t.remove} />
                                                             </div>
 
-                                                            {/* Partner selector + hours/PM */}
                                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                                                                 <div className="sm:col-span-2">
                                                                     <label className="block text-xs font-semibold text-slate-600 mb-1">{tp.partnerName || 'Partner'}</label>
@@ -1394,7 +1351,6 @@ const renderActivities = (props) => {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Direct Costs */}
                                                             <div className="mb-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-xs font-bold text-green-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -1453,7 +1409,6 @@ const renderActivities = (props) => {
                                                                 )}
                                                             </div>
 
-                                                            {/* ★ v7.0: Indirect Costs — SINGLE AUTO-CALCULATED LINE */}
                                                             {indirectSettings.percentage > 0 && directTotal > 0 && (
                                                                 <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
                                                                     <div className="flex justify-between items-center">
@@ -1474,7 +1429,6 @@ const renderActivities = (props) => {
                                                                 </div>
                                                             )}
 
-                                                            {/* Allocation Total */}
                                                             {directTotal > 0 && (
                                                                 <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
                                                                     <span className="text-xs font-semibold text-slate-500">
@@ -1495,7 +1449,6 @@ const renderActivities = (props) => {
                             ))}
                         </div>
 
-                        {/* ═══ MILESTONES ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-amber-100">
                             <SectionHeader title={t.milestones} onAdd={() => onAddItem([...path, wpIndex, 'milestones'], { id: `M${wpIndex + 1}.${(wp.milestones || []).length + 1}`, description: '', date: '' })} addText={t.add} />
                             {(wp.milestones || []).map((milestone, msIndex) => {
@@ -1522,7 +1475,6 @@ const renderActivities = (props) => {
                             })}
                         </div>
 
-                        {/* ═══ DELIVERABLES ═══ */}
                         <div className="mt-6 pl-4 border-l-4 border-indigo-100">
                             <SectionHeader title={t.deliverables} onAdd={() => onAddItem([...path, wpIndex, 'deliverables'], { id: `D${wpIndex + 1}.${(wp.deliverables || []).length + 1}`, title: '', description: '', indicator: '' })} addText={t.add} />
                             {(wp.deliverables || []).map((deliverable, dIndex) => (
@@ -1553,9 +1505,7 @@ const renderActivities = (props) => {
                 </div>
             </div>
 
-            {/* ★ v7.0: Finance section (now with funding model + indirect settings) */}
             {renderFinance(props)}
-
             {renderRisks(props)}
         </>
     );
@@ -1573,13 +1523,24 @@ const renderExpectedResults = (props) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// MAIN COMPONENT — unchanged from v6.1
+// MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 const ProjectDisplay = (props) => {
     const { activeStepId, onGenerateSection, isLoading, error, language, missingApiKey, completedStepsStatus, onStepClick } = props;
+    const [vizTrigger, setVizTrigger] = React.useState(0);
+    const [showVizPrompt, setShowVizPrompt] = React.useState(false);
+    const prevLoadingRef = useRef(isLoading);
     const STEPS = getSteps(language);
     const activeStep = STEPS.find(step => step.id === activeStepId);
     const t = TEXT[language] || TEXT['en'];
+
+    useEffect(function () {
+        var wasLoading = prevLoadingRef.current;
+        prevLoadingRef.current = isLoading;
+        if (wasLoading && !isLoading) {
+            setShowVizPrompt(true);
+        }
+    }, [isLoading]);
 
     if (!activeStep) return <div className="p-8 text-center text-red-500">Error: Invalid Step Selected</div>;
 
@@ -1594,105 +1555,125 @@ const ProjectDisplay = (props) => {
         expectedResults: '#10B981',
     };
 
+    const propsWithViz = Object.assign({}, props, { vizTrigger: vizTrigger });
+
     const renderContent = () => {
         switch (sectionKey) {
-            case 'problemAnalysis': return renderProblemAnalysis(props);
-            case 'projectIdea': return renderProjectIdea(props);
-            case 'generalObjectives': return renderObjectives(props, 'generalObjectives');
-            case 'specificObjectives': return renderObjectives(props, 'specificObjectives');
-            case 'activities': return renderActivities(props);
-            case 'expectedResults': return renderExpectedResults(props);
+            case 'problemAnalysis': return renderProblemAnalysis(propsWithViz);
+            case 'projectIdea': return renderProjectIdea(propsWithViz);
+            case 'generalObjectives': return renderObjectives(propsWithViz, 'generalObjectives');
+            case 'specificObjectives': return renderObjectives(propsWithViz, 'specificObjectives');
+            case 'activities': return renderActivities(propsWithViz);
+            case 'expectedResults': return renderExpectedResults(propsWithViz);
             default: return <div className="p-8 text-center text-slate-500">{t.selectStep}</div>;
         }
     };
 
-    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
-
-    return (
-        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
-            <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
-                <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
-                    <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ minWidth: 0 }}>
-                        <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
-                        <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
-                    </div>
-                </div>
-
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
-                    <StepNavigationBar
-                        language={language}
-                        currentStepId={activeStepId}
-                        completedStepsStatus={completedStepsStatus || []}
-                        onStepClick={onStepClick || (() => {})}
-                        isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
-                    />
-                </div>
-
-                <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
-                        {showGenerateButton && (
-                        (sectionKey === 'expectedResults' || sectionKey === 'activities')
-                            ? <GenerateButton onClick={() => props.onGenerateCompositeSection(sectionKey)} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                            : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
-                    )}
-                </div>
-            </header>
-
-            {error && (() => {
-                const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
-                return (
-                    <div
-                        className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
-                            isWarning
-                                ? 'bg-amber-50 border-amber-200 text-amber-800'
-                                : 'bg-red-50 border-red-200 text-red-800'
-                        }`}
-                        role="alert"
-                    >
-                        <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold mb-0.5">
-                                {isWarning
-                                    ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
-                                    : 'Error'}
-                            </p>
-                            <p className="text-sm leading-relaxed">{error}</p>
-                        </div>
-                    </div>
-                );
-            })()}
-            
-                    {isLoading && (
-                <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
-                    <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
-                    <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
-                    {props.onCancelGeneration && (
-                        <button
-                            onClick={props.onCancelGeneration}
-                            className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
-                        >
-                            ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
-                        </button>
-                    )}
-                </div>
-            )}
-
-            <div 
-                id="main-scroll-container" 
-                className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
-                style={{
-                    '--step-card-bg': stepColors[sectionKey as keyof typeof stepColors]?.light || '#FFFFFF',
-                    '--step-card-border': stepColors[sectionKey as keyof typeof stepColors]?.border || '#E2E8F0',
-                } as React.CSSProperties}
-            >
-                <div className="max-w-5xl mx-auto pb-20">
-                    <div className="animate-fadeIn" key={activeStepId}>
-                        {renderContent()}
-                    </div>
+    const showGenerateButton = return (
+    <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
+        <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
+            <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
+                <span style={{ width: 4, height: 28, borderRadius: 4, background: stepColorMap[sectionKey] || '#6366F1', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ minWidth: 0 }}>
+                    <h2 className="text-base font-bold text-slate-800 tracking-tight" style={{ lineHeight: 1.2 }}>{activeStep.title}</h2>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">{t.stepSubtitle}</p>
                 </div>
             </div>
-        </main>
-    );
-};
-export default ProjectDisplay;
 
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
+                <StepNavigationBar
+                    language={language}
+                    currentStepId={activeStepId}
+                    completedStepsStatus={completedStepsStatus || []}
+                    onStepClick={onStepClick || (() => {})}
+                    isProblemAnalysisComplete={completedStepsStatus?.[0] || false}
+                />
+            </div>
+
+            <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
+                    {showGenerateButton && (
+                    (sectionKey === 'expectedResults' || sectionKey === 'activities')
+                        ? <GenerateButton onClick={() => props.onGenerateCompositeSection(sectionKey)} isLoading={!!isLoading} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                        : <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
+                )}
+            </div>
+        </header>
+
+        {showVizPrompt && (
+            <div className="mx-6 mt-4 mb-2 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 shadow-sm animate-fadeIn">
+                <span className="text-lg flex-shrink-0">📊</span>
+                <p className="text-sm text-indigo-800 font-medium flex-1">
+                    {language === 'si'
+                        ? 'Generiranje zakljuceno. Zelite generirati vizualizacije za vse sekcije?'
+                        : 'Generation complete. Would you like to generate visualizations for all sections?'}
+                </p>
+                <button
+                    onClick={function () { setVizTrigger(function (v) { return v + 1; }); setShowVizPrompt(false); }}
+                    className="px-3 py-1.5 text-sm font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:scale-95 transition-all shadow-sm flex-shrink-0"
+                >
+                    {language === 'si' ? 'Da, generiraj' : 'Yes, generate'}
+                </button>
+                <button
+                    onClick={function () { setShowVizPrompt(false); }}
+                    className="px-3 py-1.5 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 active:scale-95 transition-all flex-shrink-0"
+                >
+                    {language === 'si' ? 'Ne, hvala' : 'No, thanks'}
+                </button>
+            </div>
+        )}
+
+        {error && (() => {
+            const isWarning = error.includes('partially done') || error.includes('delno uspel') || error.includes('fields failed') || error.includes('polj ni uspelo');
+            return (
+                <div
+                    className={`mx-6 mt-4 mb-2 flex items-start gap-3 rounded-xl border px-4 py-3 shadow-sm animate-fadeIn ${
+                        isWarning
+                            ? 'bg-amber-50 border-amber-200 text-amber-800'
+                            : 'bg-red-50 border-red-200 text-red-800'
+                    }`}
+                    role="alert"
+                >
+                    <span className="text-lg flex-shrink-0 mt-0.5">{isWarning ? '⚠️' : '❌'}</span>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold mb-0.5">
+                            {isWarning
+                                ? (language === 'si' ? 'Delni prevod' : 'Partial Translation')
+                                : 'Error'}
+                        </p>
+                        <p className="text-sm leading-relaxed">{error}</p>
+                    </div>
+                </div>
+            );
+        })()}
+        
+        {isLoading && (
+            <div className="p-4 m-6 flex items-center justify-center gap-4 text-sky-700 bg-sky-50 rounded-lg animate-pulse border border-sky-100 font-medium">
+                <div className="border-2 border-sky-400 border-t-transparent rounded-full animate-spin w-5 h-5 flex-shrink-0" />
+                <span>{typeof isLoading === 'string' ? isLoading : t.loading}</span>
+                {props.onCancelGeneration && (
+                    <button
+                        onClick={props.onCancelGeneration}
+                        className="ml-4 px-4 py-1.5 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 animate-none"
+                    >
+                        ✕ {language === 'si' ? 'Prekliči' : 'Cancel'}
+                    </button>
+                )}
+            </div>
+        )}
+
+        <div 
+            id="main-scroll-container" 
+            className="step-content flex-1 overflow-y-auto p-6 scroll-smooth relative"
+            style={{
+                '--step-card-bg': stepColors[sectionKey as keyof typeof stepColors]?.light || '#FFFFFF',
+                '--step-card-border': stepColors[sectionKey as keyof typeof stepColors]?.border || '#E2E8F0',
+            } as React.CSSProperties}
+        >
+            <div className="max-w-5xl mx-auto pb-20">
+                <div className="animate-fadeIn" key={activeStepId}>
+                    {renderContent()}
+                </div>
+            </div>
+        </div>
+    </main>
+);
