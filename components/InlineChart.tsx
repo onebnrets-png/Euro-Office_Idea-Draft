@@ -126,10 +126,22 @@ var InlineChart = function (props: InlineChartProps) {
         setIsExpanded(true);
         lastExtractedTextRef.current = text;
       } else {
-        console.log('[InlineChart] No visualizable data in "' + (fieldContext || '') + '"');
+        // Check if failure was due to rate limit (DataExtractionService swallows errors)
+        var lastLog = '';
+        var origWarn = console.warn;
+        // We can't check retroactively, but we can check extracted length vs input
+        // If text has numbers/percentages but extracted is empty, likely rate limited
+        var hasNumbers = /\d+[\.,]?\d*\s*%/.test(text) || /\b\d{2,}\b/.test(text);
+        if (hasNumbers && extracted.length === 0) {
+          console.warn('[InlineChart] Text has empirical data but extraction returned 0 — likely rate limited');
+          setStatus('rate_limit');
+        } else {
+          console.log('[InlineChart] No visualizable data in "' + (fieldContext || '') + '"');
+          setStatus('done');
+        }
         setCharts([]);
-        setStatus('done');
       }
+
     } catch (err: any) {
       var errMsg = (err && err.message) ? err.message : String(err);
       console.warn('[InlineChart] Extraction failed for "' + (fieldContext || '') + '":', errMsg);
