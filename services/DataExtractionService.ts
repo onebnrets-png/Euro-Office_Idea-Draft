@@ -1,40 +1,9 @@
 // services/DataExtractionService.ts
 // ═══════════════════════════════════════════════════════════════
-// AI-powered extraction of empirical data points from text.
-// Identifies numbers, percentages, statistics, comparisons,
-// and returns structured data suitable for visualization.
-//
-// v1.4 — 2026-02-21
-//   - FIX: Risk severity/category now normalizes Slovenian values
-//     ("Nizka"→low, "Srednja"→medium, "Visoka"→high, "Tehnično"→Technical)
-//   - FIX: Minimum data points for severity chart reduced to >= 1
-//   - FIX: Category donut chart minimum reduced to >= 1
-//   - NEW: normalizeSeverity() and normalizeCategory() helpers
-//
-// v1.3 — 2026-02-21
-//   - NEW: extractStructuralData() now accepts `language` parameter
-//     and returns localized titles, subtitles, labels for SI/EN
-//   - All chart titles, subtitles, risk categories, severity labels,
-//     and section names are now bilingual (Slovenian / English)
-//
-// v1.2 — 2026-02-18
-//   - FIX: extractStructuralData() completeness calculation now correctly
-//     handles empty/skeleton project data (default values like startDate,
-//     durationMonths, empty readinessLevels, skeleton arrays no longer
-//     inflate completeness percentages)
-//   - FIX: arrayHasRealContent now skips default enum fields
-//     (category, likelihood, impact, type, dependencies)
-//   - FIX: Numbers no longer count as "real content" (prevents
-//     durationMonths:24 from inflating percentages)
-//
-// ARCHITECTURE:
-//   - Input: raw text string (from any project field)
-//   - Output: ExtractedChartData[] — structured data points
-//   - Uses the same AI provider as the main generation pipeline
-//   - Falls back gracefully if extraction fails (returns [])
-//
-// IMPORTANT: This service extracts data for VISUALIZATION only.
-//   It does NOT modify or generate project content.
+// v1.5 — 2026-02-25 — FIX: Re-throw RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
+// v1.4 — 2026-02-21 — Risk severity/category normalization
+// v1.3 — 2026-02-21 — Bilingual extractStructuralData
+// v1.2 — 2026-02-18 — Completeness calculation fix
 // ═══════════════════════════════════════════════════════════════
 
 import {
@@ -79,7 +48,7 @@ export interface ExtractedChartData {
 
 // ─── JSON Schema for AI extraction ──────────────────────────
 
-const extractionSchema = {
+var extractionSchema = {
   type: Type.ARRAY,
   items: {
     type: Type.OBJECT,
@@ -115,131 +84,126 @@ const extractionSchema = {
 
 // ─── Schema to text (for OpenRouter) ─────────────────────────
 
-const schemaToText = (schema: any): string => {
+var schemaToText = function (schema: any): string {
   try {
-    return `\n\nRESPONSE JSON SCHEMA (follow exactly):\n${JSON.stringify(schema, null, 2)}\n`;
-  } catch {
+    return '\n\nRESPONSE JSON SCHEMA (follow exactly):\n' + JSON.stringify(schema, null, 2) + '\n';
+  } catch (e) {
     return '';
   }
 };
 
 // ─── Extraction prompt ───────────────────────────────────────
 
-const EXTRACTION_PROMPT = `You are a data extraction specialist. Analyze the following text and extract ALL empirical data points that could be visualized in a chart or graph.
-
-WHAT TO EXTRACT:
-- Percentages (e.g., "37% of citizens", "increased by 23%")
-- Absolute numbers (e.g., "6,000 professionals", "35 EU projects")
-- Comparisons (e.g., "50% perceive X while only 37% feel Y")
-- Time series data (e.g., "grew from 12% in 2019 to 28% in 2023")
-- Rankings or distributions (e.g., "Technical 40%, Social 30%, Economic 30%")
-- Scores or levels (e.g., "TRL 4", "readiness level 6 out of 9")
-
-RULES:
-1. Extract ONLY data explicitly stated in the text — do NOT infer or calculate.
-2. Each visualization should have 2–8 data points (not more).
-3. Include the source/citation if mentioned in the text.
-4. Include the exact text snippet that contains the data.
-5. Set confidence: 0.9+ for explicit numbers, 0.7-0.9 for clear implications, below 0.7 for approximations.
-6. If NO empirical data is found, return an empty array [].
-7. suggestedChartType: use comparison_bar for comparisons, donut for distributions, line for time series, gauge for single metrics, progress for completion/readiness levels.
-
-TEXT TO ANALYZE:
-`;
+var EXTRACTION_PROMPT = 'You are a data extraction specialist. Analyze the following text and extract ALL empirical data points that could be visualized in a chart or graph.\n\nWHAT TO EXTRACT:\n- Percentages (e.g., "37% of citizens", "increased by 23%")\n- Absolute numbers (e.g., "6,000 professionals", "35 EU projects")\n- Comparisons (e.g., "50% perceive X while only 37% feel Y")\n- Time series data (e.g., "grew from 12% in 2019 to 28% in 2023")\n- Rankings or distributions (e.g., "Technical 40%, Social 30%, Economic 30%")\n- Scores or levels (e.g., "TRL 4", "readiness level 6 out of 9")\n\nRULES:\n1. Extract ONLY data explicitly stated in the text — do NOT infer or calculate.\n2. Each visualization should have 2–8 data points (not more).\n3. Include the source/citation if mentioned in the text.\n4. Include the exact text snippet that contains the data.\n5. Set confidence: 0.9+ for explicit numbers, 0.7-0.9 for clear implications, below 0.7 for approximations.\n6. If NO empirical data is found, return an empty array [].\n7. suggestedChartType: use comparison_bar for comparisons, donut for distributions, line for time series, gauge for single metrics, progress for completion/readiness levels.\n\nTEXT TO ANALYZE:\n';
 
 // ─── Main extraction function ────────────────────────────────
+// ★ v1.5: Re-throws RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
 
-export const extractEmpiricalData = async (
+export var extractEmpiricalData = async function (
   text: string,
   fieldContext?: string
-): Promise<ExtractedChartData[]> => {
+): Promise<ExtractedChartData[]> {
   if (!text || text.trim().length < 20) return [];
-  if (!hasValidProviderKey()) return [];
+  if (!hasValidProviderKey()) throw new Error('MISSING_API_KEY');
+
+  var config = getProviderConfig();
+  var needsTextSchema = config.provider !== 'gemini';
+  var textSchemaStr = needsTextSchema ? schemaToText(extractionSchema) : '';
+
+  var contextNote = fieldContext
+    ? '\n[Context: This text is from the "' + fieldContext + '" section of an EU project proposal.]\n'
+    : '';
+
+  var prompt = EXTRACTION_PROMPT + contextNote + '\n---\n' + text + '\n---' + textSchemaStr;
 
   try {
-    const config = getProviderConfig();
-    const needsTextSchema = config.provider !== 'gemini';
-    const textSchemaStr = needsTextSchema ? schemaToText(extractionSchema) : '';
-
-    const contextNote = fieldContext
-      ? `\n[Context: This text is from the "${fieldContext}" section of an EU project proposal.]\n`
-      : '';
-
-    const prompt = `${EXTRACTION_PROMPT}${contextNote}\n---\n${text}\n---${textSchemaStr}`;
-
-    const result = await generateContent({
-      prompt,
+    var result = await generateContent({
+      prompt: prompt,
       jsonSchema: config.provider === 'gemini' ? extractionSchema : undefined,
       temperature: 0.2,
     });
 
     if (!result || !result.text) return [];
 
-    let parsed: any[];
-    const cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    var parsed: any[];
+    var cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     try {
       parsed = JSON.parse(cleaned);
-    } catch {
+    } catch (e) {
       return [];
     }
 
     if (!Array.isArray(parsed)) return [];
 
-    const extracted: ExtractedChartData[] = parsed
-      .filter((item: any) =>
-        item.dataPoints &&
-        Array.isArray(item.dataPoints) &&
-        item.dataPoints.length >= 2 &&
-        item.confidence >= 0.6
-      )
-      .map((item: any, index: number) => ({
-        id: `chart-${Date.now()}-${index}`,
-        chartType: item.suggestedChartType || 'comparison_bar',
-        title: item.title || 'Data Visualization',
-        subtitle: item.subtitle || undefined,
-        dataPoints: item.dataPoints.map((dp: any) => ({
-          label: dp.label || 'Unknown',
-          value: typeof dp.value === 'number' ? dp.value : parseFloat(dp.value) || 0,
-          unit: dp.unit || undefined,
-          category: dp.category || undefined,
-          source: dp.source || undefined,
-          year: dp.year || undefined,
-        })),
-        source: item.source || undefined,
-        textSnippet: item.textSnippet || '',
-        confidence: typeof item.confidence === 'number' ? item.confidence : 0.7,
-      }));
+    var extracted: ExtractedChartData[] = parsed
+      .filter(function (item: any) {
+        return item.dataPoints &&
+          Array.isArray(item.dataPoints) &&
+          item.dataPoints.length >= 2 &&
+          item.confidence >= 0.6;
+      })
+      .map(function (item: any, index: number) {
+        return {
+          id: 'chart-' + Date.now() + '-' + index,
+          chartType: item.suggestedChartType || 'comparison_bar',
+          title: item.title || 'Data Visualization',
+          subtitle: item.subtitle || undefined,
+          dataPoints: item.dataPoints.map(function (dp: any) {
+            return {
+              label: dp.label || 'Unknown',
+              value: typeof dp.value === 'number' ? dp.value : parseFloat(dp.value) || 0,
+              unit: dp.unit || undefined,
+              category: dp.category || undefined,
+              source: dp.source || undefined,
+              year: dp.year || undefined,
+            };
+          }),
+          source: item.source || undefined,
+          textSnippet: item.textSnippet || '',
+          confidence: typeof item.confidence === 'number' ? item.confidence : 0.7,
+        };
+      });
 
-    console.log(`[DataExtraction] Extracted ${extracted.length} visualizable dataset(s) from text.`);
+    console.log('[DataExtraction] Extracted ' + extracted.length + ' visualizable dataset(s) from text.');
     return extracted;
 
   } catch (err: any) {
-    console.warn('[DataExtraction] Extraction failed:', err.message);
+    var errMsg = (err && err.message) ? err.message : String(err);
+    console.warn('[DataExtraction] Extraction failed:', errMsg);
+
+    // ★ v1.5: Re-throw critical errors so caller can show proper UI
+    if (errMsg.indexOf('RATE_LIMIT') >= 0 || errMsg.indexOf('429') >= 0 || errMsg.indexOf('Quota') >= 0) {
+      throw err;
+    }
+    if (errMsg.indexOf('INSUFFICIENT_CREDITS') >= 0 || errMsg.indexOf('402') >= 0 || errMsg.indexOf('afford') >= 0) {
+      throw err;
+    }
+    if (errMsg.indexOf('MISSING_API_KEY') >= 0) {
+      throw err;
+    }
     return [];
   }
 };
 
 // ─── Helpers for structural extraction ───────────────────────
-// v1.2 FIX: These helpers ensure skeleton/default data is not
-// counted as real user-entered content.
-// - Skip enum defaults: category, likelihood, impact, type
-// - Skip id-like fields: id, project_id, created_at, updated_at
-// - Do NOT count numbers as real content (durationMonths:24, etc.)
 
-const SKIP_KEYS = new Set([
+var SKIP_KEYS = new Set([
   'id', 'project_id', 'created_at', 'updated_at',
   'category', 'likelihood', 'impact', 'type', 'dependencies',
 ]);
 
-const hasRealString = (v: any): boolean =>
-  typeof v === 'string' && v.trim().length > 0;
+var hasRealString = function (v: any): boolean {
+  return typeof v === 'string' && v.trim().length > 0;
+};
 
-const arrayHasRealContent = (arr: any[]): boolean => {
+var arrayHasRealContent = function (arr: any[]): boolean {
   if (!Array.isArray(arr) || arr.length === 0) return false;
-  return arr.some((item: any) => {
+  return arr.some(function (item: any) {
     if (typeof item === 'string') return item.trim().length > 0;
     if (typeof item !== 'object' || item === null) return false;
-    return Object.entries(item).some(([k, v]) => {
+    return Object.entries(item).some(function (entry) {
+      var k = entry[0];
+      var v = entry[1];
       if (SKIP_KEYS.has(k)) return false;
       if (typeof v === 'string') return v.trim().length > 0;
       if (Array.isArray(v)) return arrayHasRealContent(v);
@@ -248,58 +212,58 @@ const arrayHasRealContent = (arr: any[]): boolean => {
   });
 };
 
-// ─── Per-section completeness calculator for chart ───────────
-// v1.2 — Explicit checks per section, immune to default values
+// ─── Per-section completeness calculator ─────────────────────
 
-const getSectionCompleteness = (projectData: any, sectionKey: string): number => {
-  const data = projectData?.[sectionKey];
+var getSectionCompleteness = function (projectData: any, sectionKey: string): number {
+  var data = projectData && projectData[sectionKey];
   if (!data) return 0;
 
   switch (sectionKey) {
     case 'problemAnalysis': {
-      let score = 0, total = 3;
-      if (hasRealString(data.coreProblem?.title) || hasRealString(data.coreProblem?.description)) score++;
+      var score = 0, total = 3;
+      if (hasRealString(data.coreProblem && data.coreProblem.title) || hasRealString(data.coreProblem && data.coreProblem.description)) score++;
       if (arrayHasRealContent(data.causes)) score++;
       if (arrayHasRealContent(data.consequences)) score++;
       return Math.round((score / total) * 100);
     }
 
     case 'projectIdea': {
-      let score = 0, total = 5;
-      if (hasRealString(data.projectTitle)) score++;
-      if (hasRealString(data.projectAcronym)) score++;
-      if (hasRealString(data.mainAim)) score++;
-      if (hasRealString(data.stateOfTheArt)) score++;
-      if (hasRealString(data.proposedSolution)) score++;
-      if (arrayHasRealContent(data.policies)) { score++; total++; }
-      const rl = data.readinessLevels;
-      if (rl && (rl.TRL?.level !== null || rl.SRL?.level !== null || rl.ORL?.level !== null || rl.LRL?.level !== null)) {
-        const hasAnyLevel = [rl.TRL, rl.SRL, rl.ORL, rl.LRL].some(
-          (r: any) => typeof r?.level === 'number' && r.level > 0
-        );
-        if (hasAnyLevel) { score++; total++; }
+      var s2 = 0, t2 = 5;
+      if (hasRealString(data.projectTitle)) s2++;
+      if (hasRealString(data.projectAcronym)) s2++;
+      if (hasRealString(data.mainAim)) s2++;
+      if (hasRealString(data.stateOfTheArt)) s2++;
+      if (hasRealString(data.proposedSolution)) s2++;
+      if (arrayHasRealContent(data.policies)) { s2++; t2++; }
+      var rl = data.readinessLevels;
+      if (rl && (rl.TRL || rl.SRL || rl.ORL || rl.LRL)) {
+        var levels = [rl.TRL, rl.SRL, rl.ORL, rl.LRL];
+        var hasAnyLevel = levels.some(function (r: any) {
+          return r && typeof r.level === 'number' && r.level > 0;
+        });
+        if (hasAnyLevel) { s2++; t2++; }
       }
-      return total === 0 ? 0 : Math.round((score / total) * 100);
+      return t2 === 0 ? 0 : Math.round((s2 / t2) * 100);
     }
 
     case 'generalObjectives':
     case 'specificObjectives': {
       if (!Array.isArray(data) || data.length === 0) return 0;
-      const filled = data.filter((item: any) =>
-        hasRealString(item.title) || hasRealString(item.description)
-      );
+      var filled = data.filter(function (item: any) {
+        return hasRealString(item.title) || hasRealString(item.description);
+      });
       return filled.length === 0 ? 0 : Math.round((filled.length / data.length) * 100);
     }
 
     case 'activities': {
       if (!Array.isArray(data) || data.length === 0) return 0;
-      const filled = data.filter((wp: any) =>
-        hasRealString(wp.title) ||
-        arrayHasRealContent(wp.tasks) ||
-        arrayHasRealContent(wp.milestones) ||
-        arrayHasRealContent(wp.deliverables)
-      );
-      return filled.length === 0 ? 0 : Math.round((filled.length / data.length) * 100);
+      var filledWp = data.filter(function (wp: any) {
+        return hasRealString(wp.title) ||
+          arrayHasRealContent(wp.tasks) ||
+          arrayHasRealContent(wp.milestones) ||
+          arrayHasRealContent(wp.deliverables);
+      });
+      return filledWp.length === 0 ? 0 : Math.round((filledWp.length / data.length) * 100);
     }
 
     case 'outputs':
@@ -307,18 +271,18 @@ const getSectionCompleteness = (projectData: any, sectionKey: string): number =>
     case 'impacts':
     case 'kers': {
       if (!Array.isArray(data) || data.length === 0) return 0;
-      const filled = data.filter((item: any) =>
-        hasRealString(item.title) || hasRealString(item.description)
-      );
-      return filled.length === 0 ? 0 : Math.round((filled.length / data.length) * 100);
+      var filledR = data.filter(function (item: any) {
+        return hasRealString(item.title) || hasRealString(item.description);
+      });
+      return filledR.length === 0 ? 0 : Math.round((filledR.length / data.length) * 100);
     }
 
     case 'risks': {
       if (!Array.isArray(data) || data.length === 0) return 0;
-      const filled = data.filter((item: any) =>
-        hasRealString(item.title) || hasRealString(item.description) || hasRealString(item.mitigation)
-      );
-      return filled.length === 0 ? 0 : Math.round((filled.length / data.length) * 100);
+      var filledRisk = data.filter(function (item: any) {
+        return hasRealString(item.title) || hasRealString(item.description) || hasRealString(item.mitigation);
+      });
+      return filledRisk.length === 0 ? 0 : Math.round((filledRisk.length / data.length) * 100);
     }
 
     default:
@@ -326,73 +290,64 @@ const getSectionCompleteness = (projectData: any, sectionKey: string): number =>
   }
 };
 
-// ─── Normalization helpers for risk data ─────────────────────
-// ★ v1.4: Support Slovenian, English, and numeric severity values
+// ─── Normalization helpers ───────────────────────────────────
 
-const normalizeSeverity = (val: string | undefined): 'low' | 'medium' | 'high' | null => {
+var normalizeSeverity = function (val: string | undefined): 'low' | 'medium' | 'high' | null {
   if (!val) return null;
-  const v = val.toString().toLowerCase().trim();
+  var v = val.toString().toLowerCase().trim();
   if (v === 'high' || v === 'visoka' || v === 'visok' || v === 'veliko' || v === 'velika' || v === '3') return 'high';
   if (v === 'medium' || v === 'srednja' || v === 'srednji' || v === 'srednje' || v === '2') return 'medium';
   if (v === 'low' || v === 'nizka' || v === 'nizek' || v === 'nizko' || v === 'malo' || v === 'majhna' || v === '1') return 'low';
-  // Partial match fallback
-  if (v.includes('visok') || v.includes('high') || v.includes('kritičn') || v.includes('critical')) return 'high';
-  if (v.includes('sredn') || v.includes('medium') || v.includes('zmern') || v.includes('moderate')) return 'medium';
-  if (v.includes('nizk') || v.includes('low') || v.includes('majhn') || v.includes('zanemarljiv')) return 'low';
+  if (v.indexOf('visok') >= 0 || v.indexOf('high') >= 0 || v.indexOf('kriticn') >= 0 || v.indexOf('critical') >= 0) return 'high';
+  if (v.indexOf('sredn') >= 0 || v.indexOf('medium') >= 0 || v.indexOf('zmern') >= 0 || v.indexOf('moderate') >= 0) return 'medium';
+  if (v.indexOf('nizk') >= 0 || v.indexOf('low') >= 0 || v.indexOf('majhn') >= 0 || v.indexOf('zanemarljiv') >= 0) return 'low';
   return null;
 };
 
-const normalizeCategory = (val: string | undefined, language: 'en' | 'si'): string => {
+var normalizeCategory = function (val: string | undefined, language: 'en' | 'si'): string {
   if (!val) return language === 'si' ? 'Neznano' : 'Unknown';
-  const v = val.toString().toLowerCase().trim();
-  const catMap: Record<string, { en: string; si: string }> = {
-    'technical': { en: 'Technical', si: 'Tehnično' },
-    'tehnično': { en: 'Technical', si: 'Tehnično' },
-    'tehnicno': { en: 'Technical', si: 'Tehnično' },
-    'tehnical': { en: 'Technical', si: 'Tehnično' },
-    'social': { en: 'Social', si: 'Družbeno' },
-    'družbeno': { en: 'Social', si: 'Družbeno' },
-    'druzbeno': { en: 'Social', si: 'Družbeno' },
+  var v = val.toString().toLowerCase().trim();
+  var catMap: Record<string, { en: string; si: string }> = {
+    'technical': { en: 'Technical', si: 'Tehnicno' },
+    'tehnicno': { en: 'Technical', si: 'Tehnicno' },
+    'social': { en: 'Social', si: 'Druzbeno' },
+    'druzbeno': { en: 'Social', si: 'Druzbeno' },
     'economic': { en: 'Economic', si: 'Ekonomsko' },
     'ekonomsko': { en: 'Economic', si: 'Ekonomsko' },
-    'financial': { en: 'Financial', si: 'Finančno' },
-    'finančno': { en: 'Financial', si: 'Finančno' },
-    'financno': { en: 'Financial', si: 'Finančno' },
+    'financial': { en: 'Financial', si: 'Financno' },
+    'financno': { en: 'Financial', si: 'Financno' },
     'environmental': { en: 'Environmental', si: 'Okoljsko' },
     'okoljsko': { en: 'Environmental', si: 'Okoljsko' },
     'legal': { en: 'Legal', si: 'Pravno' },
     'pravno': { en: 'Legal', si: 'Pravno' },
     'organizational': { en: 'Organizational', si: 'Organizacijsko' },
     'organizacijsko': { en: 'Organizational', si: 'Organizacijsko' },
-    'political': { en: 'Political', si: 'Politično' },
-    'politično': { en: 'Political', si: 'Politično' },
-    'politicno': { en: 'Political', si: 'Politično' },
+    'political': { en: 'Political', si: 'Politicno' },
+    'politicno': { en: 'Political', si: 'Politicno' },
   };
-  const mapped = catMap[v];
+  var mapped = catMap[v];
   if (mapped) return mapped[language];
   return val.charAt(0).toUpperCase() + val.slice(1);
 };
 
 // ─── Extract from structured project data ────────────────────
-// Extracts visualization data from project's structured fields
-// (readiness levels, risks, objectives, etc.) WITHOUT using AI.
-//
-// ★ v1.3: Now accepts `language` parameter for bilingual output.
-// ★ v1.4: Normalizes SI/EN risk values, relaxed chart minimums.
 
-export const extractStructuralData = (projectData: any, language: 'en' | 'si' = 'en'): ExtractedChartData[] => {
-  const results: ExtractedChartData[] = [];
-  const si = language === 'si';
+export var extractStructuralData = function (projectData: any, language: 'en' | 'si'): ExtractedChartData[] {
+  if (!language) language = 'en';
+  var results: ExtractedChartData[] = [];
+  var si = language === 'si';
 
   // 1. Readiness Levels Radar
-  const rl = projectData?.projectIdea?.readinessLevels;
+  var rl = projectData && projectData.projectIdea && projectData.projectIdea.readinessLevels;
   if (rl) {
-    const dataPoints: ExtractedDataPoint[] = [];
-    const keys = ['TRL', 'SRL', 'ORL', 'LRL'] as const;
-    let hasData = false;
+    var dataPoints: ExtractedDataPoint[] = [];
+    var keys = ['TRL', 'SRL', 'ORL', 'LRL'];
+    var hasData = false;
 
-    for (const key of keys) {
-      const level = rl[key]?.level;
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var rlEntry = rl[key];
+      var level = rlEntry && rlEntry.level;
       if (typeof level === 'number' && level > 0) {
         hasData = true;
         dataPoints.push({
@@ -410,7 +365,7 @@ export const extractStructuralData = (projectData: any, language: 'en' | 'si' = 
         chartType: 'radar',
         title: si ? 'Stopnje pripravljenosti' : 'Readiness Levels',
         subtitle: 'TRL / SRL / ORL / LRL',
-        dataPoints,
+        dataPoints: dataPoints,
         textSnippet: si ? 'Ocena stopenj pripravljenosti projekta' : 'Project readiness levels assessment',
         confidence: 1.0,
       });
@@ -418,37 +373,37 @@ export const extractStructuralData = (projectData: any, language: 'en' | 'si' = 
   }
 
   // 2. Risk Matrix Summary
-  const risks = projectData?.risks;
+  var risks = projectData && projectData.risks;
   if (risks && Array.isArray(risks) && risks.length >= 1) {
-    const realRisks = risks.filter((r: any) =>
-      hasRealString(r.title) || hasRealString(r.description)
-    );
+    var realRisks = risks.filter(function (r: any) {
+      return hasRealString(r.title) || hasRealString(r.description);
+    });
 
     if (realRisks.length >= 1) {
-      const categoryCounts: Record<string, number> = {};
-      const likelihoodCounts: Record<string, number> = { low: 0, medium: 0, high: 0 };
-      const impactCounts: Record<string, number> = { low: 0, medium: 0, high: 0 };
+      var categoryCounts: Record<string, number> = {};
+      var likelihoodCounts: Record<string, number> = { low: 0, medium: 0, high: 0 };
+      var impactCounts: Record<string, number> = { low: 0, medium: 0, high: 0 };
 
-      realRisks.forEach((r: any) => {
-        // ★ v1.4: Normalize SI/EN values before counting
-        const normLikelihood = normalizeSeverity(r.likelihood);
-        const normImpact = normalizeSeverity(r.impact);
+      realRisks.forEach(function (r: any) {
+        var normLikelihood = normalizeSeverity(r.likelihood);
+        var normImpact = normalizeSeverity(r.impact);
         if (normLikelihood) likelihoodCounts[normLikelihood]++;
         if (normImpact) impactCounts[normImpact]++;
 
-        const catLabel = normalizeCategory(r.category, language);
+        var catLabel = normalizeCategory(r.category, language);
         categoryCounts[catLabel] = (categoryCounts[catLabel] || 0) + 1;
       });
 
-      // Risk Categories Donut
-      const catPoints: ExtractedDataPoint[] = Object.entries(categoryCounts)
-        .filter(([, count]) => count > 0)
-        .map(([cat, count]) => ({
-          label: cat,
-          value: count,
-          unit: si ? 'tveganj' : 'risks',
-          category: 'risk_category',
-        }));
+      var catPoints: ExtractedDataPoint[] = Object.entries(categoryCounts)
+        .filter(function (entry) { return entry[1] > 0; })
+        .map(function (entry) {
+          return {
+            label: entry[0],
+            value: entry[1],
+            unit: si ? 'tveganj' : 'risks',
+            category: 'risk_category',
+          };
+        });
 
       if (catPoints.length >= 1) {
         results.push({
@@ -461,15 +416,14 @@ export const extractStructuralData = (projectData: any, language: 'en' | 'si' = 
         });
       }
 
-      // ★ v1.4: Bilingual severity labels with normalized counts
-      const severityPoints: ExtractedDataPoint[] = [
+      var severityPoints: ExtractedDataPoint[] = [
         { label: si ? 'Visoka verjetnost' : 'High Likelihood', value: likelihoodCounts.high || 0, category: 'likelihood' },
         { label: si ? 'Srednja verjetnost' : 'Medium Likelihood', value: likelihoodCounts.medium || 0, category: 'likelihood' },
         { label: si ? 'Nizka verjetnost' : 'Low Likelihood', value: likelihoodCounts.low || 0, category: 'likelihood' },
         { label: si ? 'Visok vpliv' : 'High Impact', value: impactCounts.high || 0, category: 'impact' },
         { label: si ? 'Srednji vpliv' : 'Medium Impact', value: impactCounts.medium || 0, category: 'impact' },
         { label: si ? 'Nizek vpliv' : 'Low Impact', value: impactCounts.low || 0, category: 'impact' },
-      ].filter(p => p.value > 0);
+      ].filter(function (p) { return p.value > 0; });
 
       if (severityPoints.length >= 1) {
         results.push({
@@ -485,31 +439,28 @@ export const extractStructuralData = (projectData: any, language: 'en' | 'si' = 
     }
   }
 
-  // 3. Project Completeness (per section)
-  // v1.2 FIX: Uses explicit per-section checks instead of generic field counting
-  // ★ v1.3: Bilingual section labels
-  const sections = [
+  // 3. Project Completeness
+  var sections = [
     { key: 'problemAnalysis', label: si ? 'Analiza problema' : 'Problem Analysis' },
     { key: 'projectIdea', label: si ? 'Projektna ideja' : 'Project Idea' },
-    { key: 'generalObjectives', label: si ? 'Splošni cilji' : 'General Obj.' },
-    { key: 'specificObjectives', label: si ? 'Specifični cilji' : 'Specific Obj.' },
+    { key: 'generalObjectives', label: si ? 'Splosni cilji' : 'General Obj.' },
+    { key: 'specificObjectives', label: si ? 'Specificni cilji' : 'Specific Obj.' },
     { key: 'activities', label: si ? 'Aktivnosti' : 'Activities' },
-    { key: 'outputs', label: si ? 'Pričak. rezultati' : 'Expected Results' },
+    { key: 'outputs', label: si ? 'Pricak. rezultati' : 'Expected Results' },
   ];
 
-  const completenessPoints: ExtractedDataPoint[] = [];
+  var completenessPoints: ExtractedDataPoint[] = [];
 
-  for (const section of sections) {
-    const completeness = getSectionCompleteness(projectData, section.key);
+  for (var j = 0; j < sections.length; j++) {
+    var completeness = getSectionCompleteness(projectData, sections[j].key);
     completenessPoints.push({
-      label: section.label,
+      label: sections[j].label,
       value: completeness,
       unit: '%',
     });
   }
 
-  // Only show chart if at least one section has real content
-  if (completenessPoints.some(p => p.value > 0)) {
+  if (completenessPoints.some(function (p) { return p.value > 0; })) {
     results.push({
       id: 'structural-completeness',
       chartType: 'comparison_bar',
