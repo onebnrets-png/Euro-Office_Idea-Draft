@@ -1,5 +1,6 @@
 // services/DataExtractionService.ts
 // ═══════════════════════════════════════════════════════════════
+// v1.8 — 2026-02-25 — Finance charts in extractStructuralData (budget, partners, PM, hours)
 // v1.7 — 2026-02-25 — Reduced token budget via sectionKey 'chartExtraction' (1024 tokens)
 // v1.6 — 2026-02-25 — Lowered extraction thresholds + expanded prompt for objectives/results
 // v1.5 — 2026-02-25 — FIX: Re-throw RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
@@ -14,6 +15,11 @@ import {
   getProviderConfig,
 } from './aiProvider.ts';
 import { Type } from '@google/genai';
+import {
+  PM_HOURS_PER_MONTH,
+  CENTRALIZED_DIRECT_COSTS,
+  DECENTRALIZED_DIRECT_COSTS,
+} from '../types.ts';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -337,6 +343,7 @@ var normalizeCategory = function (val: string | undefined, language: 'en' | 'si'
 };
 
 // ─── Extract from structured project data ────────────────────
+// ★ v1.8: Added finance charts (budget overview, per WP, per partner, PM, hours, partner count)
 
 export var extractStructuralData = function (projectData: any, language: 'en' | 'si'): ExtractedChartData[] {
   if (!language) language = 'en';
@@ -476,6 +483,209 @@ export var extractStructuralData = function (projectData: any, language: 'en' | 
       textSnippet: si ? 'Pregled stanja zapolnjenosti projekta' : 'Project completion status overview',
       confidence: 1.0,
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ★ v1.8: FINANCE CHARTS
+  // ═══════════════════════════════════════════════════════════
+
+  var partners = Array.isArray(projectData.partners) ? projectData.partners : [];
+  var activities = Array.isArray(projectData.activities) ? projectData.activities : [];
+  var fundingModel = projectData.fundingModel || 'centralized';
+  var indirectSettings = projectData.indirectCostSettings || { percentage: 0, appliesToCategories: [] };
+
+  // Helper: calculate indirect cost for one allocation
+  var calcIndirect = function (alloc: any): number {
+    if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
+    var applicableCats = indirectSettings.appliesToCategories || [];
+    if (applicableCats.length === 0) return 0;
+    var directCostDefs = fundingModel === 'centralized' ? CENTRALIZED_DIRECT_COSTS : DECENTRALIZED_DIRECT_COSTS;
+    var applicableSum = (alloc.directCosts || []).reduce(function (sum: number, dc: any) {
+      var catKey = dc.categoryKey || (directCostDefs[dc.categoryIndex] ? directCostDefs[dc.categoryIndex].key : '');
+      return applicableCats.includes(catKey) ? sum + (dc.amount || 0) : sum;
+    }, 0);
+    return Math.round(applicableSum * (indirectSettings.percentage / 100));
+  };
+
+  // Collect all allocations across all WPs/tasks
+  var allAllocations: any[] = [];
+  activities.forEach(function (wp: any) {
+    (wp.tasks || []).forEach(function (task: any) {
+      (task.partnerAllocations || []).forEach(function (alloc: any) {
+        var partner = partners.find(function (p: any) { return p.id === alloc.partnerId; });
+        var directTotal = (alloc.directCosts || []).reduce(function (sum: number, dc: any) { return sum + (dc.amount || 0); }, 0);
+        var indirectTotal = calcIndirect(alloc);
+        allAllocations.push({
+          wpId: wp.id || '',
+          wpTitle: wp.title || '',
+          partnerId: alloc.partnerId,
+          partnerCode: partner ? partner.code : '?',
+          partnerName: partner ? partner.name : '?',
+          hours: alloc.hours || 0,
+          pm: alloc.pm || 0,
+          directTotal: directTotal,
+          indirectTotal: indirectTotal,
+          total: directTotal + indirectTotal,
+        });
+      });
+    });
+  });
+
+  var hasFinanceData = allAllocations.length > 0;
+  var grandDirectTotal = allAllocations.reduce(function (s, a) { return s + a.directTotal; }, 0);
+  var grandIndirectTotal = allAllocations.reduce(function (s, a) { return s + a.indirectTotal; }, 0);
+  var grandTotal = grandDirectTotal + grandIndirectTotal;
+
+  // 4. Partner Count (gauge)
+  var namedPartners = partners.filter(function (p: any) { return hasRealString(p.name); });
+  if (namedPartners.length >= 1) {
+    results.push({
+      id: 'structural-partner-count',
+      chartType: 'gauge',
+      title: si ? 'Stevilo partnerjev' : 'Number of Partners',
+      subtitle: si ? 'Konzorcij' : 'Consortium',
+      dataPoints: [{
+        label: si ? 'Partnerji' : 'Partners',
+        value: namedPartners.length,
+        unit: si ? 'partnerjev' : 'partners',
+      }],
+      textSnippet: si
+        ? 'Projekt ima ' + namedPartners.length + ' partnerjev v konzorciju'
+        : 'Project has ' + namedPartners.length + ' partners in the consortium',
+      confidence: 1.0,
+    });
+  }
+
+  // 5. Budget Overview (donut — Direct vs Indirect)
+  if (hasFinanceData && grandTotal > 0) {
+    var budgetOverviewPoints: ExtractedDataPoint[] = [
+      { label: si ? 'Neposredni stroski' : 'Direct Costs', value: grandDirectTotal, unit: 'EUR', category: 'direct' },
+    ];
+    if (grandIndirectTotal > 0) {
+      budgetOverviewPoints.push({ label: si ? 'Posredni stroski' : 'Indirect Costs', value: grandIndirectTotal, unit: 'EUR', category: 'indirect' });
+    }
+    results.push({
+      id: 'structural-budget-overview',
+      chartType: 'donut',
+      title: si ? 'Pregled proracuna' : 'Budget Overview',
+      subtitle: si ? 'Neposredni vs posredni stroski' : 'Direct vs Indirect Costs',
+      dataPoints: budgetOverviewPoints,
+      textSnippet: si
+        ? 'Skupni proracun: ' + grandTotal.toLocaleString('de-DE') + ' EUR'
+        : 'Total budget: ' + grandTotal.toLocaleString('de-DE') + ' EUR',
+      confidence: 1.0,
+    });
+  }
+
+  // 6. Budget per Work Package (bar chart)
+  if (hasFinanceData) {
+    var wpGroups: Record<string, { direct: number; indirect: number; total: number }> = {};
+    allAllocations.forEach(function (a) {
+      if (!wpGroups[a.wpId]) wpGroups[a.wpId] = { direct: 0, indirect: 0, total: 0 };
+      wpGroups[a.wpId].direct += a.directTotal;
+      wpGroups[a.wpId].indirect += a.indirectTotal;
+      wpGroups[a.wpId].total += a.total;
+    });
+
+    var wpBudgetPoints: ExtractedDataPoint[] = Object.entries(wpGroups)
+      .filter(function (entry) { return entry[1].total > 0; })
+      .map(function (entry) {
+        return { label: entry[0], value: entry[1].total, unit: 'EUR', category: 'wp_budget' };
+      });
+
+    if (wpBudgetPoints.length >= 1) {
+      results.push({
+        id: 'structural-budget-per-wp',
+        chartType: 'comparison_bar',
+        title: si ? 'Proracun po delovnih sklopih' : 'Budget per Work Package',
+        subtitle: si ? 'Skupni stroski na DS' : 'Total cost per WP',
+        dataPoints: wpBudgetPoints,
+        textSnippet: si ? 'Razdelitev proracuna po delovnih sklopih' : 'Budget distribution across work packages',
+        confidence: 1.0,
+      });
+    }
+  }
+
+  // 7. Budget per Partner (bar chart)
+  if (hasFinanceData) {
+    var partnerBudgetGroups: Record<string, number> = {};
+    allAllocations.forEach(function (a) {
+      var code = a.partnerCode || '?';
+      partnerBudgetGroups[code] = (partnerBudgetGroups[code] || 0) + a.total;
+    });
+
+    var partnerBudgetPoints: ExtractedDataPoint[] = Object.entries(partnerBudgetGroups)
+      .filter(function (entry) { return entry[1] > 0; })
+      .map(function (entry) {
+        return { label: entry[0], value: entry[1], unit: 'EUR', category: 'partner_budget' };
+      });
+
+    if (partnerBudgetPoints.length >= 1) {
+      results.push({
+        id: 'structural-budget-per-partner',
+        chartType: 'comparison_bar',
+        title: si ? 'Proracun po partnerjih' : 'Budget per Partner',
+        subtitle: si ? 'Skupni stroski na partnerja' : 'Total cost per partner',
+        dataPoints: partnerBudgetPoints,
+        textSnippet: si ? 'Razdelitev proracuna po partnerjih' : 'Budget distribution across partners',
+        confidence: 1.0,
+      });
+    }
+  }
+
+  // 8. Person-Months per Partner (donut)
+  if (hasFinanceData) {
+    var partnerPMGroups: Record<string, number> = {};
+    allAllocations.forEach(function (a) {
+      var code = a.partnerCode || '?';
+      partnerPMGroups[code] = (partnerPMGroups[code] || 0) + a.pm;
+    });
+
+    var pmPoints: ExtractedDataPoint[] = Object.entries(partnerPMGroups)
+      .filter(function (entry) { return entry[1] > 0; })
+      .map(function (entry) {
+        return { label: entry[0], value: Math.round(entry[1] * 10) / 10, unit: 'PM', category: 'pm' };
+      });
+
+    if (pmPoints.length >= 1) {
+      var totalPM = pmPoints.reduce(function (s, p) { return s + p.value; }, 0);
+      results.push({
+        id: 'structural-pm-per-partner',
+        chartType: 'donut',
+        title: si ? 'Clovek-meseci po partnerjih' : 'Person-Months per Partner',
+        subtitle: si ? 'Skupaj: ' + totalPM.toFixed(1) + ' PM' : 'Total: ' + totalPM.toFixed(1) + ' PM',
+        dataPoints: pmPoints,
+        textSnippet: si ? 'Razdelitev clovek-mesecev po partnerjih' : 'Person-month distribution across partners',
+        confidence: 1.0,
+      });
+    }
+  }
+
+  // 9. Hours per Work Package (bar chart)
+  if (hasFinanceData) {
+    var wpHoursGroups: Record<string, number> = {};
+    allAllocations.forEach(function (a) {
+      wpHoursGroups[a.wpId] = (wpHoursGroups[a.wpId] || 0) + a.hours;
+    });
+
+    var hoursPoints: ExtractedDataPoint[] = Object.entries(wpHoursGroups)
+      .filter(function (entry) { return entry[1] > 0; })
+      .map(function (entry) {
+        return { label: entry[0], value: entry[1], unit: si ? 'ur' : 'hours', category: 'hours' };
+      });
+
+    if (hoursPoints.length >= 1) {
+      var totalHours = hoursPoints.reduce(function (s, p) { return s + p.value; }, 0);
+      results.push({
+        id: 'structural-hours-per-wp',
+        chartType: 'comparison_bar',
+        title: si ? 'Ure po delovnih sklopih' : 'Hours per Work Package',
+        subtitle: si ? 'Skupaj: ' + totalHours.toLocaleString('de-DE') + ' ur' : 'Total: ' + totalHours.toLocaleString('de-DE') + ' hours',
+        dataPoints: hoursPoints,
+        textSnippet: si ? 'Razdelitev ur po delovnih sklopih' : 'Hours distribution across work packages',
+        confidence: 1.0,
+      });
+    }
   }
 
   return results;
