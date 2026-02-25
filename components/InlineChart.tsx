@@ -25,6 +25,15 @@ import { resolveAllChartTypes } from '../services/ChartTypeResolver.ts';
 import ChartRenderer from './ChartRenderer.tsx';
 import { theme } from '../design/theme.ts';
 
+// ★ FIX: Module-level cache — survives component remount
+// Key = text hash, Value = extracted charts
+const extractionCache = new Map<string, ExtractedChartData[]>();
+
+const getTextHash = (text: string): string => {
+  // Simple hash — first 100 chars + length is enough for uniqueness
+  return `${text.substring(0, 100)}__${text.length}`;
+};
+
 // ─── Props ───────────────────────────────────────────────────
 
 interface InlineChartProps {
