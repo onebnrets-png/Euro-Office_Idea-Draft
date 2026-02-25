@@ -590,6 +590,7 @@ const App = () => {
                   completedStepsStatus={completedStepsStatus}
                   onStepClick={(stepId: number) => pm.setCurrentStepId(stepId)}
                   onCancelGeneration={generation.cancelGeneration}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
               />
               )}
             </div>
