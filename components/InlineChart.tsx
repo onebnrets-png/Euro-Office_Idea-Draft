@@ -50,6 +50,7 @@ var InlineChart = function (props: InlineChartProps) {
   var language = props.language || 'en';
   var minTextLength = props.minTextLength || 50;
   var maxCharts = props.maxCharts || 3;
+  var onRateLimitError = props.onRateLimitError;
 
   var chartsState = useState<ExtractedChartData[]>([]);
   var charts = chartsState[0];
