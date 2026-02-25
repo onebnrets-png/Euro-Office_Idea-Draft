@@ -1,15 +1,7 @@
 // components/InlineChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// Inline chart component — sits next to text fields and displays
-// automatically extracted empirical data visualizations.
-//
+// v1.2 — 2026-02-25 — FIX: Serialized queue + cache + StrictMode fix
 // v1.1 — 2026-02-25 — FIX: Module-level cache to survive remount
-//   ★ NEW: extractionCache — Map that persists across component remounts
-//   ★ NEW: getTextHash() — simple text fingerprint for cache key
-//   ★ CHANGED: doExtraction() checks cache before AI call, stores after success
-//   ★ CHANGED: useEffect instant cache restore on remount (no 2s debounce)
-//   ★ CHANGED: Cache invalidation on significant text change (>= 20 chars)
-//
 // v1.0 — 2026-02-17 — Initial version
 // ═══════════════════════════════════════════════════════════════
 
@@ -24,17 +16,26 @@ import { theme } from '../design/theme.ts';
 const extractionCache = new Map<string, ExtractedChartData[]>();
 
 const getTextHash = (text: string): string => {
-  return text.substring(0, 100) + "__" + text.length;
+  return text.substring(0, 100) + '__' + text.length;
 };
 
-// ★ FIX: Serialize extractions — one at a time to avoid rate limiting
-let extractionQueue: Array<{ text: string; fieldContext: string; resolve: (data: ExtractedChartData[]) => void }> = [];
+// ─── Serialized queue — one extraction at a time ─────────────
+
+interface QueueItem {
+  text: string;
+  fieldContext: string;
+  resolve: (data: ExtractedChartData[]) => void;
+}
+
+const extractionQueue: QueueItem[] = [];
 let isProcessingQueue = false;
 
 const enqueueExtraction = (text: string, fieldContext: string): Promise<ExtractedChartData[]> => {
   return new Promise((resolve) => {
     extractionQueue.push({ text, fieldContext, resolve });
-    processQueue();
+    if (!isProcessingQueue) {
+      processQueue();
+    }
   });
 };
 
@@ -46,16 +47,19 @@ const processQueue = async () => {
     const item = extractionQueue.shift();
     if (!item) break;
 
+    console.log('[InlineChart] ★ Queue processing: "' + item.fieldContext + '" (' + extractionQueue.length + ' remaining)');
+
     try {
       const result = await extractEmpiricalData(item.text, item.fieldContext);
       item.resolve(result);
-    } catch (err) {
-      console.warn('[InlineChart] Queue extraction failed for "' + item.fieldContext + '":', err);
+    } catch (err: any) {
+      console.warn('[InlineChart] Queue extraction failed for "' + item.fieldContext + '":', err?.message || err);
       item.resolve([]);
     }
 
-    // ★ Wait 4s between extractions to respect rate limits
+    // Wait 4s between extractions to respect rate limits
     if (extractionQueue.length > 0) {
+      console.log('[InlineChart] ★ Queue waiting 4s before next...');
       await new Promise(r => setTimeout(r, 4000));
     }
   }
@@ -98,12 +102,8 @@ const InlineChart: React.FC<InlineChartProps> = ({
   const [hasExtracted, setHasExtracted] = useState(false);
   const lastTextRef = useRef<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // ★ DIAGNOSTIC: Log every mount
-  useEffect(() => {
-    console.log('[InlineChart] ★ MOUNTED — fieldContext:', fieldContext, '| text length:', text?.length, '| text preview:', text?.substring(0, 50));
-  }, []);
 
-  // ─── Extract data on text change (debounced) ─────────────
+  // ─── Extract data (uses serialized queue) ─────────────────
 
   const doExtraction = useCallback(async (currentText: string) => {
     if (currentText.length < minTextLength) {
@@ -112,11 +112,11 @@ const InlineChart: React.FC<InlineChartProps> = ({
       return;
     }
 
-    // ★ FIX v1.1: Check cache first — no AI call needed on remount
+    // Check cache first
     const cacheKey = getTextHash(currentText);
     const cached = extractionCache.get(cacheKey);
     if (cached) {
-      console.log(`[InlineChart] ★ Cache HIT for "${fieldContext}" (${cached.length} charts)`);
+      console.log('[InlineChart] Cache HIT for "' + (fieldContext || '') + '" (' + cached.length + ' charts)');
       setCharts(cached);
       setHasExtracted(true);
       return;
@@ -124,26 +124,25 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
     setIsLoading(true);
     try {
+      // ★ v1.2: Use serialized queue instead of direct call
       const extracted = await enqueueExtraction(currentText, fieldContext || '');
       const resolved = resolveAllChartTypes(extracted);
       const limited = resolved.slice(0, maxCharts);
 
-      // ★ FIX v1.1: Store in cache
       extractionCache.set(cacheKey, limited);
-      console.log(`[InlineChart] ★ Cache SET for "${fieldContext}" (${limited.length} charts)`);
+      console.log('[InlineChart] Cache SET for "' + (fieldContext || '') + '" (' + limited.length + ' charts)');
 
       setCharts(limited);
       setHasExtracted(true);
     } catch (err) {
       console.warn('[InlineChart] Extraction failed:', err);
-      // ★ FIX v1.1: On failure, check if we have stale cache
       const stale = extractionCache.get(cacheKey);
       if (stale) {
-        console.log(`[InlineChart] ★ Using stale cache for "${fieldContext}" after failure`);
         setCharts(stale);
         setHasExtracted(true);
       } else {
         setCharts([]);
+        setHasExtracted(true);
       }
     } finally {
       setIsLoading(false);
@@ -152,25 +151,21 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
   // ─── Trigger extraction on text change ────────────────────
 
-    useEffect(() => {
-    // ★ FIX: Reset lastTextRef on every mount to ensure extraction runs
-    // This fixes React StrictMode double-mount where ref survives but timeout is cleaned up
+  useEffect(() => {
+    // StrictMode fix: ref survives remount but timeout was cleaned up
     const isRemount = lastTextRef.current === text && text.length > 0;
-    
+
     if (isRemount) {
-      // StrictMode remount — ref has value from first mount but timeout was cleaned up
-      // Check cache first, otherwise re-trigger extraction
       if (text.length >= minTextLength) {
         const cacheKey = getTextHash(text);
         const cached = extractionCache.get(cacheKey);
-        if (cached) {
-          console.log('[InlineChart] ★ Cache restore on remount for "' + fieldContext + '"');
+        if (cached && cached.length > 0) {
           setCharts(cached);
           setHasExtracted(true);
           return;
         }
       }
-      // No cache — reset ref to force extraction
+      // No cache or empty cache — reset ref to force extraction
       lastTextRef.current = '';
     }
 
@@ -180,19 +175,21 @@ const InlineChart: React.FC<InlineChartProps> = ({
     const previousText = lastTextRef.current;
     lastTextRef.current = text;
 
+    // On mount with existing text — check cache immediately
     if (previousText === '' && text.length >= minTextLength) {
       const cacheKey = getTextHash(text);
       const cached = extractionCache.get(cacheKey);
-      if (cached) {
-        console.log('[InlineChart] ★ Instant cache restore for "' + fieldContext + '"');
+      if (cached && cached.length > 0) {
         setCharts(cached);
         setHasExtracted(true);
         return;
       }
     }
 
+    // Skip if minor edit and already extracted
     if (hasExtracted && lengthDiff < 20) return;
 
+    // Invalidate old cache on significant text change
     if (previousText && lengthDiff >= 20) {
       const oldKey = getTextHash(previousText);
       extractionCache.delete(oldKey);
@@ -200,7 +197,6 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      console.log('[InlineChart] ★ Debounce FIRED for "' + fieldContext + '" — calling doExtraction');
       doExtraction(text);
     }, 2000);
 
@@ -217,12 +213,11 @@ const InlineChart: React.FC<InlineChartProps> = ({
   // ─── Toggle button ────────────────────────────────────────
 
   const buttonLabel = language === 'si'
-    ? `${isExpanded ? 'Skrij' : 'Prikaži'} vizualizacije (${charts.length})`
-    : `${isExpanded ? 'Hide' : 'Show'} visualizations (${charts.length})`;
+    ? (isExpanded ? 'Skrij' : 'Prikazi') + ' vizualizacije (' + charts.length + ')'
+    : (isExpanded ? 'Hide' : 'Show') + ' visualizations (' + charts.length + ')';
 
   return (
     <div style={{ marginTop: '8px' }}>
-      {/* Toggle button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         disabled={isLoading}
@@ -235,7 +230,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
           fontWeight: 500,
           color: isLoading ? theme.colors.text.muted : theme.colors.secondary[600],
           backgroundColor: isLoading ? theme.colors.surface.background : theme.colors.secondary[50],
-          border: `1px solid ${isLoading ? theme.colors.border.light : theme.colors.secondary[200]}`,
+          border: '1px solid ' + (isLoading ? theme.colors.border.light : theme.colors.secondary[200]),
           borderRadius: theme.radii.full,
           cursor: isLoading ? 'wait' : 'pointer',
           transition: 'all 0.15s ease',
@@ -262,7 +257,6 @@ const InlineChart: React.FC<InlineChartProps> = ({
         }
       </button>
 
-      {/* Charts panel */}
       {isExpanded && charts.length > 0 && (
         <div style={{
           marginTop: '10px',
