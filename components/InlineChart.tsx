@@ -24,7 +24,43 @@ import { theme } from '../design/theme.ts';
 const extractionCache = new Map<string, ExtractedChartData[]>();
 
 const getTextHash = (text: string): string => {
-  return `${text.substring(0, 100)}__${text.length}`;
+  return text.substring(0, 100) + "__" + text.length;
+};
+
+// ★ FIX: Serialize extractions — one at a time to avoid rate limiting
+let extractionQueue: Array<{ text: string; fieldContext: string; resolve: (data: ExtractedChartData[]) => void }> = [];
+let isProcessingQueue = false;
+
+const enqueueExtraction = (text: string, fieldContext: string): Promise<ExtractedChartData[]> => {
+  return new Promise((resolve) => {
+    extractionQueue.push({ text, fieldContext, resolve });
+    processQueue();
+  });
+};
+
+const processQueue = async () => {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  while (extractionQueue.length > 0) {
+    const item = extractionQueue.shift();
+    if (!item) break;
+
+    try {
+      const result = await extractEmpiricalData(item.text, item.fieldContext);
+      item.resolve(result);
+    } catch (err) {
+      console.warn('[InlineChart] Queue extraction failed for "' + item.fieldContext + '":', err);
+      item.resolve([]);
+    }
+
+    // ★ Wait 4s between extractions to respect rate limits
+    if (extractionQueue.length > 0) {
+      await new Promise(r => setTimeout(r, 4000));
+    }
+  }
+
+  isProcessingQueue = false;
 };
 
 // ─── Props ───────────────────────────────────────────────────
