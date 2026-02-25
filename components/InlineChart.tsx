@@ -150,6 +150,9 @@ var InlineChart = function (props: InlineChartProps) {
 
       if (errMsg.indexOf('RATE_LIMIT') >= 0 || errMsg.indexOf('429') >= 0 || errMsg.indexOf('Quota') >= 0) {
         setStatus('rate_limit');
+        if (onRateLimitError) {
+          onRateLimitError();
+        }
       } else {
         setStatus('error');
       }
