@@ -1268,18 +1268,22 @@ export const useGeneration = ({
     // Guard: AI sometimes returns activities array instead of PM object
     if (Array.isArray(generatedData)) {
       console.error(`[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (${generatedData.length} items) — this is activities data, NOT PM! Keeping original.`);
-      // Don't overwrite — keep existing projectManagement
     } else if (generatedData && typeof generatedData === 'object') {
+      // ★ FIX: AI sometimes wraps response as {projectManagement: {description, structure}}
+      const pmData = generatedData.projectManagement && typeof generatedData.projectManagement === 'object'
+        ? generatedData.projectManagement
+        : generatedData;
+      console.log(`[executeGeneration] ★ PM merge — unwrapped: ${!!generatedData.projectManagement}, desc length: ${pmData?.description?.length || 0}`);
       newData[sectionKey] = {
         ...newData[sectionKey],
-        ...generatedData,
+        ...pmData,
         structure: {
           ...(newData[sectionKey]?.structure || {}),
-          ...(generatedData?.structure || {}),
+          ...(pmData?.structure || {}),
         },
       };
     }
-    } else {
+  } else {
     newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
   }
         } else if (sectionKey === 'activities') {
