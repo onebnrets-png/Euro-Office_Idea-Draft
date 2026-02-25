@@ -1569,7 +1569,7 @@ const ProjectDisplay = (props) => {
         }
     };
 
-    Copy    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
+    const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
 
     return (
         <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
