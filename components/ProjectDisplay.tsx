@@ -1572,6 +1572,7 @@ const ProjectDisplay = (props) => {
     const showGenerateButton = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'].includes(sectionKey);
 
     return (
+        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
     <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
         <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center flex-shrink-0 sticky top-0 z-20 shadow-sm animate-fadeIn" style={{ gap: '12px' }}>
             <div className="flex items-start gap-2" style={{ flexShrink: 0, minWidth: '180px', maxWidth: '240px' }}>
