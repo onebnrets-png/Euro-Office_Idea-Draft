@@ -47,7 +47,40 @@ if exist "vite_output.tmp" (
     del /f /q "vite_output.tmp"
 )
 
-REM Install dependencies if node_modules doesn't exist
+REM ========================================
+REM   Cleanup leftover PostCSS/Tailwind
+REM ========================================
+if exist "node_modules\tailwindcss" (
+    echo [CLEANUP] Removing leftover tailwindcss/postcss packages...
+    rmdir /s /q node_modules
+    if exist "package-lock.json" del /f /q package-lock.json
+    echo Done. Will reinstall fresh.
+    echo.
+)
+if exist "postcss.config.js" (
+    echo [CLEANUP] Removing leftover postcss.config.js...
+    del /f /q postcss.config.js
+    echo.
+)
+if exist "postcss.config.cjs" (
+    echo [CLEANUP] Removing leftover postcss.config.cjs...
+    del /f /q postcss.config.cjs
+    echo.
+)
+if exist "tailwind.config.js" (
+    echo [CLEANUP] Removing leftover tailwind.config.js...
+    del /f /q tailwind.config.js
+    echo.
+)
+if exist "tailwind.config.ts" (
+    echo [CLEANUP] Removing leftover tailwind.config.ts...
+    del /f /q tailwind.config.ts
+    echo.
+)
+
+REM ========================================
+REM   Install dependencies if needed
+REM ========================================
 if not exist "node_modules" (
     echo ========================================
     echo   Installing dependencies...
@@ -121,7 +154,6 @@ if "%MISSING%"=="1" (
         pause
         exit /b 1
     )
-    REM === Ensure jszip is installed (not in package.json yet) ===
     if not exist "node_modules\jszip" (
         echo Installing jszip separately...
         call npm install jszip
@@ -134,7 +166,7 @@ if "%MISSING%"=="1" (
     echo.
 )
 
-REM === Final safety check: jszip (dynamically imported, may not be in package.json) ===
+REM === Final safety check: jszip ===
 if not exist "node_modules\jszip" (
     echo [FIX] jszip not found - installing...
     call npm install jszip
@@ -142,7 +174,7 @@ if not exist "node_modules\jszip" (
     echo.
 )
 
-REM Optional: .env info (NOT required - Supabase is hardcoded, AI keys via Settings)
+REM Optional: .env info
 if not exist ".env" (
     echo [INFO] .env datoteka ni najdena - to je OK.
     echo        Supabase credentials so v supabaseClient.ts.
