@@ -1,21 +1,4 @@
 /* ═══════════════════════════════════════════════════════════════
-   0. TAILWIND (no Preflight reset — preserves existing styles)
-   ═══════════════════════════════════════════════════════════════ */
-
-@tailwind components;
-@tailwind utilities;
-
-/* ═══════════════════════════════════════════════════════════════
-   1B. FONT — System font stack (prevents OTS parsing errors)
-   ═══════════════════════════════════════════════════════════════ */
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* ═══════════════════════════════════════════════════════════════
    EURO-OFFICE Design System — Global Stylesheet
    v5.0 — 2026-02-17
    
