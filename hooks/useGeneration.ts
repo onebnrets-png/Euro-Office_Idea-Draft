@@ -1315,10 +1315,24 @@ export const useGeneration = ({
             } else {
               newData[sectionKey] = generatedData;
             }
-          } else {
+                    } else {
             console.warn(`[executeGeneration] ★ "${sectionKey}" generatedData is null/undefined — keeping original`);
             // Don't overwrite with null/undefined
           }
+        }
+
+        // ★ FIX: Auto-assign IDs for KERs and Risks if AI didn't generate them
+        if (Array.isArray(newData.kers)) {
+          newData.kers = newData.kers.map((item: any, idx: number) => ({
+            ...item,
+            id: (item.id && item.id.trim()) ? item.id : `KER${idx + 1}`,
+          }));
+        }
+        if (Array.isArray(newData.risks)) {
+          newData.risks = newData.risks.map((item: any, idx: number) => ({
+            ...item,
+            id: (item.id && item.id.trim()) ? item.id : `RISK${idx + 1}`,
+          }));
         }
 
         if (sectionKey === 'activities') {
