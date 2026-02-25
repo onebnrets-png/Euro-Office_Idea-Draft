@@ -1994,6 +1994,13 @@ export const useGeneration = ({
               } else if (risksContent && Array.isArray((risksContent as any).risks)) {
                 newData.risks = (risksContent as any).risks;
               }
+              // ★ FIX: Auto-assign Risk IDs if missing
+              if (Array.isArray(newData.risks)) {
+                newData.risks = newData.risks.map((item: any, idx: number) => ({
+                  ...item,
+                  id: (item.id && item.id.trim()) ? item.id : `RISK${idx + 1}`,
+                }));
+              }
               successCount++;
               console.log(`[Composite/activities] Step 5/5: risks ✅`);
             } catch (e: any) {
