@@ -485,7 +485,7 @@ const renderGenericResults = (props, sectionKey) => {
 };
 
 const renderObjectives = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
     const items = projectData[sectionKey];
     const t = TEXT[language] || TEXT['en'];
     const title = sectionKey === 'generalObjectives' ? t.generalObjectives : t.specificObjectives;
