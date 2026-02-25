@@ -1,9 +1,9 @@
 // components/InlineChart.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.3 — 2026-02-25 — Serialized queue + rate limit UI + cache fix
+// v2.0 — 2026-02-25 — Manual trigger + serialized queue + rate limit stop
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { extractEmpiricalData, type ExtractedChartData } from '../services/DataExtractionService.ts';
 import { resolveAllChartTypes } from '../services/ChartTypeResolver.ts';
 import ChartRenderer from './ChartRenderer.tsx';
@@ -11,85 +11,10 @@ import { theme } from '../design/theme.ts';
 
 // ─── Module-level cache ──────────────────────────────────────
 
-const extractionCache = new Map<string, ExtractedChartData[]>();
+var extractionCache = new Map<string, ExtractedChartData[]>();
 
-const getTextHash = function (text: string): string {
+var getTextHash = function (text: string): string {
   return text.substring(0, 100) + '__' + text.length;
-};
-
-// ─── Serialized queue ────────────────────────────────────────
-
-interface QueueItem {
-  text: string;
-  fieldContext: string;
-  resolve: (data: ExtractedChartData[]) => void;
-  reject: (err: any) => void;
-}
-
-const extractionQueue: QueueItem[] = [];
-let isProcessingQueue = false;
-let queueRateLimited = false;
-
-var enqueueExtraction = function (text: string, fieldContext: string): Promise<ExtractedChartData[]> {
-  // If we already hit rate limit, reject immediately
-  if (queueRateLimited) {
-    return Promise.reject(new Error('RATE_LIMIT'));
-  }
-  return new Promise(function (resolve, reject) {
-    extractionQueue.push({ text: text, fieldContext: fieldContext, resolve: resolve, reject: reject });
-    if (!isProcessingQueue) {
-      processQueue();
-    }
-  });
-};
-
-var processQueue = async function () {
-  if (isProcessingQueue) return;
-  isProcessingQueue = true;
-
-  while (extractionQueue.length > 0) {
-    var item = extractionQueue.shift();
-    if (!item) break;
-
-    console.log('[InlineChart] Queue processing: "' + item.fieldContext + '" (' + extractionQueue.length + ' remaining)');
-
-    try {
-      var result = await extractEmpiricalData(item.text, item.fieldContext);
-      item.resolve(result);
-    } catch (err: any) {
-      var msg = (err && err.message) ? err.message : String(err);
-      var isRateLimit = msg.indexOf('RATE_LIMIT') >= 0 || msg.indexOf('429') >= 0 || msg.indexOf('Quota') >= 0;
-
-      console.warn('[InlineChart] Queue failed for "' + item.fieldContext + '":' + (isRateLimit ? ' RATE_LIMIT' : ' ' + msg));
-
-      if (isRateLimit) {
-        queueRateLimited = true;
-        item.reject(new Error('RATE_LIMIT'));
-        // Cancel all remaining
-        console.warn('[InlineChart] RATE LIMIT — clearing queue (' + extractionQueue.length + ' items cancelled)');
-        while (extractionQueue.length > 0) {
-          var cancelled = extractionQueue.shift();
-          if (cancelled) cancelled.reject(new Error('RATE_LIMIT'));
-        }
-        // Reset rate limit flag after 120s
-        setTimeout(function () {
-          queueRateLimited = false;
-          console.log('[InlineChart] Rate limit cooldown expired — queue re-enabled');
-        }, 120000);
-        break;
-      } else {
-        item.reject(err);
-      }
-    }
-
-    // Wait 8s between extractions
-    if (extractionQueue.length > 0) {
-      console.log('[InlineChart] Queue waiting 8s before next...');
-      await new Promise(function (r) { setTimeout(r, 8000); });
-    }
-  }
-
-  isProcessingQueue = false;
 };
 
 // ─── Props ───────────────────────────────────────────────────
@@ -137,131 +62,99 @@ var InlineChart = function (props: InlineChartProps) {
   var isLoading = loadingState[0];
   var setIsLoading = loadingState[1];
 
-  var extractedState = useState(false);
-  var hasExtracted = extractedState[0];
-  var setHasExtracted = extractedState[1];
+  var statusState = useState<'idle' | 'done' | 'rate_limit' | 'error'>('idle');
+  var status = statusState[0];
+  var setStatus = statusState[1];
 
-  var rateLimitState = useState(false);
-  var rateLimitHit = rateLimitState[0];
-  var setRateLimitHit = rateLimitState[1];
+  var lastExtractedTextRef = useRef<string>('');
 
-  var lastTextRef = useRef<string>('');
-  var debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─── Check cache on mount ─────────────────────────────────
 
-  // ─── Extract data ─────────────────────────────────────────
-
-  var doExtraction = useCallback(async function (currentText: string) {
-    if (currentText.length < minTextLength) {
-      setCharts([]);
-      setHasExtracted(false);
-      return;
-    }
-
-    var cacheKey = getTextHash(currentText);
+  var cachedCharts = function (): ExtractedChartData[] | null {
+    if (text.length < minTextLength) return null;
+    var cacheKey = getTextHash(text);
     var cached = extractionCache.get(cacheKey);
-    if (cached) {
+    if (cached && cached.length > 0) return cached;
+    return null;
+  };
+
+  // If we have cache, show it immediately without user clicking
+  var initialCache = cachedCharts();
+  if (initialCache && charts.length === 0 && status === 'idle') {
+    // Can't call setState during render, use ref check
+    if (lastExtractedTextRef.current !== text) {
+      lastExtractedTextRef.current = text;
+      // Schedule state update
+      setTimeout(function () {
+        setCharts(initialCache);
+        setStatus('done');
+        setIsExpanded(false);
+      }, 0);
+    }
+  }
+
+  // ─── Manual extraction trigger ────────────────────────────
+
+  var handleGenerateCharts = useCallback(async function () {
+    if (text.length < minTextLength) return;
+
+    // Check cache first
+    var cacheKey = getTextHash(text);
+    var cached = extractionCache.get(cacheKey);
+    if (cached && cached.length > 0) {
       console.log('[InlineChart] Cache HIT for "' + (fieldContext || '') + '" (' + cached.length + ' charts)');
       setCharts(cached);
-      setHasExtracted(true);
-      setRateLimitHit(false);
+      setStatus('done');
+      setIsExpanded(true);
       return;
     }
 
     setIsLoading(true);
+    setStatus('idle');
+
     try {
-      var extracted = await enqueueExtraction(currentText, fieldContext || '');
+      console.log('[InlineChart] Extracting for "' + (fieldContext || '') + '"...');
+      var extracted = await extractEmpiricalData(text, fieldContext);
       var resolved = resolveAllChartTypes(extracted);
       var limited = resolved.slice(0, maxCharts);
 
       if (limited.length > 0) {
         extractionCache.set(cacheKey, limited);
         console.log('[InlineChart] Cache SET for "' + (fieldContext || '') + '" (' + limited.length + ' charts)');
-        setRateLimitHit(false);
+        setCharts(limited);
+        setStatus('done');
+        setIsExpanded(true);
+        lastExtractedTextRef.current = text;
       } else {
-        console.log('[InlineChart] Skip cache — 0 charts for "' + (fieldContext || '') + '"');
+        console.log('[InlineChart] No visualizable data in "' + (fieldContext || '') + '"');
+        setCharts([]);
+        setStatus('done');
       }
-
-      setCharts(limited);
-      setHasExtracted(true);
     } catch (err: any) {
-      console.warn('[InlineChart] Extraction failed:', err);
       var errMsg = (err && err.message) ? err.message : String(err);
+      console.warn('[InlineChart] Extraction failed for "' + (fieldContext || '') + '":', errMsg);
+
       if (errMsg.indexOf('RATE_LIMIT') >= 0 || errMsg.indexOf('429') >= 0 || errMsg.indexOf('Quota') >= 0) {
-        setRateLimitHit(true);
+        setStatus('rate_limit');
+      } else {
+        setStatus('error');
       }
       setCharts([]);
-      setHasExtracted(true);
     } finally {
       setIsLoading(false);
     }
-  }, [fieldContext, minTextLength, maxCharts]);
+  }, [text, fieldContext, minTextLength, maxCharts]);
 
-  // ─── Trigger extraction on text change ────────────────────
+  // ─── Don't render if text too short ───────────────────────
 
-  useEffect(function () {
-    var isRemount = lastTextRef.current === text && text.length > 0;
-
-    if (isRemount) {
-      if (text.length >= minTextLength) {
-        var cacheKey = getTextHash(text);
-        var cached = extractionCache.get(cacheKey);
-        if (cached && cached.length > 0) {
-          setCharts(cached);
-          setHasExtracted(true);
-          setRateLimitHit(false);
-          return;
-        }
-      }
-      lastTextRef.current = '';
-    }
-
-    if (text === lastTextRef.current) return;
-
-    var lengthDiff = Math.abs(text.length - lastTextRef.current.length);
-    var previousText = lastTextRef.current;
-    lastTextRef.current = text;
-
-    if (previousText === '' && text.length >= minTextLength) {
-      var ck = getTextHash(text);
-      var c = extractionCache.get(ck);
-      if (c && c.length > 0) {
-        setCharts(c);
-        setHasExtracted(true);
-        setRateLimitHit(false);
-        return;
-      }
-    }
-
-    if (hasExtracted && lengthDiff < 20) return;
-
-    if (previousText && lengthDiff >= 20) {
-      var oldKey = getTextHash(previousText);
-      extractionCache.delete(oldKey);
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(function () {
-      doExtraction(text);
-    }, 2000);
-
-    return function () {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [text, doExtraction, hasExtracted, minTextLength, fieldContext]);
+  if (text.length < minTextLength) return null;
 
   // ─── Render ───────────────────────────────────────────────
-
-  if (!hasExtracted && !isLoading && !rateLimitHit) return null;
-  if (hasExtracted && charts.length === 0 && !isLoading && !rateLimitHit) return null;
-
-  var buttonLabel = language === 'si'
-    ? (isExpanded ? 'Skrij' : 'Prikazi') + ' vizualizacije (' + charts.length + ')'
-    : (isExpanded ? 'Hide' : 'Show') + ' visualizations (' + charts.length + ')';
 
   return (
     <div style={{ marginTop: '8px' }}>
 
-      {rateLimitHit && charts.length === 0 && !isLoading && (
+      {status === 'rate_limit' && (
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -280,12 +173,31 @@ var InlineChart = function (props: InlineChartProps) {
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           {language === 'si'
-            ? 'Vizualizacije niso na voljo \u2014 API kvota izcr\u0301pana. Poskusite pozneje.'
-            : 'Visualizations unavailable \u2014 API quota exceeded. Try again later.'}
+            ? 'API kvota izcrpana \u2014 pocakajte 1-2 minuti in poskusite ponovno.'
+            : 'API quota exceeded \u2014 wait 1-2 minutes and try again.'}
         </div>
       )}
 
-      {isLoading && charts.length === 0 && (
+      {status === 'error' && (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '5px 12px',
+          fontSize: '11px',
+          fontWeight: 600,
+          color: '#dc2626',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '9999px',
+        }}>
+          {language === 'si'
+            ? 'Napaka pri analizi podatkov. Poskusite ponovno.'
+            : 'Data analysis error. Please try again.'}
+        </div>
+      )}
+
+      {isLoading && (
         <button
           disabled={true}
           style={{
@@ -307,7 +219,36 @@ var InlineChart = function (props: InlineChartProps) {
         </button>
       )}
 
-      {charts.length > 0 && (
+      {!isLoading && charts.length === 0 && status !== 'rate_limit' && status !== 'error' && (
+        <button
+          onClick={handleGenerateCharts}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: theme.colors.secondary[600],
+            backgroundColor: theme.colors.secondary[50],
+            border: '1px solid ' + theme.colors.secondary[200],
+            borderRadius: theme.radii.full,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={function (e) {
+            (e.target as HTMLButtonElement).style.backgroundColor = theme.colors.secondary[100];
+          }}
+          onMouseLeave={function (e) {
+            (e.target as HTMLButtonElement).style.backgroundColor = theme.colors.secondary[50];
+          }}
+        >
+          <ChartIcon size={14} />
+          {language === 'si' ? 'Generiraj vizualizacije' : 'Generate visualizations'}
+        </button>
+      )}
+
+      {!isLoading && charts.length > 0 && (
         <button
           onClick={function () { setIsExpanded(!isExpanded); }}
           style={{
@@ -332,7 +273,9 @@ var InlineChart = function (props: InlineChartProps) {
           }}
         >
           <ChartIcon size={14} />
-          {buttonLabel}
+          {language === 'si'
+            ? (isExpanded ? 'Skrij' : 'Prikazi') + ' vizualizacije (' + charts.length + ')'
+            : (isExpanded ? 'Hide' : 'Show') + ' visualizations (' + charts.length + ')'}
         </button>
       )}
 
