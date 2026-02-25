@@ -3,20 +3,14 @@
 // Inline chart component — sits next to text fields and displays
 // automatically extracted empirical data visualizations.
 //
-// v1.0 — 2026-02-17
+// v1.1 — 2026-02-25 — FIX: Module-level cache to survive remount
+//   ★ NEW: extractionCache — Map that persists across component remounts
+//   ★ NEW: getTextHash() — simple text fingerprint for cache key
+//   ★ CHANGED: doExtraction() checks cache before AI call, stores after success
+//   ★ CHANGED: useEffect instant cache restore on remount (no 2s debounce)
+//   ★ CHANGED: Cache invalidation on significant text change (>= 20 chars)
 //
-// USAGE:
-//   <InlineChart
-//     text={fieldValue}
-//     fieldContext="stateOfTheArt"
-//     language={language}
-//   />
-//
-// The component automatically:
-//   1. Extracts empirical data from the text (via DataExtractionService)
-//   2. Resolves optimal chart types (via ChartTypeResolver)
-//   3. Renders charts (via ChartRenderer)
-//   4. Shows/hides with a toggle button
+// v1.0 — 2026-02-17 — Initial version
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -25,12 +19,11 @@ import { resolveAllChartTypes } from '../services/ChartTypeResolver.ts';
 import ChartRenderer from './ChartRenderer.tsx';
 import { theme } from '../design/theme.ts';
 
-// ★ FIX: Module-level cache — survives component remount
-// Key = text hash, Value = extracted charts
+// ─── Module-level cache — survives component remount ─────────
+
 const extractionCache = new Map<string, ExtractedChartData[]>();
 
 const getTextHash = (text: string): string => {
-  // Simple hash — first 100 chars + length is enough for uniqueness
   return `${text.substring(0, 100)}__${text.length}`;
 };
 
@@ -72,14 +65,14 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
   // ─── Extract data on text change (debounced) ─────────────
 
- const doExtraction = useCallback(async (currentText: string) => {
+  const doExtraction = useCallback(async (currentText: string) => {
     if (currentText.length < minTextLength) {
       setCharts([]);
       setHasExtracted(false);
       return;
     }
 
-    // ★ FIX: Check cache first — no AI call needed on remount
+    // ★ FIX v1.1: Check cache first — no AI call needed on remount
     const cacheKey = getTextHash(currentText);
     const cached = extractionCache.get(cacheKey);
     if (cached) {
@@ -94,16 +87,16 @@ const InlineChart: React.FC<InlineChartProps> = ({
       const extracted = await extractEmpiricalData(currentText, fieldContext);
       const resolved = resolveAllChartTypes(extracted);
       const limited = resolved.slice(0, maxCharts);
-      
-      // ★ FIX: Store in cache
+
+      // ★ FIX v1.1: Store in cache
       extractionCache.set(cacheKey, limited);
       console.log(`[InlineChart] ★ Cache SET for "${fieldContext}" (${limited.length} charts)`);
-      
+
       setCharts(limited);
       setHasExtracted(true);
     } catch (err) {
       console.warn('[InlineChart] Extraction failed:', err);
-      // ★ FIX: On failure, check if we have stale cache
+      // ★ FIX v1.1: On failure, check if we have stale cache
       const stale = extractionCache.get(cacheKey);
       if (stale) {
         console.log(`[InlineChart] ★ Using stale cache for "${fieldContext}" after failure`);
@@ -116,15 +109,8 @@ const InlineChart: React.FC<InlineChartProps> = ({
       setIsLoading(false);
     }
   }, [fieldContext, minTextLength, maxCharts]);
-      setCharts(limited);
-      setHasExtracted(true);
-    } catch (err) {
-      console.warn('[InlineChart] Extraction failed:', err);
-      setCharts([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fieldContext, minTextLength, maxCharts]);
+
+  // ─── Trigger extraction on text change ────────────────────
 
   useEffect(() => {
     if (text === lastTextRef.current) return;
@@ -133,7 +119,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
     const previousText = lastTextRef.current;
     lastTextRef.current = text;
 
-    // ★ FIX: On remount (previousText was ''), check cache immediately — no debounce
+    // ★ FIX v1.1: On remount (previousText was ''), check cache immediately — no debounce
     if (previousText === '' && text.length >= minTextLength) {
       const cacheKey = getTextHash(text);
       const cached = extractionCache.get(cacheKey);
@@ -148,7 +134,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
     // Skip if minor edit and already extracted
     if (hasExtracted && lengthDiff < 20) return;
 
-    // ★ FIX: If text changed significantly, invalidate cache for old text
+    // ★ FIX v1.1: If text changed significantly, invalidate cache for old text
     if (previousText && lengthDiff >= 20) {
       const oldKey = getTextHash(previousText);
       extractionCache.delete(oldKey);
