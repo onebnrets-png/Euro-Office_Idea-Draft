@@ -1,5 +1,6 @@
 // services/DataExtractionService.ts
 // ═══════════════════════════════════════════════════════════════
+// v1.6 — 2026-02-25 — Lowered extraction thresholds + expanded prompt for objectives/results
 // v1.5 — 2026-02-25 — FIX: Re-throw RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
 // v1.4 — 2026-02-21 — Risk severity/category normalization
 // v1.3 — 2026-02-21 — Bilingual extractStructuralData
@@ -93,11 +94,13 @@ var schemaToText = function (schema: any): string {
 };
 
 // ─── Extraction prompt ───────────────────────────────────────
+// ★ v1.6: Expanded prompt for objectives, expected results, before/after comparisons
 
-var EXTRACTION_PROMPT = 'You are a data extraction specialist. Analyze the following text and extract ALL empirical data points that could be visualized in a chart or graph.\n\nWHAT TO EXTRACT:\n- Percentages (e.g., "37% of citizens", "increased by 23%")\n- Absolute numbers (e.g., "6,000 professionals", "35 EU projects")\n- Comparisons (e.g., "50% perceive X while only 37% feel Y")\n- Time series data (e.g., "grew from 12% in 2019 to 28% in 2023")\n- Rankings or distributions (e.g., "Technical 40%, Social 30%, Economic 30%")\n- Scores or levels (e.g., "TRL 4", "readiness level 6 out of 9")\n\nRULES:\n1. Extract ONLY data explicitly stated in the text — do NOT infer or calculate.\n2. Each visualization should have 2–8 data points (not more).\n3. Include the source/citation if mentioned in the text.\n4. Include the exact text snippet that contains the data.\n5. Set confidence: 0.9+ for explicit numbers, 0.7-0.9 for clear implications, below 0.7 for approximations.\n6. If NO empirical data is found, return an empty array [].\n7. suggestedChartType: use comparison_bar for comparisons, donut for distributions, line for time series, gauge for single metrics, progress for completion/readiness levels.\n\nTEXT TO ANALYZE:\n';
+var EXTRACTION_PROMPT = 'You are a data extraction specialist. Analyze the following text and extract ALL empirical data points that could be visualized in a chart or graph.\n\nWHAT TO EXTRACT:\n- Percentages (e.g., "37% of citizens", "increased by 23%")\n- Absolute numbers (e.g., "6,000 professionals", "35 EU projects")\n- Comparisons (e.g., "50% perceive X while only 37% feel Y")\n- Time series data (e.g., "grew from 12% in 2019 to 28% in 2023")\n- Rankings or distributions (e.g., "Technical 40%, Social 30%, Economic 30%")\n- Scores or levels (e.g., "TRL 4", "readiness level 6 out of 9")\n- Targets and goals (e.g., "reduce from 10% to 5%", "increase by 30%", "reach 500 participants")\n- Before/after comparisons (e.g., "current state: 15%, expected: 25%")\n- Indicators and milestones (e.g., "train 200 teachers", "publish 5 toolkits")\n- Any mentioned counts, quantities, durations, or measurable outcomes\n\nRULES:\n1. Extract ONLY data explicitly stated in the text — do NOT infer or calculate.\n2. Each visualization should have 1–8 data points.\n3. Include the source/citation if mentioned in the text.\n4. Include the exact text snippet that contains the data.\n5. Set confidence: 0.9+ for explicit numbers, 0.5-0.9 for clear implications, below 0.5 for rough approximations.\n6. If NO empirical data is found at all, return an empty array [].\n7. suggestedChartType: use comparison_bar for comparisons and before/after targets, donut for distributions, line for time series, gauge for single metrics, progress for completion/readiness levels.\n8. If the text describes targets, goals, indicators, expected changes, or before/after comparisons, extract these as data points even if they are qualitative targets. For each such target, create a comparison chart with chartType "comparison_bar" showing current state vs. expected result.\n9. Be generous in extraction — if a number or percentage appears in the text, include it as a data point. Even a SINGLE number is worth extracting as a gauge chart.\n\nTEXT TO ANALYZE:\n';
 
 // ─── Main extraction function ────────────────────────────────
 // ★ v1.5: Re-throws RATE_LIMIT, INSUFFICIENT_CREDITS, MISSING_API_KEY
+// ★ v1.6: Lowered filter thresholds (1 datapoint, 0.3 confidence)
 
 export var extractEmpiricalData = async function (
   text: string,
@@ -135,12 +138,13 @@ export var extractEmpiricalData = async function (
 
     if (!Array.isArray(parsed)) return [];
 
+    // ★ v1.6: Lowered thresholds — 1 data point minimum, 0.3 confidence minimum
     var extracted: ExtractedChartData[] = parsed
       .filter(function (item: any) {
         return item.dataPoints &&
           Array.isArray(item.dataPoints) &&
-          item.dataPoints.length >= 2 &&
-          item.confidence >= 0.6;
+          item.dataPoints.length >= 1 &&
+          (typeof item.confidence !== 'number' || item.confidence >= 0.3);
       })
       .map(function (item: any, index: number) {
         return {
@@ -235,9 +239,9 @@ var getSectionCompleteness = function (projectData: any, sectionKey: string): nu
       if (hasRealString(data.stateOfTheArt)) s2++;
       if (hasRealString(data.proposedSolution)) s2++;
       if (arrayHasRealContent(data.policies)) { s2++; t2++; }
-      var rl = data.readinessLevels;
-      if (rl && (rl.TRL || rl.SRL || rl.ORL || rl.LRL)) {
-        var levels = [rl.TRL, rl.SRL, rl.ORL, rl.LRL];
+      var rl2 = data.readinessLevels;
+      if (rl2 && (rl2.TRL || rl2.SRL || rl2.ORL || rl2.LRL)) {
+        var levels = [rl2.TRL, rl2.SRL, rl2.ORL, rl2.LRL];
         var hasAnyLevel = levels.some(function (r: any) {
           return r && typeof r.level === 'number' && r.level > 0;
         });
