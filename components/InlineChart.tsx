@@ -124,7 +124,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
     setIsLoading(true);
     try {
-      const extracted = await extractEmpiricalData(currentText, fieldContext);
+      const extracted = await enqueueExtraction(currentText, fieldContext || '');
       const resolved = resolveAllChartTypes(extracted);
       const limited = resolved.slice(0, maxCharts);
 
