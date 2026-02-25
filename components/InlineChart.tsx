@@ -127,16 +127,33 @@ const InlineChart: React.FC<InlineChartProps> = ({
   }, [fieldContext, minTextLength, maxCharts]);
 
   useEffect(() => {
-    // Only re-extract if text actually changed significantly
     if (text === lastTextRef.current) return;
 
-    // Check if change is meaningful (>20 chars difference)
     const lengthDiff = Math.abs(text.length - lastTextRef.current.length);
-    if (hasExtracted && lengthDiff < 20) return;
-
+    const previousText = lastTextRef.current;
     lastTextRef.current = text;
 
-    // Debounce: wait 2s after last change
+    // ★ FIX: On remount (previousText was ''), check cache immediately — no debounce
+    if (previousText === '' && text.length >= minTextLength) {
+      const cacheKey = getTextHash(text);
+      const cached = extractionCache.get(cacheKey);
+      if (cached) {
+        console.log(`[InlineChart] ★ Instant cache restore for "${fieldContext}"`);
+        setCharts(cached);
+        setHasExtracted(true);
+        return;
+      }
+    }
+
+    // Skip if minor edit and already extracted
+    if (hasExtracted && lengthDiff < 20) return;
+
+    // ★ FIX: If text changed significantly, invalidate cache for old text
+    if (previousText && lengthDiff >= 20) {
+      const oldKey = getTextHash(previousText);
+      extractionCache.delete(oldKey);
+    }
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       doExtraction(text);
@@ -145,7 +162,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [text, doExtraction, hasExtracted]);
+  }, [text, doExtraction, hasExtracted, minTextLength, fieldContext]);
 
   // ─── Render nothing if no charts ─────────────────────────
 
