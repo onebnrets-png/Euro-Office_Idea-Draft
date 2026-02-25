@@ -116,9 +116,27 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
   // ─── Trigger extraction on text change ────────────────────
 
-  useEffect(() => {
-    // ★ DIAGNOSTIC 2
-    console.log('[InlineChart] useEffect TEXT — fieldContext:', fieldContext, '| text===lastRef:', text === lastTextRef.current, '| textLen:', text?.length, '| lastRefLen:', lastTextRef.current?.length);
+    useEffect(() => {
+    // ★ FIX: Reset lastTextRef on every mount to ensure extraction runs
+    // This fixes React StrictMode double-mount where ref survives but timeout is cleaned up
+    const isRemount = lastTextRef.current === text && text.length > 0;
+    
+    if (isRemount) {
+      // StrictMode remount — ref has value from first mount but timeout was cleaned up
+      // Check cache first, otherwise re-trigger extraction
+      if (text.length >= minTextLength) {
+        const cacheKey = getTextHash(text);
+        const cached = extractionCache.get(cacheKey);
+        if (cached) {
+          console.log('[InlineChart] ★ Cache restore on remount for "' + fieldContext + '"');
+          setCharts(cached);
+          setHasExtracted(true);
+          return;
+        }
+      }
+      // No cache — reset ref to force extraction
+      lastTextRef.current = '';
+    }
 
     if (text === lastTextRef.current) return;
 
@@ -126,22 +144,19 @@ const InlineChart: React.FC<InlineChartProps> = ({
     const previousText = lastTextRef.current;
     lastTextRef.current = text;
 
-    // ★ FIX v1.1: On remount (previousText was ''), check cache immediately — no debounce
     if (previousText === '' && text.length >= minTextLength) {
       const cacheKey = getTextHash(text);
       const cached = extractionCache.get(cacheKey);
       if (cached) {
-        console.log(`[InlineChart] ★ Instant cache restore for "${fieldContext}"`);
+        console.log('[InlineChart] ★ Instant cache restore for "' + fieldContext + '"');
         setCharts(cached);
         setHasExtracted(true);
         return;
       }
     }
 
-    // Skip if minor edit and already extracted
     if (hasExtracted && lengthDiff < 20) return;
 
-    // ★ FIX v1.1: If text changed significantly, invalidate cache for old text
     if (previousText && lengthDiff >= 20) {
       const oldKey = getTextHash(previousText);
       extractionCache.delete(oldKey);
@@ -149,6 +164,7 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      console.log('[InlineChart] ★ Debounce FIRED for "' + fieldContext + '" — calling doExtraction');
       doExtraction(text);
     }, 2000);
 
