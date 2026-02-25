@@ -1,5 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs
 // v7.3 — 2026-02-23 — Language-aware WP/Task prefixes + partners.map bugfix
 //   - FIX: WP prefix: EN=WP, SI=DS (was hardcoded WP)
 //   - FIX: Task prefix: EN=T, SI=N (was hardcoded T)
@@ -599,6 +600,7 @@ const renderRisks = (props) => {
                         </div>
                     </div>
                     <TextArea label={t.risks.mitigation} path={[...path, index, 'mitigation']} value={risk.mitigation} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.mitigationPlaceholder} generateTitle={`${t.generateField} ${t.risks.mitigation}`} missingApiKey={missingApiKey} />
+                    <InlineChart text={(risk.description || '') + ' ' + (risk.mitigation || '')} fieldContext={'risk_' + index} language={language} onRateLimitError={onOpenSettings} />
                 </div>
             )})}
         </div>
@@ -606,7 +608,7 @@ const renderRisks = (props) => {
 };
 
 const renderKERs = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings } = props;
     const { kers } = projectData;
     const path = ['kers'];
     const t = TEXT[language] || TEXT['en'];
@@ -630,6 +632,7 @@ const renderKERs = (props) => {
                      </div>
                      <TextArea label={t.kers.kerDesc} path={[...path, index, 'description']} value={ker.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
                      <TextArea label={t.kers.exploitationStrategy} path={[...path, index, 'exploitationStrategy']} value={ker.exploitationStrategy} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.strategyPlaceholder} generateTitle={`${t.generateField} ${t.kers.exploitationStrategy}`} missingApiKey={missingApiKey} />
+                     <InlineChart text={(ker.description || '') + ' ' + (ker.exploitationStrategy || '')} fieldContext={'ker_' + index} language={language} onRateLimitError={onOpenSettings} />
                 </div>
             ))}
         </div>
