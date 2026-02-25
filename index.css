@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   0. TAILWIND DIRECTIVES
+   0. TAILWIND (no Preflight reset — preserves existing styles)
    ═══════════════════════════════════════════════════════════════ */
 
-@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
