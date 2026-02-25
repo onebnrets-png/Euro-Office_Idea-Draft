@@ -2145,7 +2145,14 @@ export const useGeneration = ({
 
                   setProjectData((prev: any) => {
                     const next = { ...prev };
-                    next[s] = generatedData;
+                    // ★ FIX: Auto-assign IDs for kers if missing
+                  if (s === 'kers' && Array.isArray(generatedData)) {
+                    generatedData = generatedData.map((item: any, idx: number) => ({
+                      ...item,
+                      id: item.id && item.id.trim() ? item.id : `KER${idx + 1}`,
+                    }));
+                  }
+                  next[s] = generatedData;
                     return next;
                   });
                   successCount++;
