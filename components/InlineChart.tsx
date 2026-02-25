@@ -72,10 +72,20 @@ const InlineChart: React.FC<InlineChartProps> = ({
 
   // ─── Extract data on text change (debounced) ─────────────
 
-  const doExtraction = useCallback(async (currentText: string) => {
+ const doExtraction = useCallback(async (currentText: string) => {
     if (currentText.length < minTextLength) {
       setCharts([]);
       setHasExtracted(false);
+      return;
+    }
+
+    // ★ FIX: Check cache first — no AI call needed on remount
+    const cacheKey = getTextHash(currentText);
+    const cached = extractionCache.get(cacheKey);
+    if (cached) {
+      console.log(`[InlineChart] ★ Cache HIT for "${fieldContext}" (${cached.length} charts)`);
+      setCharts(cached);
+      setHasExtracted(true);
       return;
     }
 
@@ -84,6 +94,28 @@ const InlineChart: React.FC<InlineChartProps> = ({
       const extracted = await extractEmpiricalData(currentText, fieldContext);
       const resolved = resolveAllChartTypes(extracted);
       const limited = resolved.slice(0, maxCharts);
+      
+      // ★ FIX: Store in cache
+      extractionCache.set(cacheKey, limited);
+      console.log(`[InlineChart] ★ Cache SET for "${fieldContext}" (${limited.length} charts)`);
+      
+      setCharts(limited);
+      setHasExtracted(true);
+    } catch (err) {
+      console.warn('[InlineChart] Extraction failed:', err);
+      // ★ FIX: On failure, check if we have stale cache
+      const stale = extractionCache.get(cacheKey);
+      if (stale) {
+        console.log(`[InlineChart] ★ Using stale cache for "${fieldContext}" after failure`);
+        setCharts(stale);
+        setHasExtracted(true);
+      } else {
+        setCharts([]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fieldContext, minTextLength, maxCharts]);
       setCharts(limited);
       setHasExtracted(true);
     } catch (err) {
