@@ -4,181 +4,286 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euro-Office User Guide</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
   :root {
-    --primary: #6366f1;
-    --primary-light: #818cf8;
-    --primary-dark: #4f46e5;
-    --accent: #06b6d4;
-    --bg: #f8fafc;
-    --bg-white: #ffffff;
-    --text: #1e293b;
-    --text-light: #64748b;
-    --border: #e2e8f0;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --error: #ef4444;
-    --code-bg: #f1f5f9;
+    --bg-surface: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #0F172A;
+    --bg-sidebar-hover: #1E293B;
+    --bg-sidebar-active: #6366F1;
+    --text-heading: #0F172A;
+    --text-body: #334155;
+    --text-muted: #94A3B8;
+    --text-sidebar: rgba(255,255,255,0.7);
+    --text-sidebar-active: #FFFFFF;
+    --border-light: #E2E8F0;
+    --border-medium: #CBD5E1;
+    --primary: #6366F1;
+    --primary-light: #818CF8;
+    --primary-dark: #4F46E5;
+    --accent: #06B6D4;
+    --success: #22C55E;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --red-500: #EF4444;
+    --orange-500: #F97316;
+    --amber-500: #F59E0B;
+    --yellow-500: #EAB308;
+    --lime-500: #84CC16;
+    --cyan-500: #06B6D4;
+    --sidebar-width: 280px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    background: var(--bg-surface);
+    color: var(--text-body);
     line-height: 1.7;
-    font-size: 16px;
+    font-size: 15px;
+    display: flex;
+    min-height: 100vh;
   }
 
-  .hero {
-    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--accent) 100%);
-    color: white;
-    padding: 80px 40px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
+  /* ═══ SIDEBAR ═══ */
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--bg-sidebar);
+    color: var(--text-sidebar);
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease;
   }
 
-  .hero::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
-    animation: pulse 8s ease-in-out infinite;
-  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  .sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-  }
-
-  .hero h1 {
-    font-size: 3em;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    margin-bottom: 10px;
-    position: relative;
-  }
-
-  .hero .subtitle {
-    font-size: 1.3em;
-    font-weight: 300;
-    opacity: 0.9;
-    position: relative;
-  }
-
-  .hero .version {
-    margin-top: 20px;
-    font-size: 0.9em;
-    opacity: 0.7;
-    position: relative;
-  }
-
-  .container {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 40px 30px;
-  }
-
-  .toc {
-    background: var(--bg-white);
-    border-radius: 16px;
-    padding: 40px;
-    margin: 40px 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--border);
-  }
-
-  .toc h2 {
-    font-size: 1.5em;
-    margin-bottom: 20px;
-    color: var(--primary-dark);
-  }
-
-  .toc-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .toc a {
-    color: var(--text);
-    text-decoration: none;
-    padding: 8px 12px;
-    border-radius: 8px;
-    display: block;
-    font-size: 0.95em;
-    transition: all 0.2s;
-  }
-
-  .toc a:hover {
-    background: var(--primary);
-    color: white;
-    transform: translateX(4px);
-  }
-
-  .toc a .num {
-    color: var(--primary);
-    font-weight: 600;
-    margin-right: 6px;
-  }
-
-  .toc a:hover .num { color: white; }
-
-  .section {
-    background: var(--bg-white);
-    border-radius: 16px;
-    padding: 40px;
-    margin: 30px 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--border);
-  }
-
-  .section h2 {
-    font-size: 1.8em;
-    font-weight: 700;
-    color: var(--primary-dark);
-    margin-bottom: 24px;
-    padding-bottom: 12px;
-    border-bottom: 3px solid var(--primary);
+  .sidebar-logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
   }
 
-  .section h2 .icon {
-    font-size: 1.2em;
+  .sidebar-logo img {
+    height: 36px;
+    filter: brightness(0) invert(1);
   }
 
-  .section h3 {
-    font-size: 1.25em;
+  .sidebar-logo .logo-badge {
+    font-size: 10px;
     font-weight: 600;
-    color: var(--text);
-    margin: 28px 0 12px 0;
+    background: var(--primary);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.5px;
   }
 
-  .section h4 {
-    font-size: 1.05em;
+  .sidebar-nav {
+    padding: 16px 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .sidebar-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.35);
+    padding: 16px 12px 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--text-sidebar);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    margin-bottom: 2px;
+  }
+
+  .nav-item:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--text-sidebar-active);
+  }
+
+  .nav-item.active {
+    background: var(--bg-sidebar-active);
+    color: var(--text-sidebar-active);
     font-weight: 600;
-    color: var(--text-light);
-    margin: 20px 0 8px 0;
   }
 
-  .section p {
-    margin-bottom: 14px;
-    color: var(--text);
+  .nav-item .nav-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
+  .nav-item .nav-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+
+  .nav-sub-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px 7px 36px;
+    border-radius: 6px;
+    color: rgba(255,255,255,0.5);
+    text-decoration: none;
+    font-size: 12.5px;
+    font-weight: 400;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    margin-bottom: 1px;
+  }
+
+  .nav-sub-item:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--text-sidebar-active);
+  }
+
+  .nav-sub-item.active {
+    color: var(--text-sidebar-active);
+    font-weight: 500;
+  }
+
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255,255,255,0.4);
+    text-decoration: none;
+    font-size: 11px;
+    transition: color 0.15s;
+  }
+
+  .sidebar-footer a:hover { color: rgba(255,255,255,0.8); }
+
+  /* ═══ MAIN CONTENT ═══ */
+  .main-content {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    min-height: 100vh;
+  }
+
+  .top-bar {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-light);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .top-bar h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-heading);
+  }
+
+  .top-bar .version-badge {
+    font-size: 11px;
+    background: #EEF2FF;
+    color: var(--primary);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+
+  .content-area {
+    padding: 32px;
+    max-width: 880px;
+  }
+
+  /* ═══ SECTION CARDS ═══ */
+  .section-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-light);
+    padding: 32px;
+    margin-bottom: 24px;
+    animation: cardAppear 0.4s ease-out both;
+  }
+
+  @keyframes cardAppear {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-card h2 {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--text-heading);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-card h2 .section-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .section-card h3 {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--text-heading);
+    margin: 24px 0 10px;
+  }
+
+  .section-card p {
+    margin-bottom: 12px;
+    color: var(--text-body);
+    line-height: 1.75;
+  }
+
+  /* ═══ STEP LIST ═══ */
   .step-list {
     list-style: none;
     padding: 0;
-    margin: 16px 0;
+    margin: 14px 0;
   }
 
   .step-list li {
@@ -186,8 +291,9 @@
     position: relative;
     margin-bottom: 6px;
     border-radius: 8px;
-    background: var(--bg);
-    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    font-size: 14px;
   }
 
   .step-list li::before {
@@ -200,142 +306,91 @@
     background: var(--primary);
     color: white;
     border-radius: 50%;
-    font-size: 0.8em;
+    font-size: 12px;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
+  /* ═══ TABLES ═══ */
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 16px 0;
-    font-size: 0.95em;
+    margin: 14px 0;
+    font-size: 13.5px;
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-light);
   }
 
   thead { background: var(--primary); color: white; }
-  th { padding: 12px 16px; text-align: left; font-weight: 600; }
-  td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
-  tbody tr:hover { background: #f1f5f9; }
+  th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12.5px; }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border-light); }
+  tbody tr:hover { background: #F1F5F9; }
   tbody tr:last-child td { border-bottom: none; }
 
+  /* ═══ INFO BOXES ═══ */
   .tip-box {
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
     border-left: 4px solid var(--primary);
-    padding: 16px 20px;
+    padding: 14px 18px;
     border-radius: 0 8px 8px 0;
-    margin: 16px 0;
-    font-size: 0.95em;
+    margin: 14px 0;
+    font-size: 13.5px;
   }
 
   .tip-box .tip-label {
     font-weight: 700;
     color: var(--primary-dark);
     margin-bottom: 4px;
+    font-size: 12.5px;
   }
 
   .warning-box {
-    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    background: linear-gradient(135deg, #FFFBEB, #FEF3C7);
     border-left: 4px solid var(--warning);
-    padding: 16px 20px;
+    padding: 14px 18px;
     border-radius: 0 8px 8px 0;
-    margin: 16px 0;
-    font-size: 0.95em;
+    margin: 14px 0;
+    font-size: 13.5px;
   }
 
   .warning-box .tip-label {
     font-weight: 700;
-    color: #b45309;
+    color: #B45309;
     margin-bottom: 4px;
+    font-size: 12.5px;
   }
 
   .success-box {
-    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
     border-left: 4px solid var(--success);
-    padding: 16px 20px;
+    padding: 14px 18px;
     border-radius: 0 8px 8px 0;
-    margin: 16px 0;
-    font-size: 0.95em;
+    margin: 14px 0;
+    font-size: 13.5px;
   }
 
   .success-box .tip-label {
     font-weight: 700;
-    color: #15803d;
+    color: #15803D;
     margin-bottom: 4px;
+    font-size: 12.5px;
   }
 
-  code {
-    background: var(--code-bg);
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.9em;
-    color: var(--primary-dark);
-  }
-
-  .workflow-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 20px 0;
-  }
-
-  .workflow-step {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px;
-    background: var(--bg);
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    transition: all 0.2s;
-  }
-
-  .workflow-step:hover {
-    border-color: var(--primary-light);
-    box-shadow: 0 2px 8px rgba(99,102,241,0.1);
-  }
-
-  .workflow-step .step-num {
-    width: 40px;
-    height: 40px;
-    background: var(--primary);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 1.1em;
-    flex-shrink: 0;
-  }
-
-  .workflow-step .step-content h4 {
-    margin: 0 0 4px 0;
-    color: var(--text);
-  }
-
-  .workflow-step .step-content p {
-    margin: 0;
-    font-size: 0.9em;
-    color: var(--text-light);
-  }
-
+  /* ═══ MODE CARDS ═══ */
   .mode-cards {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 16px;
-    margin: 20px 0;
+    gap: 14px;
+    margin: 16px 0;
   }
 
   .mode-card {
-    padding: 20px;
-    border-radius: 12px;
-    border: 2px solid var(--border);
+    padding: 18px;
+    border-radius: 10px;
+    border: 2px solid var(--border-light);
     text-align: center;
     transition: all 0.2s;
   }
@@ -343,606 +398,875 @@
   .mode-card:hover {
     border-color: var(--primary);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+    box-shadow: 0 4px 12px rgba(99,102,241,0.12);
   }
 
-  .mode-card .mode-icon { font-size: 2em; margin-bottom: 8px; }
-  .mode-card h4 { margin: 8px 0 6px; color: var(--primary-dark); }
-  .mode-card p { font-size: 0.85em; color: var(--text-light); margin: 0; }
+  .mode-card .mode-icon { font-size: 1.8em; margin-bottom: 6px; }
+  .mode-card h4 { margin: 6px 0 4px; color: var(--primary-dark); font-size: 14px; }
+  .mode-card p { font-size: 12px; color: var(--text-muted); margin: 0; }
 
-  .footer {
-    text-align: center;
-    padding: 40px;
-    color: var(--text-light);
-    font-size: 0.9em;
+  /* ═══ WORKFLOW STEPS ═══ */
+  .workflow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0;
   }
 
-  .footer a { color: var(--primary); text-decoration: none; }
+  .workflow-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    background: var(--bg-surface);
+    border-radius: 10px;
+    border: 1px solid var(--border-light);
+    transition: all 0.2s;
+  }
 
+  .workflow-step:hover {
+    border-color: var(--primary-light);
+    box-shadow: 0 2px 8px rgba(99,102,241,0.08);
+  }
+
+  .workflow-step .step-num {
+    width: 36px;
+    height: 36px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .workflow-step .step-content h4 { margin: 0 0 2px; color: var(--text-heading); font-size: 14px; }
+  .workflow-step .step-content p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+
+  /* ═══ BADGES ═══ */
   .badge {
     display: inline-block;
     padding: 2px 10px;
     border-radius: 12px;
-    font-size: 0.8em;
+    font-size: 11px;
     font-weight: 600;
   }
 
-  .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  .badge-green { background: #dcfce7; color: #15803d; }
-  .badge-yellow { background: #fef3c7; color: #b45309; }
-  .badge-red { background: #fee2e2; color: #dc2626; }
+  .badge-blue { background: #DBEAFE; color: #1D4ED8; }
+  .badge-green { background: #DCFCE7; color: #15803D; }
+  .badge-yellow { background: #FEF3C7; color: #B45309; }
+  .badge-red { background: #FEE2E2; color: #DC2626; }
+  .badge-purple { background: #EDE9FE; color: #6D28D9; }
 
-  @media (max-width: 768px) {
-    .hero { padding: 40px 20px; }
-    .hero h1 { font-size: 2em; }
-    .container { padding: 20px 16px; }
-    .section { padding: 24px 20px; }
-    .toc-grid { grid-template-columns: 1fr; }
+  code {
+    background: #F1F5F9;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--primary-dark);
+  }
+
+  /* ═══ MOBILE RESPONSIVE ═══ */
+  .mobile-toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 200;
+    background: var(--bg-sidebar);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 20px;
+  }
+
+  @media (max-width: 860px) {
+    .mobile-toggle { display: block; }
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main-content { margin-left: 0; }
+    .top-bar { padding-left: 56px; }
+    .content-area { padding: 20px 16px; }
     .mode-cards { grid-template-columns: 1fr; }
   }
 
+  /* ═══ PRINT ═══ */
   @media print {
-    .hero { padding: 40px; }
-    .section { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
-    body { font-size: 12pt; }
+    .sidebar, .mobile-toggle, .top-bar { display: none !important; }
+    .main-content { margin-left: 0; }
+    .section-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    body { font-size: 11pt; }
   }
 </style>
 </head>
 <body>
 
-<div class="hero">
-  <img src="/euro-office-logo.png" alt="Euro-Office" style="height: 80px; margin-bottom: 16px; position: relative; filter: brightness(0) invert(1);">
-  <div class="subtitle">EU Intervention Logic AI Assistant &mdash; User Guide</div>
-</div>
+<button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
 
-<div class="container">
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <img src="/euro-office-logo.png" alt="Euro-Office">
+    <span class="logo-badge">GUIDE</span>
+  </div>
 
-  <!-- TABLE OF CONTENTS -->
-  <div class="toc">
-    <h2>Table of Contents</h2>
-    <div class="toc-grid">
-      <a href="#s1"><span class="num">01</span> Getting Started</a>
-      <a href="#s2"><span class="num">02</span> Application Overview</a>
-      <a href="#s3"><span class="num">03</span> API Key Configuration</a>
-      <a href="#s4"><span class="num">04</span> Creating a Project</a>
-      <a href="#s5"><span class="num">05</span> Problem Analysis</a>
-      <a href="#s6"><span class="num">06</span> Project Idea</a>
-      <a href="#s7"><span class="num">07</span> Objectives</a>
-      <a href="#s8"><span class="num">08</span> Activities (Work Packages)</a>
-      <a href="#s9"><span class="num">09</span> Project Management</a>
-      <a href="#s10"><span class="num">10</span> Risk Register</a>
-      <a href="#s11"><span class="num">11</span> Expected Results &amp; KERs</a>
-      <a href="#s12"><span class="num">12</span> Partnership</a>
-      <a href="#s13"><span class="num">13</span> Finance</a>
-      <a href="#s14"><span class="num">14</span> Dashboard Panel</a>
-      <a href="#s15"><span class="num">15</span> Gantt, PERT &amp; Organigram</a>
-      <a href="#s16"><span class="num">16</span> Export &amp; Print</a>
-      <a href="#s17"><span class="num">17</span> Administration Panel</a>
-      <a href="#s18"><span class="num">18</span> Tips &amp; Troubleshooting</a>
+  <div class="sidebar-nav">
+    <div class="sidebar-section-label">Getting Started</div>
+    <a class="nav-item active" href="#s1" onclick="navigateTo(this, 's1')">
+      <span class="nav-dot" style="background:#6366F1"></span> Registration &amp; Login
+    </a>
+    <a class="nav-item" href="#s2" onclick="navigateTo(this, 's2')">
+      <span class="nav-dot" style="background:#6366F1"></span> Application Overview
+    </a>
+    <a class="nav-item" href="#s3" onclick="navigateTo(this, 's3')">
+      <span class="nav-dot" style="background:#6366F1"></span> API Key Setup
+    </a>
+    <a class="nav-item" href="#s4" onclick="navigateTo(this, 's4')">
+      <span class="nav-dot" style="background:#6366F1"></span> Creating a Project
+    </a>
+
+    <div class="sidebar-section-label">Intervention Logic</div>
+    <a class="nav-item" href="#s5" onclick="navigateTo(this, 's5')">
+      <span class="nav-dot" style="background:var(--red-500)"></span> Problem Analysis
+    </a>
+    <a class="nav-item" href="#s6" onclick="navigateTo(this, 's6')">
+      <span class="nav-dot" style="background:var(--orange-500)"></span> Project Idea
+    </a>
+    <a class="nav-item" href="#s7" onclick="navigateTo(this, 's7')">
+      <span class="nav-dot" style="background:var(--amber-500)"></span> Objectives
+    </a>
+    <a class="nav-item" href="#s8" onclick="navigateTo(this, 's8')">
+      <span class="nav-dot" style="background:var(--lime-500)"></span> Activities (WPs)
+    </a>
+    <a class="nav-sub-item" href="#s9" onclick="navigateTo(this, 's9')">Project Management</a>
+    <a class="nav-sub-item" href="#s10" onclick="navigateTo(this, 's10')">Risk Register</a>
+    <a class="nav-item" href="#s11" onclick="navigateTo(this, 's11')">
+      <span class="nav-dot" style="background:var(--cyan-500)"></span> Expected Results
+    </a>
+
+    <div class="sidebar-section-label">Consortium &amp; Finance</div>
+    <a class="nav-item" href="#s12" onclick="navigateTo(this, 's12')">
+      <span class="nav-dot" style="background:#8B5CF6"></span> Partnership
+    </a>
+    <a class="nav-item" href="#s13" onclick="navigateTo(this, 's13')">
+      <span class="nav-dot" style="background:#EC4899"></span> Finance
+    </a>
+
+    <div class="sidebar-section-label">Visualization</div>
+    <a class="nav-item" href="#s14" onclick="navigateTo(this, 's14')">
+      <span class="nav-dot" style="background:#14B8A6"></span> Dashboard Panel
+    </a>
+    <a class="nav-item" href="#s15" onclick="navigateTo(this, 's15')">
+      <span class="nav-dot" style="background:#0EA5E9"></span> Gantt, PERT, Organigram
+    </a>
+
+    <div class="sidebar-section-label">Export &amp; Admin</div>
+    <a class="nav-item" href="#s16" onclick="navigateTo(this, 's16')">
+      <span class="nav-dot" style="background:#64748B"></span> Export &amp; Print
+    </a>
+    <a class="nav-item" href="#s17" onclick="navigateTo(this, 's17')">
+      <span class="nav-dot" style="background:#F97316"></span> Admin Panel
+    </a>
+    <a class="nav-item" href="#s18" onclick="navigateTo(this, 's18')">
+      <span class="nav-dot" style="background:#22C55E"></span> Tips &amp; Troubleshooting
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="https://euro-office.net" target="_blank">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/></svg>
+      Open Euro-Office App
+    </a>
+  </div>
+</nav>
+
+<!-- ═══════════ MAIN CONTENT ═══════════ -->
+<div class="main-content">
+  <div class="top-bar">
+    <h1>User Guide</h1>
+    <span class="version-badge">v1.0 &bull; Feb 2026</span>
+  </div>
+
+  <div class="content-area">
+    <!-- ═══ SECTION 1 ═══ -->
+    <div class="section-card" id="s1">
+      <h2><span class="section-dot" style="background:var(--primary)"></span> 1. Registration &amp; Login</h2>
+
+      <h3>1.1 Registration</h3>
+      <ol class="step-list">
+        <li data-step="1">Open your browser and navigate to <strong>https://euro-office.net</strong></li>
+        <li data-step="2">You will see the Login screen with the Euro-Office logo, email and password fields</li>
+        <li data-step="3">Click <strong>"Register here"</strong> at the bottom of the login form</li>
+        <li data-step="4">Fill in your <strong>E-mail Address</strong> (must be valid) and <strong>Password</strong> (minimum 6 characters)</li>
+        <li data-step="5">Click <strong>"Register"</strong></li>
+        <li data-step="6">Check your email inbox for a <strong>confirmation email</strong> and click the activation link</li>
+        <li data-step="7">Return to https://euro-office.net and log in with your credentials</li>
+      </ol>
+
+      <h3>1.2 Login</h3>
+      <ol class="step-list">
+        <li data-step="1">Enter your <strong>E-mail Address</strong> and <strong>Password</strong></li>
+        <li data-step="2">Click <strong>"Login"</strong></li>
+        <li data-step="3">If 2FA is enabled, enter the verification code from your authenticator app</li>
+        <li data-step="4">You will be taken to the <strong>Home Screen</strong></li>
+      </ol>
+
+      <h3>1.3 Language Selection</h3>
+      <p>In the <strong>top-right corner</strong>, click <strong>SI</strong> or <strong>EN</strong> to switch the interface and AI generation language. The active language is highlighted in blue.</p>
     </div>
-  </div>
 
-  <!-- SECTION 1 -->
-  <div class="section" id="s1">
-    <h2><span class="icon">🚀</span> 1. Getting Started</h2>
+    <!-- ═══ SECTION 2 ═══ -->
+    <div class="section-card" id="s2">
+      <h2><span class="section-dot" style="background:var(--primary)"></span> 2. Application Overview</h2>
 
-    <h3>1.1 Registration</h3>
-    <ol class="step-list">
-      <li data-step="1">Open your browser and navigate to <strong>https://euro-office.net</strong></li>
-      <li data-step="2">You will see the Login screen with the Euro-Office logo, email and password fields</li>
-      <li data-step="3">Click <strong>"Register here"</strong> at the bottom of the login form</li>
-      <li data-step="4">Fill in your <strong>E-mail Address</strong> (must be valid) and <strong>Password</strong> (minimum 6 characters)</li>
-      <li data-step="5">Click <strong>"Register"</strong></li>
-      <li data-step="6">Check your email inbox for a <strong>confirmation email</strong> and click the activation link</li>
-      <li data-step="7">Return to https://euro-office.net and log in with your credentials</li>
-    </ol>
+      <h3>2.1 Main Layout</h3>
+      <p>The application has three main areas:</p>
+      <table>
+        <thead><tr><th>Area</th><th>Position</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sidebar</strong></td><td>Left</td><td>Navigation menu with all project chapters and sub-sections</td></tr>
+          <tr><td><strong>Editor</strong></td><td>Centre</td><td>Main workspace for viewing and editing project content</td></tr>
+          <tr><td><strong>Dashboard</strong></td><td>Right</td><td>Statistical overview with auto-generated charts (collapsible)</td></tr>
+        </tbody>
+      </table>
 
-    <h3>1.2 Login</h3>
-    <ol class="step-list">
-      <li data-step="1">Enter your <strong>E-mail Address</strong> and <strong>Password</strong></li>
-      <li data-step="2">Click <strong>"Login"</strong></li>
-      <li data-step="3">If 2FA is enabled, enter the verification code from your authenticator app</li>
-      <li data-step="4">You will be taken to the <strong>Home Screen / Dashboard</strong></li>
-    </ol>
+      <h3>2.2 Sidebar Navigation</h3>
+      <p>The sidebar follows the <strong>Intervention Logic Framework</strong> &mdash; the structured cause-and-effect chain from problem to impact that is the backbone of every EU project proposal:</p>
+      <table>
+        <thead><tr><th>Chapter</th><th>Section</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-red">Ch.1</span></td><td><strong>Problem Analysis</strong></td><td>Core problem, causes, consequences</td></tr>
+          <tr><td><span class="badge badge-yellow">Ch.2</span></td><td><strong>Project Idea</strong></td><td>Title, acronym, aim, state of the art, solution, policies, readiness</td></tr>
+          <tr><td><span class="badge badge-yellow">Ch.3-4</span></td><td><strong>Objectives</strong></td><td>General objectives &amp; specific S.M.A.R.T. objectives</td></tr>
+          <tr><td><span class="badge badge-green">Ch.5</span></td><td><strong>Activities</strong></td><td>Work packages, project management, risks, partnership, finance</td></tr>
+          <tr><td><span class="badge badge-blue">Ch.6</span></td><td><strong>Expected Results</strong></td><td>Outputs, outcomes, impacts, KERs</td></tr>
+        </tbody>
+      </table>
 
-    <h3>1.3 Language Selection</h3>
-    <p>In the <strong>top-right corner</strong>, click <strong>SI</strong> or <strong>EN</strong> to switch the interface and AI generation language. The active language is highlighted in blue.</p>
-  </div>
-
-  <!-- SECTION 2 -->
-  <div class="section" id="s2">
-    <h2><span class="icon">🗺️</span> 2. Application Overview</h2>
-
-    <h3>2.1 Main Layout</h3>
-    <p>The application has three main areas:</p>
-    <table>
-      <thead><tr><th>Area</th><th>Position</th><th>Purpose</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Sidebar</strong></td><td>Left</td><td>Navigation menu with all project chapters</td></tr>
-        <tr><td><strong>Editor</strong></td><td>Centre</td><td>Main workspace for viewing and editing content</td></tr>
-        <tr><td><strong>Dashboard</strong></td><td>Right</td><td>Statistical overview with charts (collapsible)</td></tr>
-      </tbody>
-    </table>
-
-    <h3>2.2 Sidebar Navigation</h3>
-    <p>The sidebar follows the <strong>Intervention Logic Framework</strong> &mdash; the structured chain from problem to impact:</p>
-    <table>
-      <thead><tr><th>Section</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Problem Analysis</strong></td><td>Core problem, causes, consequences</td></tr>
-        <tr><td><strong>Project Idea</strong></td><td>Title, acronym, aim, solution, policies, readiness</td></tr>
-        <tr><td><strong>Objectives</strong></td><td>General &amp; specific (S.M.A.R.T.) objectives</td></tr>
-        <tr><td><strong>Activities</strong></td><td>Work packages with tasks, milestones, deliverables</td></tr>
-        <tr><td><strong>Project Management</strong></td><td>Governance structure and narrative</td></tr>
-        <tr><td><strong>Risks</strong></td><td>Risk register across 4 categories</td></tr>
-        <tr><td><strong>Expected Results</strong></td><td>Outputs, outcomes, impacts</td></tr>
-        <tr><td><strong>KERs</strong></td><td>Key Exploitable Results with exploitation strategies</td></tr>
-        <tr><td><strong>Partnership</strong></td><td>Consortium composition and partner types</td></tr>
-        <tr><td><strong>Finance</strong></td><td>Budget allocation and costs</td></tr>
-        <tr><td><strong>Gantt Chart</strong></td><td>Visual project timeline</td></tr>
-        <tr><td><strong>PERT Chart</strong></td><td>Task dependency network</td></tr>
-        <tr><td><strong>Organigram</strong></td><td>Management structure chart</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- SECTION 3 -->
-  <div class="section" id="s3">
-    <h2><span class="icon">🔑</span> 3. API Key Configuration</h2>
-
-    <div class="warning-box">
-      <div class="tip-label">⚠ IMPORTANT — DO THIS FIRST</div>
-      <p>Without a valid API key, AI generation will not work. You can still manually fill in all fields, but the AI-powered features require an API key.</p>
-    </div>
-
-    <h3>3.1 Setting Up Your API Key</h3>
-    <ol class="step-list">
-      <li data-step="1">Click the <strong>Settings gear icon (⚙️)</strong> in the top-right corner</li>
-      <li data-step="2">In the Settings modal, select your <strong>AI Provider</strong>:
-        <br><span class="badge badge-green">Recommended</span> <strong>Gemini</strong> (Google) &mdash; generous free tier
-        <br><span class="badge badge-blue">Alternative</span> <strong>OpenRouter</strong> &mdash; multiple models, requires credits
-        <br><span class="badge badge-blue">Alternative</span> <strong>OpenAI</strong> &mdash; GPT models, requires paid key
-      </li>
-      <li data-step="3">Paste your <strong>API Key</strong> in the key field</li>
-      <li data-step="4">Select the <strong>Model</strong> (e.g., <code>gemini-2.5-flash-lite</code>)</li>
-      <li data-step="5">Click <strong>Save</strong></li>
-    </ol>
-
-    <h3>3.2 Getting a Free Gemini API Key</h3>
-    <ol class="step-list">
-      <li data-step="1">Go to <strong>https://aistudio.google.com/apikey</strong></li>
-      <li data-step="2">Sign in with your Google account</li>
-      <li data-step="3">Click <strong>"Create API Key"</strong></li>
-      <li data-step="4">Copy the key and paste it into Euro-Office Settings</li>
-    </ol>
-  </div>
-
-  <!-- SECTION 4 -->
-  <div class="section" id="s4">
-    <h2><span class="icon">📁</span> 4. Creating a Project</h2>
-
-    <h3>4.1 New Project</h3>
-    <ol class="step-list">
-      <li data-step="1">From the Home screen, click <strong>"+ New Project"</strong></li>
-      <li data-step="2">Enter a <strong>Project Title</strong> (working title &mdash; AI can refine it later)</li>
-      <li data-step="3">Select <strong>Language</strong> (EN or SI)</li>
-      <li data-step="4">Set the <strong>Start Date</strong> and <strong>Duration</strong> in months</li>
-      <li data-step="5">Choose <strong>Funding Model</strong> (Centralized or Decentralized)</li>
-      <li data-step="6">Click <strong>"Create"</strong> &mdash; your project opens at Problem Analysis</li>
-    </ol>
-
-    <h3>4.2 Project List Actions</h3>
-    <table>
-      <thead><tr><th>Action</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Open</strong></td><td>Opens the project editor</td></tr>
-        <tr><td><strong>Duplicate</strong></td><td>Creates a complete copy of the project</td></tr>
-        <tr><td><strong>Delete</strong></td><td>Permanently removes the project (with confirmation)</td></tr>
-        <tr><td><strong>QR Code</strong></td><td>Generates a shareable QR code</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- SECTION 5 -->
-  <div class="section" id="s5">
-    <h2><span class="icon">🔍</span> 5. Problem Analysis</h2>
-    <p>This is the <strong>foundation</strong> of your entire project. Everything else builds on this chapter.</p>
-
-    <h3>5.1 Core Problem</h3>
-    <p>Enter a concise <strong>Title</strong> and a detailed <strong>Description</strong> with quantitative evidence. Even a few sentences are enough &mdash; AI will expand and enrich it.</p>
-
-    <h3>5.2 Causes (minimum 4)</h3>
-    <p>Click <strong>"+ Add Cause"</strong> to add manually, or let AI generate them. Causes should be ordered from root/structural to proximate. Each cause needs a title and description with evidence.</p>
-
-    <h3>5.3 Consequences (minimum 4)</h3>
-    <p>Click <strong>"+ Add Consequence"</strong> or let AI generate them. Consequences should show the escalation chain: local &rarr; regional &rarr; national &rarr; EU impact.</p>
-
-    <h3>5.4 AI Generation</h3>
-    <p>At the top of the section, you will find three generation buttons:</p>
-
-    <div class="mode-cards">
-      <div class="mode-card">
-        <div class="mode-icon">📝</div>
-        <h4>Fill</h4>
-        <p>Fills only empty fields. Keeps your existing content untouched.</p>
-      </div>
-      <div class="mode-card">
-        <div class="mode-icon">✨</div>
-        <h4>Enhance</h4>
-        <p>Deepens and improves existing content. Adds citations and EU terminology.</p>
-      </div>
-      <div class="mode-card">
-        <div class="mode-icon">🔄</div>
-        <h4>Regenerate</h4>
-        <p>Creates completely new content from scratch. Replaces existing data.</p>
+      <div class="tip-box">
+        <div class="tip-label">&#128161; The Golden Thread</div>
+        <p>Every chapter logically flows from the previous one: Problem &rarr; Solution &rarr; Objectives &rarr; Activities &rarr; Results. EU evaluators check this chain for consistency. Euro-Office enforces this through AI cross-referencing.</p>
       </div>
     </div>
 
-    <div class="tip-box">
-      <div class="tip-label">💡 Recommended Workflow</div>
-      <p>Write your core problem title and a few sentences of description manually. Then click <strong>Regenerate</strong> to let AI generate the full analysis. Review and edit, then use <strong>Enhance</strong> to further improve.</p>
+    <!-- ═══ SECTION 3 ═══ -->
+    <div class="section-card" id="s3">
+      <h2><span class="section-dot" style="background:var(--primary)"></span> 3. API Key Configuration</h2>
+
+      <div class="warning-box">
+        <div class="tip-label">&#9888; IMPORTANT &mdash; DO THIS FIRST</div>
+        <p>Without a valid API key, AI generation will not work. You can still manually fill in all fields, but the AI-powered features (Fill, Enhance, Regenerate) require an API key.</p>
+      </div>
+
+      <h3>3.1 Setting Up Your API Key</h3>
+      <ol class="step-list">
+        <li data-step="1">Click the <strong>Settings gear icon</strong> in the top-right corner of the application</li>
+        <li data-step="2">In the Settings modal, select your <strong>AI Provider</strong>:
+          <br><span class="badge badge-green">Recommended</span> <strong>Gemini</strong> (Google) &mdash; generous free tier, fast
+          <br><span class="badge badge-blue">Alternative</span> <strong>OpenRouter</strong> &mdash; multiple models, requires credits
+          <br><span class="badge badge-blue">Alternative</span> <strong>OpenAI</strong> &mdash; GPT models, requires paid key
+        </li>
+        <li data-step="3">Paste your <strong>API Key</strong> in the key field</li>
+        <li data-step="4">Select the <strong>Model</strong> (e.g., <code>gemini-2.5-flash-lite</code> for Gemini)</li>
+        <li data-step="5">Click <strong>Save</strong></li>
+      </ol>
+
+      <h3>3.2 Getting a Free Gemini API Key</h3>
+      <ol class="step-list">
+        <li data-step="1">Go to <strong>https://aistudio.google.com/apikey</strong></li>
+        <li data-step="2">Sign in with your Google account</li>
+        <li data-step="3">Click <strong>"Create API Key"</strong></li>
+        <li data-step="4">Copy the key and paste it into Euro-Office Settings</li>
+      </ol>
+
+      <div class="success-box">
+        <div class="tip-label">&#10004; Free Tier</div>
+        <p>Gemini's free tier allows approximately 15 requests per minute, which is sufficient for generating all project sections. No credit card required.</p>
+      </div>
     </div>
 
-    <h3>5.5 Inline Visualizations</h3>
-    <p>After generation, a <strong>"Generate visualizations"</strong> button appears below descriptions containing empirical data. Click it to create charts (bar charts, gauges, donuts) that visualize statistics mentioned in the text.</p>
-  </div>
+    <!-- ═══ SECTION 4 ═══ -->
+    <div class="section-card" id="s4">
+      <h2><span class="section-dot" style="background:var(--primary)"></span> 4. Creating a Project</h2>
 
-  <!-- SECTION 6 -->
-  <div class="section" id="s6">
-    <h2><span class="icon">💡</span> 6. Project Idea</h2>
-    <p>This chapter translates the problem into a proposed intervention. It contains multiple sub-sections:</p>
+      <h3>4.1 New Project</h3>
+      <ol class="step-list">
+        <li data-step="1">From the Home screen, click the <strong>"+ New Project"</strong> button</li>
+        <li data-step="2">Enter a <strong>Project Title</strong> (working title &mdash; AI can refine it later)</li>
+        <li data-step="3">Select <strong>Language</strong>: EN (English) or SI (Slovenian)</li>
+        <li data-step="4">Set the <strong>Start Date</strong> and <strong>Duration</strong> in months (e.g., 24, 36)</li>
+        <li data-step="5">Choose <strong>Funding Model</strong>: Centralized or Decentralized</li>
+        <li data-step="6">Click <strong>"Create"</strong> &mdash; your project opens at Problem Analysis</li>
+      </ol>
 
-    <h3>6.1 Project Title &amp; Acronym</h3>
-    <p><strong>Title:</strong> A concise noun phrase (30&ndash;200 characters), no acronym inside the title.<br>
-    <strong>Acronym:</strong> 3&ndash;8 uppercase letters derived from the title (e.g., GREENTRANS, DIGI-CRAFT).</p>
-
-    <h3>6.2 Main Aim</h3>
-    <p>One comprehensive sentence starting with an infinitive verb (e.g., "To develop...", "To strengthen..."). Captures the project's core purpose.</p>
-
-    <h3>6.3 State of the Art</h3>
-    <p>Analysis of existing projects and studies. AI includes references to real EU projects and describes how your project capitalises on past results (synergies).</p>
-
-    <h3>6.4 Proposed Solution</h3>
-    <p>Detailed intervention description structured in phases. AI generates an introductory overview, phase breakdown, and DNSH compliance statement.</p>
-
-    <h3>6.5 EU Policies</h3>
-    <p>Relevant EU policies with alignment descriptions. Add manually or let AI generate them.</p>
-
-    <h3>6.6 Readiness Levels</h3>
-    <table>
-      <thead><tr><th>Level</th><th>Full Name</th><th>What it measures</th></tr></thead>
-      <tbody>
-        <tr><td><strong>TRL</strong></td><td>Technology Readiness Level</td><td>Technology maturity</td></tr>
-        <tr><td><strong>SRL</strong></td><td>Societal Readiness Level</td><td>Social acceptance &amp; adoption</td></tr>
-        <tr><td><strong>ORL</strong></td><td>Organisational Readiness Level</td><td>Institutional capacity</td></tr>
-        <tr><td><strong>LRL</strong></td><td>Legislative Readiness Level</td><td>Regulatory alignment</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- SECTION 7 -->
-  <div class="section" id="s7">
-    <h2><span class="icon">🎯</span> 7. Objectives</h2>
-
-    <h3>7.1 General Objectives (3&ndash;5)</h3>
-    <p>Each starts with an <strong>infinitive verb</strong> (e.g., "Strengthen...", "Develop..."). Linked to broader EU goals. Each has a title, description, and KPI indicator.</p>
-
-    <h3>7.2 Specific Objectives (5&ndash;7)</h3>
-    <p>Follow the <strong>S.M.A.R.T.</strong> method: Specific, Measurable, Achievable, Relevant, Time-bound. Each has a measurable KPI with targets and timeframes.</p>
-
-    <div class="tip-box">
-      <div class="tip-label">💡 Example S.M.A.R.T. Indicator</div>
-      <p>"Increase the percentage of pilot school students completing the academic year from 82% to 93% by M24, verified by school records across 5 partner regions."</p>
+      <h3>4.2 Project List Actions</h3>
+      <table>
+        <thead><tr><th>Action</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Open</strong></td><td>Opens the project in the editor</td></tr>
+          <tr><td><strong>Duplicate</strong></td><td>Creates a complete copy of the project</td></tr>
+          <tr><td><strong>Delete</strong></td><td>Permanently removes the project (with confirmation dialog)</td></tr>
+          <tr><td><strong>QR Code</strong></td><td>Generates a shareable QR code for the project</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <p>Click <strong>"+ Add Objective"</strong> to add manually, or use Fill/Enhance/Regenerate for AI generation.</p>
-  </div>
+    <!-- ═══ SECTION 5 ═══ -->
+    <div class="section-card" id="s5">
+      <h2><span class="section-dot" style="background:var(--red-500)"></span> 5. Problem Analysis</h2>
+      <p>This is the <strong>foundation</strong> of your entire project. Every cause identified here must later be addressed by an activity, and every consequence must connect to an impact. Without a solid problem analysis, everything that follows is built on sand.</p>
 
-  <!-- SECTION 8 -->
-  <div class="section" id="s8">
-    <h2><span class="icon">⚙️</span> 8. Activities (Work Packages)</h2>
-    <p>This is the most complex and content-rich section of the project.</p>
+      <h3>5.1 Core Problem</h3>
+      <p>Enter a concise <strong>Title</strong> and a detailed <strong>Description</strong> with quantitative evidence. Even a few sentences are enough to start &mdash; AI will expand and enrich it with citations from real sources (Eurostat, OECD, European Commission, etc.).</p>
 
-    <h3>8.1 Work Package Structure</h3>
-    <p>AI generates <strong>6&ndash;10 Work Packages</strong> in a mandatory order:</p>
-    <table>
-      <thead><tr><th>Position</th><th>WP Type</th><th>Duration</th></tr></thead>
-      <tbody>
-        <tr><td><strong>WP1</strong></td><td>Foundational / Analytical</td><td>Specific phase</td></tr>
-        <tr><td><strong>WP2&ndash;WP(N-2)</strong></td><td>Content / Thematic</td><td>Sequential phases</td></tr>
-        <tr><td><strong>WP(N-1)</strong></td><td>Dissemination, Communication &amp; Exploitation</td><td>Full project duration</td></tr>
-        <tr><td><strong>WP(N)</strong></td><td>Project Management &amp; Coordination</td><td>Full project duration</td></tr>
-      </tbody>
-    </table>
+      <h3>5.2 Causes (minimum 4)</h3>
+      <p>Click <strong>"+ Add Cause"</strong> to add manually, or let AI generate them. Causes should be ordered from root/structural causes first to proximate causes second. Each cause gets a title and a 3&ndash;5 sentence description with evidence-based citations.</p>
 
-    <h3>8.2 Each Work Package Contains</h3>
-    <p><strong>Tasks (2&ndash;5)</strong> with title, description, start/end dates, and dependencies. <strong>Milestones (1&ndash;2)</strong> marking completion checkpoints. <strong>Deliverables (1&ndash;3)</strong> with title, description, and binary verifiable indicator (Lump Sum compliant).</p>
+      <h3>5.3 Consequences (minimum 4)</h3>
+      <p>Click <strong>"+ Add Consequence"</strong> or let AI generate them. Consequences should show the escalation chain: local impact &rarr; regional impact &rarr; national impact &rarr; EU-level policy impact.</p>
 
-    <h3>8.3 Two-Phase AI Generation</h3>
-    <p>Activities generation uses a special approach:</p>
-    <ol class="step-list">
-      <li data-step="1"><strong>Phase 1 &mdash; Scaffold:</strong> AI generates WP titles and date ranges</li>
-      <li data-step="2"><strong>Phase 2 &mdash; Detail:</strong> AI generates each WP individually with full content</li>
-    </ol>
-    <p>A progress indicator shows which WP is currently being generated. This process takes <strong>1&ndash;3 minutes</strong> for 6&ndash;10 WPs.</p>
+      <h3>5.4 AI Generation Modes</h3>
+      <p>At the top of each section, you will find three generation buttons:</p>
 
-    <h3>8.4 Editing Activities</h3>
-    <p>Click on any WP to expand/collapse it. Edit tasks, milestones, and deliverables inline. Add or remove items with the + and trash buttons. Dates can be changed and the system recalculates dependencies.</p>
-  </div>
-
-  <!-- SECTION 9 -->
-  <div class="section" id="s9">
-    <h2><span class="icon">📊</span> 9. Project Management</h2>
-
-    <h3>9.1 Management Description</h3>
-    <p>A comprehensive narrative (500+ words) covering governance structure, decision-making, quality assurance (including Gender Equality Plans), risk management, communication, conflict resolution, and data management.</p>
-
-    <h3>9.2 Management Structure</h3>
-    <p>Short labels for the organigram chart:</p>
-    <table>
-      <thead><tr><th>Role</th><th>EU Abbreviation</th><th>Example Label</th></tr></thead>
-      <tbody>
-        <tr><td>Coordinator</td><td>PK</td><td>"Project Coordinator (PK)"</td></tr>
-        <tr><td>Steering Committee</td><td>UO</td><td>"Steering Committee (UO)"</td></tr>
-        <tr><td>Advisory Board</td><td>SO</td><td>"Advisory Board (SO)"</td></tr>
-        <tr><td>WP Leaders</td><td>VDS</td><td>"WP Leaders (VDS)"</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- SECTION 10 -->
-  <div class="section" id="s10">
-    <h2><span class="icon">⚠️</span> 10. Risk Register</h2>
-    <p>AI generates <strong>8&ndash;12 risks</strong> across four categories:</p>
-    <table>
-      <thead><tr><th>Category</th><th>Examples</th></tr></thead>
-      <tbody>
-        <tr><td><span class="badge badge-blue">Technical</span></td><td>Technology failures, integration issues</td></tr>
-        <tr><td><span class="badge badge-green">Social</span></td><td>Stakeholder resistance, low engagement</td></tr>
-        <tr><td><span class="badge badge-yellow">Economic</span></td><td>Budget overruns, market changes</td></tr>
-        <tr><td><span class="badge badge-red">Environmental</span></td><td>Climate events, regulatory changes</td></tr>
-      </tbody>
-    </table>
-    <p>Each risk includes: ID, category, title, description, likelihood (low/medium/high), impact (low/medium/high), and a concrete mitigation strategy.</p>
-  </div>
-
-  <!-- SECTION 11 -->
-  <div class="section" id="s11">
-    <h2><span class="icon">📈</span> 11. Expected Results &amp; KERs</h2>
-
-    <h3>11.1 Outputs (5&ndash;8)</h3>
-    <p>Direct, tangible deliverables of activities. Each has a result-oriented title, description, and binary verifiable indicator.</p>
-
-    <h3>11.2 Outcomes (4&ndash;6)</h3>
-    <p>Medium-term changes resulting from outputs. Measurable indicators with targets and methods.</p>
-
-    <h3>11.3 Impacts (3&ndash;5)</h3>
-    <p>Long-term strategic shifts linked to EU policy. Each categorised into a <strong>Key Impact Pathway</strong>:</p>
-    <table>
-      <thead><tr><th>Pathway</th><th>Focus</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Scientific</strong></td><td>Advancing knowledge, methods, standards</td></tr>
-        <tr><td><strong>Societal</strong></td><td>Addressing challenges, quality of life</td></tr>
-        <tr><td><strong>Economic</strong></td><td>Innovation, competitiveness, employment</td></tr>
-      </tbody>
-    </table>
-
-    <h3>11.4 Key Exploitable Results &mdash; KERs (4&ndash;6)</h3>
-    <p>Assets carrying value beyond the project. Each exploitation strategy covers <strong>3 sustainability pillars</strong>: Financial, Institutional, and Political/Regulatory sustainability.</p>
-
-    <div class="tip-box">
-      <div class="tip-label">💡 Composite Generation</div>
-      <p>Clicking Regenerate on Expected Results generates Outputs, Outcomes, Impacts, and Risks together, ensuring consistency across all result levels.</p>
-    </div>
-  </div>
-
-  <!-- SECTION 12 -->
-  <div class="section" id="s12">
-    <h2><span class="icon">🤝</span> 12. Partnership</h2>
-
-    <h3>12.1 Partner Fields</h3>
-    <table>
-      <thead><tr><th>Field</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Code</strong></td><td>CO (coordinator), P2, P3, etc.</td></tr>
-        <tr><td><strong>Name</strong></td><td>Organisation TYPE description (not real names)</td></tr>
-        <tr><td><strong>Partner Type</strong></td><td>faculty, researchInstitute, sme, publicAgency, ngo, etc.</td></tr>
-        <tr><td><strong>Expertise</strong></td><td>2&ndash;4 sentences linking to specific WPs</td></tr>
-        <tr><td><strong>PM Rate</strong></td><td>Person-month cost rate in EUR (2,500&ndash;7,000)</td></tr>
-      </tbody>
-    </table>
-
-    <h3>12.2 AI Generation</h3>
-    <p>Click <strong>Regenerate</strong> to create a balanced consortium covering all WP competences, with a mix of academic, industry, public sector, and civil society partners.</p>
-  </div>
-
-  <!-- SECTION 13 -->
-  <div class="section" id="s13">
-    <h2><span class="icon">💰</span> 13. Finance</h2>
-
-    <h3>13.1 AI-Generated Allocations</h3>
-    <p>Click <strong>"Generate Partner Allocations with AI"</strong> to automatically allocate partners to tasks with realistic hours, person-months, and costs.</p>
-
-    <h3>13.2 EU Budget Rules (Applied Automatically)</h3>
-    <table>
-      <thead><tr><th>Total Project Budget</th><th>Max % for PM WP</th></tr></thead>
-      <tbody>
-        <tr><td>up to 500,000 EUR</td><td>15%</td></tr>
-        <tr><td>500,001 &ndash; 1,000,000 EUR</td><td>10%</td></tr>
-        <tr><td>1,000,001 &ndash; 3,000,000 EUR</td><td>10%</td></tr>
-        <tr><td>3,000,001 &ndash; 5,000,000 EUR</td><td>7%</td></tr>
-        <tr><td>5,000,001 &ndash; 10,000,000 EUR</td><td>7%</td></tr>
-        <tr><td>over 10,000,000 EUR</td><td>5%</td></tr>
-      </tbody>
-    </table>
-    <p>The Dissemination WP receives approximately <strong>15%</strong> of total budget (all project sizes).</p>
-
-    <h3>13.3 Budget Tables</h3>
-    <p>After allocation, you will see per-WP tables, per-Partner tables, direct vs indirect cost breakdowns, and total project budget summary. All values can be manually adjusted.</p>
-  </div>
-
-  <!-- SECTION 14 -->
-  <div class="section" id="s14">
-    <h2><span class="icon">📊</span> 14. Dashboard Panel</h2>
-    <p>The right-side Dashboard provides a visual overview of your project with auto-generated charts:</p>
-    <table>
-      <thead><tr><th>Chart</th><th>What it shows</th></tr></thead>
-      <tbody>
-        <tr><td>Project Completion</td><td>Percentage of sections filled</td></tr>
-        <tr><td>Problem Tree</td><td>Causes &rarr; Core Problem &rarr; Consequences</td></tr>
-        <tr><td>Objectives Hierarchy</td><td>General &rarr; Specific objectives</td></tr>
-        <tr><td>Partner Distribution</td><td>Donut chart of partner types</td></tr>
-        <tr><td>Budget Overview</td><td>Direct vs Indirect costs</td></tr>
-        <tr><td>Budget per WP</td><td>Bar chart of costs per work package</td></tr>
-        <tr><td>Budget per Partner</td><td>Bar chart of costs per partner</td></tr>
-        <tr><td>Person-Months</td><td>PM distribution across partners</td></tr>
-        <tr><td>Hours per WP</td><td>Working hours per work package</td></tr>
-      </tbody>
-    </table>
-    <p>Dashboard cards can be <strong>reordered by drag-and-drop</strong>.</p>
-  </div>
-
-  <!-- SECTION 15 -->
-  <div class="section" id="s15">
-    <h2><span class="icon">📅</span> 15. Gantt Chart, PERT Chart &amp; Organigram</h2>
-
-    <h3>15.1 Gantt Chart</h3>
-    <p>Visual timeline of all work packages and tasks. Shows task durations as horizontal bars, milestones as diamonds, and dependencies as arrows. Colour-coded by work package. Scroll horizontally for the full project timeline.</p>
-
-    <h3>15.2 PERT Chart</h3>
-    <p>Network diagram showing task dependencies. Each node represents a task with its duration. Arrows show the dependency flow. Critical path is highlighted. Useful for identifying bottlenecks.</p>
-
-    <h3>15.3 Organigram</h3>
-    <p>Organisational chart showing the management structure: Coordinator &rarr; Steering Committee &rarr; Advisory Board &rarr; WP Leaders. Based on labels from the Project Management section.</p>
-  </div>
-
-  <!-- SECTION 16 -->
-  <div class="section" id="s16">
-    <h2><span class="icon">📄</span> 16. Export &amp; Print</h2>
-
-    <h3>16.1 DOCX Export</h3>
-    <ol class="step-list">
-      <li data-step="1">Click the <strong>Export / Download</strong> button in the top bar</li>
-      <li data-step="2">Select <strong>DOCX format</strong></li>
-      <li data-step="3">A professional Word document is generated with all chapters, tables, and structured content</li>
-      <li data-step="4">The file downloads to your computer</li>
-    </ol>
-
-    <h3>16.2 Print</h3>
-    <p>Use <strong>Ctrl+P</strong> (or Cmd+P on Mac) to access the print-optimized layout. Adjust settings and print.</p>
-  </div>
-
-  <!-- SECTION 17 -->
-  <div class="section" id="s17">
-    <h2><span class="icon">🔧</span> 17. Administration Panel</h2>
-    <p>Available to <strong>organisation administrators</strong> only.</p>
-
-    <h3>17.1 Features</h3>
-    <table>
-      <thead><tr><th>Feature</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td><strong>User Management</strong></td><td>View and manage organisation users</td></tr>
-        <tr><td><strong>Knowledge Base</strong></td><td>Upload reference documents (PDFs, Word) that AI uses as context</td></tr>
-        <tr><td><strong>AI Instructions Override</strong></td><td>Customize AI generation rules per section</td></tr>
-        <tr><td><strong>Global Instructions</strong></td><td>Organisation-wide generation preferences</td></tr>
-        <tr><td><strong>2FA Management</strong></td><td>Enable Two-Factor Authentication</td></tr>
-      </tbody>
-    </table>
-
-    <h3>17.2 Knowledge Base</h3>
-    <ol class="step-list">
-      <li data-step="1">Go to Admin Panel &rarr; <strong>Knowledge Base</strong></li>
-      <li data-step="2">Click <strong>"Upload Document"</strong></li>
-      <li data-step="3">Select a PDF or Word file (e.g., call text, programme guide)</li>
-      <li data-step="4">The AI will <strong>automatically consider</strong> these documents when generating content</li>
-    </ol>
-  </div>
-
-  <!-- SECTION 18 -->
-  <div class="section" id="s18">
-    <h2><span class="icon">💡</span> 18. Tips &amp; Troubleshooting</h2>
-
-    <h3>18.1 Recommended Workflow</h3>
-    <div class="workflow-steps">
-      <div class="workflow-step">
-        <div class="step-num">1</div>
-        <div class="step-content">
-          <h4>Problem Analysis</h4>
-          <p>Write core problem &rarr; Regenerate &rarr; Review &rarr; Enhance</p>
+      <div class="mode-cards">
+        <div class="mode-card">
+          <div class="mode-icon">&#128221;</div>
+          <h4>Fill</h4>
+          <p>Fills only empty fields. Keeps your existing content untouched.</p>
+        </div>
+        <div class="mode-card">
+          <div class="mode-icon">&#10024;</div>
+          <h4>Enhance</h4>
+          <p>Deepens existing content. Adds citations, EU terminology, and evidence.</p>
+        </div>
+        <div class="mode-card">
+          <div class="mode-icon">&#128260;</div>
+          <h4>Regenerate</h4>
+          <p>Creates completely new content from scratch. Replaces existing data.</p>
         </div>
       </div>
-      <div class="workflow-step">
-        <div class="step-num">2</div>
-        <div class="step-content">
-          <h4>Project Idea</h4>
-          <p>Regenerate to get title, acronym, state of the art, solution</p>
-        </div>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Recommended Workflow</div>
+        <p>Write your core problem title and a few sentences of description manually. Then click <strong>Regenerate</strong> to let AI generate the full analysis with causes, consequences, and evidence. Review and edit the output, then use <strong>Enhance</strong> to further deepen the content with additional citations.</p>
       </div>
-      <div class="workflow-step">
-        <div class="step-num">3</div>
-        <div class="step-content">
-          <h4>Objectives</h4>
-          <p>Generate general and specific objectives with KPIs</p>
-        </div>
+
+      <h3>5.5 Inline Visualizations</h3>
+      <p>After generation, a <strong>"Generate visualizations"</strong> button may appear below descriptions containing empirical data. Click it to create charts (bar charts, gauges, donuts) that visualize statistics mentioned in the text. These are useful for enriching your proposal and for the Dashboard overview.</p>
+    </div>
+
+    <!-- ═══ SECTION 6 ═══ -->
+    <div class="section-card" id="s6">
+      <h2><span class="section-dot" style="background:var(--orange-500)"></span> 6. Project Idea</h2>
+      <p>This chapter translates the problem analysis into a proposed intervention. It contains multiple sub-sections, each accessible from the sidebar or by scrolling:</p>
+
+      <h3>6.1 Project Title &amp; Acronym</h3>
+      <p><strong>Title:</strong> A concise noun phrase (30&ndash;200 characters). Must NOT contain the acronym. Must NOT be a full sentence with a verb. Think of it as a project brand &mdash; concise, memorable, professional.</p>
+      <p><strong>Acronym:</strong> 3&ndash;8 uppercase letters derived from the title keywords (e.g., GREENTRANS, DIGI-CRAFT, ALPSUST). Must be pronounceable or a recognisable abbreviation.</p>
+
+      <h3>6.2 Main Aim</h3>
+      <p>One comprehensive sentence starting with an infinitive verb (e.g., "To develop a cross-border digital platform that strengthens educational resilience..."). This captures the project's core purpose in a single powerful statement.</p>
+
+      <h3>6.3 State of the Art</h3>
+      <p>AI generates a thorough analysis referencing at least 3 real existing EU projects and studies, explicitly describing how your project capitalises on past results and avoids duplication (synergies and capitalisation &mdash; mandatory for EU proposals).</p>
+
+      <h3>6.4 Proposed Solution</h3>
+      <p>A detailed description of your proposed intervention. AI generates an introductory overview paragraph (5&ndash;8 sentences), followed by a phase-by-phase breakdown, and includes a mandatory DNSH (Do No Significant Harm) compliance statement confirming the project is screened against all six environmental objectives.</p>
+
+      <h3>6.5 EU Policies</h3>
+      <p>At least 3 relevant EU policies with specific alignment descriptions. Click <strong>"+ Add Policy"</strong> to add manually, or let AI generate them with real, verifiable policy references.</p>
+
+      <h3>6.6 Readiness Levels</h3>
+      <p>Four readiness assessments, each with a numerical level (1&ndash;9) and a project-specific justification:</p>
+      <table>
+        <thead><tr><th>Level</th><th>Full Name</th><th>What it measures</th></tr></thead>
+        <tbody>
+          <tr><td><strong>TRL</strong></td><td>Technology Readiness Level</td><td>Technology maturity</td></tr>
+          <tr><td><strong>SRL</strong></td><td>Societal Readiness Level</td><td>Social acceptance &amp; adoption readiness</td></tr>
+          <tr><td><strong>ORL</strong></td><td>Organisational Readiness Level</td><td>Institutional capacity for change</td></tr>
+          <tr><td><strong>LRL</strong></td><td>Legislative Readiness Level</td><td>Regulatory and legal alignment</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══ SECTION 7 ═══ -->
+    <div class="section-card" id="s7">
+      <h2><span class="section-dot" style="background:var(--amber-500)"></span> 7. Objectives</h2>
+
+      <h3>7.1 General Objectives (3&ndash;5)</h3>
+      <p>Each starts with an <strong>infinitive verb</strong> (e.g., "Strengthen educational resilience...", "Develop cross-border digital competences..."). These connect the project to broader EU goals. Each has a title, description (3&ndash;5 sentences), and a KPI indicator field.</p>
+
+      <h3>7.2 Specific Objectives (5&ndash;7)</h3>
+      <p>Follow the <strong>S.M.A.R.T.</strong> method: Specific, Measurable, Achievable, Relevant, Time-bound. Each has a measurable KPI indicator with quantitative targets, baseline references, and timeframes.</p>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Example S.M.A.R.T. Indicator</div>
+        <p>"Increase the percentage of pilot school students completing the academic year from 82% to 93% by M24, verified by school administration records across 5 partner regions."</p>
       </div>
-      <div class="workflow-step">
-        <div class="step-num">4</div>
-        <div class="step-content">
-          <h4>Activities</h4>
-          <p>Generate work packages (1&ndash;3 min for 6&ndash;10 WPs)</p>
-        </div>
-      </div>
-      <div class="workflow-step">
-        <div class="step-num">5</div>
-        <div class="step-content">
-          <h4>Results &amp; KERs</h4>
-          <p>Use composite generation for consistency</p>
-        </div>
-      </div>
-      <div class="workflow-step">
-        <div class="step-num">6</div>
-        <div class="step-content">
-          <h4>Partnership &amp; Finance</h4>
-          <p>Generate consortium, then AI-allocate budget</p>
-        </div>
-      </div>
-      <div class="workflow-step">
-        <div class="step-num">7</div>
-        <div class="step-content">
-          <h4>Review &amp; Export</h4>
-          <p>Review everything, enhance weak sections, export to DOCX</p>
-        </div>
+
+      <p>Click <strong>"+ Add Objective"</strong> to add manually, or use the Fill/Enhance/Regenerate buttons for AI generation. Every indicator field must be filled &mdash; the AI enforces this as a quality gate.</p>
+    </div>
+
+    <!-- ═══ SECTION 8 ═══ -->
+    <div class="section-card" id="s8">
+      <h2><span class="section-dot" style="background:var(--lime-500)"></span> 8. Activities (Work Packages)</h2>
+      <p>This is the most complex and content-rich section of the project. AI generates the full work plan in a two-phase approach.</p>
+
+      <h3>8.1 Work Package Structure</h3>
+      <p>AI generates <strong>6&ndash;10 Work Packages</strong> in a mandatory order:</p>
+      <table>
+        <thead><tr><th>Position</th><th>WP Type</th><th>Duration</th></tr></thead>
+        <tbody>
+          <tr><td><strong>WP1</strong></td><td>Foundational / Analytical (incl. Capitalisation &amp; Synergies task)</td><td>Specific phase</td></tr>
+          <tr><td><strong>WP2&ndash;WP(N-2)</strong></td><td>Content / Thematic WPs in logical sequence</td><td>Sequential phases with overlaps</td></tr>
+          <tr><td><strong>WP(N-1)</strong></td><td>Dissemination, Communication &amp; Exploitation</td><td>Full project duration (M1&ndash;end)</td></tr>
+          <tr><td><strong>WP(N)</strong></td><td>Project Management &amp; Coordination</td><td>Full project duration (M1&ndash;end)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8.2 Each Work Package Contains</h3>
+      <p><strong>Tasks (2&ndash;5)</strong> &mdash; each with title, description, start/end dates, and task dependencies (FS, SS, FF, SF types). <strong>Milestones (1&ndash;2)</strong> &mdash; completion checkpoints with specific dates. <strong>Deliverables (1&ndash;3)</strong> &mdash; with title, description, and a binary verifiable indicator that is Lump Sum compliant.</p>
+
+      <h3>8.3 Two-Phase AI Generation</h3>
+      <ol class="step-list">
+        <li data-step="1"><strong>Phase 1 &mdash; Scaffold:</strong> AI generates WP titles and date ranges for the entire project</li>
+        <li data-step="2"><strong>Phase 2 &mdash; Detail:</strong> AI generates each WP individually with full tasks, milestones, deliverables, and cross-WP dependencies</li>
+      </ol>
+      <p>A progress indicator shows which WP is currently being generated. This process takes <strong>1&ndash;3 minutes</strong> for 6&ndash;10 WPs &mdash; this is normal.</p>
+
+      <h3>8.4 Editing Activities</h3>
+      <p>Click on any WP to expand or collapse it. Edit tasks, milestones, and deliverables inline. Add or remove items with the + and trash buttons. Dates can be changed and the system automatically recalculates dependencies and enforces project timeframe boundaries.</p>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Temporal Integrity</div>
+        <p>Euro-Office automatically enforces that NO task, milestone, or deliverable falls outside the project start/end dates. If AI generates dates outside the envelope, they are automatically corrected.</p>
       </div>
     </div>
 
-    <h3>18.2 Common Issues</h3>
-    <table>
-      <thead><tr><th>Issue</th><th>Solution</th></tr></thead>
-      <tbody>
-        <tr><td>"Missing API key"</td><td>Go to Settings (⚙️) and enter your API key</td></tr>
-        <tr><td>"Insufficient credits"</td><td>Add credits to OpenRouter, or switch to Gemini (free)</td></tr>
-        <tr><td>"Rate limit" error</td><td>Wait 1&ndash;2 minutes and try again</td></tr>
-        <tr><td>Generation takes long</td><td>Activities take 1&ndash;3 min &mdash; this is normal</td></tr>
-        <tr><td>Charts not appearing</td><td>Click "Generate visualizations" button manually</td></tr>
-        <tr><td>Cannot login</td><td>Check email for confirmation link</td></tr>
-      </tbody>
-    </table>
+    <!-- ═══ SECTION 9 ═══ -->
+    <div class="section-card" id="s9">
+      <h2><span class="section-dot" style="background:var(--lime-500)"></span> 9. Project Management</h2>
 
-    <h3>18.3 Supported Browsers</h3>
-    <p>Google Chrome (recommended), Mozilla Firefox, Microsoft Edge, Safari.</p>
+      <h3>9.1 Management Description</h3>
+      <p>AI generates a comprehensive narrative (500+ words) structured in clear paragraphs covering: governance structure with EU role abbreviations, decision-making mechanisms, quality assurance (including Gender Equality Plans and AI Act/GDPR compliance), risk management approach, internal communication tools and schedules, conflict resolution procedures, and data management with FAIR principles (referencing the mandatory DMP deliverable due by M6).</p>
 
-    <div class="success-box">
-      <div class="tip-label">✅ Data Safety</div>
-      <p>All project data is stored securely in the cloud. Your projects are accessible from any device after login and saved automatically as you work.</p>
+      <h3>9.2 Management Structure (Organigram Labels)</h3>
+      <p>Short labels that appear in the visual Organigram chart:</p>
+      <table>
+        <thead><tr><th>Role</th><th>EU Abbreviation</th><th>Example Label</th></tr></thead>
+        <tbody>
+          <tr><td>Coordinator</td><td>PK</td><td>"Project Coordinator (PK)"</td></tr>
+          <tr><td>Steering Committee</td><td>UO</td><td>"Steering Committee (UO)"</td></tr>
+          <tr><td>Advisory Board</td><td>SO</td><td>"Advisory Board (SO)"</td></tr>
+          <tr><td>WP Leaders</td><td>VDS</td><td>"WP Leaders (VDS)"</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Important</div>
+        <p>The structure fields are chart labels ONLY (max 5&ndash;8 words each). All detailed descriptions go in the main description field. Do not put long text in the structure fields.</p>
+      </div>
     </div>
-  </div>
 
-</div>
+    <!-- ═══ SECTION 10 ═══ -->
+    <div class="section-card" id="s10">
+      <h2><span class="section-dot" style="background:var(--lime-500)"></span> 10. Risk Register</h2>
+      <p>AI generates <strong>8&ndash;12 risks</strong> across four mandatory categories:</p>
+      <table>
+        <thead><tr><th>Category</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-blue">Technical</span></td><td>Technology failures, integration issues, data quality problems</td></tr>
+          <tr><td><span class="badge badge-green">Social</span></td><td>Stakeholder resistance, low engagement, cultural barriers</td></tr>
+          <tr><td><span class="badge badge-yellow">Economic</span></td><td>Budget overruns, market changes, partner financial instability</td></tr>
+          <tr><td><span class="badge badge-red">Environmental</span></td><td>Climate events, regulatory changes, environmental compliance</td></tr>
+        </tbody>
+      </table>
 
-<div class="footer">
-  <p><strong>Euro-Office</strong> &mdash; EU Intervention Logic AI Assistant</p>
-  <p>&copy; 2026 INFINITA d.o.o. &bull; <a href="https://euro-office.net">euro-office.net</a> &bull; <a href="mailto:beno.stern@infinita.si">beno.stern@infinita.si</a></p>
-</div>
+      <p>Each risk includes: auto-generated ID (RISK1, RISK2...), category, title (noun phrase), description (2&ndash;4 sentences), likelihood (low/medium/high), impact (low/medium/high), and a concrete mitigation strategy with responsible parties and backup plans.</p>
+
+      <div class="warning-box">
+        <div class="tip-label">&#9888; AI Act / GDPR</div>
+        <p>If your project involves digital or AI components, the risk register will automatically include an "Ethical and Regulatory Compliance" risk covering AI Act and GDPR requirements.</p>
+      </div>
+    </div>
+
+    <!-- ═══ SECTION 11 ═══ -->
+    <div class="section-card" id="s11">
+      <h2><span class="section-dot" style="background:var(--cyan-500)"></span> 11. Expected Results &amp; KERs</h2>
+
+      <h3>11.1 Outputs (5&ndash;8)</h3>
+      <p>Direct, tangible deliverables of activities. Each has a result-oriented noun phrase title (e.g., "Digital Competence Curriculum" not "Develop a curriculum"), a 3&ndash;5 sentence description, and a binary verifiable indicator that is Lump Sum compliant.</p>
+
+      <h3>11.2 Outcomes (4&ndash;6)</h3>
+      <p>Medium-term changes resulting from outputs. Each has a measurable change indicator with quantitative targets and measurement methods. Clearly distinguishes Target Groups (engaged during project) from End Users (adopting results post-project).</p>
+
+      <h3>11.3 Impacts (3&ndash;5)</h3>
+      <p>Long-term strategic shifts linked to EU policy objectives. Each categorised into a <strong>Key Impact Pathway (KIP)</strong>:</p>
+      <table>
+        <thead><tr><th>Pathway</th><th>Focus Area</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-blue">Scientific</span></td><td>Advancing knowledge, methods, standards</td></tr>
+          <tr><td><span class="badge badge-green">Societal</span></td><td>Addressing societal challenges, improving quality of life</td></tr>
+          <tr><td><span class="badge badge-yellow">Economic</span></td><td>Innovation, competitiveness, growth, employment</td></tr>
+        </tbody>
+      </table>
+
+      <h3>11.4 Key Exploitable Results &mdash; KERs (4&ndash;6)</h3>
+      <p>Specific assets carrying lasting value beyond the project lifetime. Each has a specific product/asset name as title and an exploitation strategy covering the <strong>3 sustainability pillars</strong>:</p>
+      <table>
+        <thead><tr><th>Pillar</th><th>Question it answers</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Financial</strong></td><td>How will it be funded/maintained post-project?</td></tr>
+          <tr><td><strong>Institutional</strong></td><td>Who takes ownership and operational responsibility?</td></tr>
+          <tr><td><strong>Political/Regulatory</strong></td><td>How does it integrate into policy frameworks?</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Composite Generation</div>
+        <p>Clicking <strong>Regenerate</strong> on the Expected Results section generates Outputs, Outcomes, Impacts, and Risks together in one operation, ensuring cross-reference consistency across all result levels.</p>
+      </div>
+    </div>
+
+    <!-- ═══ SECTION 12 ═══ -->
+    <div class="section-card" id="s12">
+      <h2><span class="section-dot" style="background:#8B5CF6"></span> 12. Partnership (Consortium)</h2>
+
+      <h3>12.1 Partner Fields</h3>
+      <table>
+        <thead><tr><th>Field</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Code</strong></td><td>CO (coordinator), P2, P3, P4, etc.</td></tr>
+          <tr><td><strong>Name</strong></td><td>Organisation TYPE description &mdash; never real names (e.g., "Research University specialising in Environmental Science")</td></tr>
+          <tr><td><strong>Partner Type</strong></td><td>Dropdown: faculty, researchInstitute, sme, publicAgency, internationalAssociation, ministry, ngo, largeEnterprise, other</td></tr>
+          <tr><td><strong>Expertise</strong></td><td>2&ndash;4 sentences describing what this partner type brings and which WPs they contribute to</td></tr>
+          <tr><td><strong>PM Rate</strong></td><td>Person-month cost rate in EUR (realistic range: 2,500&ndash;7,000 depending on type)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>12.2 AI Generation</h3>
+      <p>Click <strong>Regenerate</strong> to create a balanced consortium that covers all WP competences, includes a mix of academic, industry, public sector, and civil society partners, assigns realistic PM rates per partner type, and designates the first partner as Coordinator (CO).</p>
+
+      <h3>12.3 Manual Editing</h3>
+      <p>Click <strong>"+ Add Partner"</strong> to add new partners. Edit any field inline. Delete partners with the trash icon. The consortium should be balanced &mdash; not all universities, not all SMEs.</p>
+    </div>
+    <!-- ═══ SECTION 13 ═══ -->
+    <div class="section-card" id="s13">
+      <h2><span class="section-dot" style="background:#EC4899"></span> 13. Finance (Budget Allocation)</h2>
+
+      <h3>13.1 Funding Model</h3>
+      <p>At the top of the Finance section, you will see the selected funding model (Centralized or Decentralized). This was chosen when the project was created and determines how the budget is structured.</p>
+
+      <h3>13.2 AI-Generated Partner Allocations</h3>
+      <p>Click <strong>"Generate Partner Allocations with AI"</strong> to automatically allocate partners to tasks with realistic hours, person-months (1 PM = 143 hours, EU standard), and labour costs based on each partner's PM rate.</p>
+
+      <h3>13.3 EU Budget Rules (Applied Automatically by AI)</h3>
+      <p>The AI respects the following EU budget distribution rules when generating allocations:</p>
+
+      <table>
+        <thead><tr><th>Total Project Budget</th><th>Max % for Project Management WP</th></tr></thead>
+        <tbody>
+          <tr><td>up to 500,000 EUR</td><td>15%</td></tr>
+          <tr><td>500,001 &ndash; 1,000,000 EUR</td><td>10%</td></tr>
+          <tr><td>1,000,001 &ndash; 3,000,000 EUR</td><td>10%</td></tr>
+          <tr><td>3,000,001 &ndash; 5,000,000 EUR</td><td>7%</td></tr>
+          <tr><td>5,000,001 &ndash; 10,000,000 EUR</td><td>7%</td></tr>
+          <tr><td>over 10,000,000 EUR</td><td>5%</td></tr>
+        </tbody>
+      </table>
+
+      <p>The Dissemination, Communication &amp; Exploitation WP receives approximately <strong>15%</strong> of the total project budget (fixed for all project sizes). The remaining budget is distributed proportionally across content/thematic WPs.</p>
+
+      <h3>13.4 Budget Tables</h3>
+      <p>After allocation, you will see comprehensive budget tables:</p>
+      <table>
+        <thead><tr><th>View</th><th>What it shows</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Per Work Package</strong></td><td>Total costs broken down by WP</td></tr>
+          <tr><td><strong>Per Partner</strong></td><td>Total costs broken down by partner</td></tr>
+          <tr><td><strong>Direct vs Indirect</strong></td><td>Cost type breakdown</td></tr>
+          <tr><td><strong>Summary</strong></td><td>Total project budget with all aggregations</td></tr>
+        </tbody>
+      </table>
+
+      <p>All values can be <strong>manually adjusted</strong> after AI generation &mdash; change hours, add or remove cost categories, and modify amounts as needed.</p>
+    </div>
+
+    <!-- ═══ SECTION 14 ═══ -->
+    <div class="section-card" id="s14">
+      <h2><span class="section-dot" style="background:#14B8A6"></span> 14. Dashboard Panel</h2>
+      <p>The right-side Dashboard panel provides a real-time visual overview of your project. It updates automatically as you add and generate content.</p>
+
+      <h3>14.1 Opening the Dashboard</h3>
+      <p>Click the <strong>Dashboard icon</strong> on the right side of the screen. The panel slides in from the right. Click again to collapse it.</p>
+
+      <h3>14.2 Dashboard Charts</h3>
+      <p>The Dashboard displays auto-generated charts based on your project data:</p>
+      <table>
+        <thead><tr><th>Chart</th><th>What it shows</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Project Completion</strong></td><td>Percentage of sections filled with content</td></tr>
+          <tr><td><strong>Problem Tree</strong></td><td>Visual: Causes &rarr; Core Problem &rarr; Consequences</td></tr>
+          <tr><td><strong>Objectives Hierarchy</strong></td><td>General &rarr; Specific objectives structure</td></tr>
+          <tr><td><strong>Partner Count</strong></td><td>Number of partners with consortium name</td></tr>
+          <tr><td><strong>Partner Distribution</strong></td><td>Donut chart of partner types</td></tr>
+          <tr><td><strong>Budget Overview</strong></td><td>Direct vs Indirect costs donut</td></tr>
+          <tr><td><strong>Budget per WP</strong></td><td>Bar chart of total costs per work package</td></tr>
+          <tr><td><strong>Budget per Partner</strong></td><td>Bar chart of total costs per partner</td></tr>
+          <tr><td><strong>Person-Months</strong></td><td>PM distribution across partners</td></tr>
+          <tr><td><strong>Hours per WP</strong></td><td>Working hours allocated per work package</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Drag and Drop</div>
+        <p>Dashboard statistics cards can be <strong>reordered by drag-and-drop</strong> &mdash; arrange them in your preferred order for quick overview.</p>
+      </div>
+    </div>
+
+    <!-- ═══ SECTION 15 ═══ -->
+    <div class="section-card" id="s15">
+      <h2><span class="section-dot" style="background:#0EA5E9"></span> 15. Gantt Chart, PERT Chart &amp; Organigram</h2>
+
+      <h3>15.1 Gantt Chart</h3>
+      <p>A visual timeline of all work packages and tasks. Task durations are shown as horizontal bars, milestones as diamonds, and dependencies as connecting arrows. The chart is colour-coded by work package. Scroll horizontally to view the full project timeline. This chart updates automatically when you change task dates or add new activities.</p>
+
+      <h3>15.2 PERT Chart</h3>
+      <p>A network diagram showing task dependencies and the critical path. Each node represents a task with its duration. Arrows show the dependency flow between tasks (FS, SS, FF, SF). The critical path is highlighted, helping you identify bottlenecks and parallel workstreams. Particularly useful for project planning and resource optimization.</p>
+
+      <h3>15.3 Organigram</h3>
+      <p>An organisational chart displaying the project management structure: Coordinator &rarr; Steering Committee &rarr; Advisory Board &rarr; WP Leaders. The chart is generated from the labels defined in the Project Management section (Section 9). This is a standard visual required in most EU project proposals.</p>
+    </div>
+
+    <!-- ═══ SECTION 16 ═══ -->
+    <div class="section-card" id="s16">
+      <h2><span class="section-dot" style="background:#64748B"></span> 16. Export &amp; Print</h2>
+
+      <h3>16.1 DOCX Export</h3>
+      <ol class="step-list">
+        <li data-step="1">Click the <strong>Export / Download</strong> button in the top toolbar</li>
+        <li data-step="2">Select <strong>DOCX format</strong></li>
+        <li data-step="3">A professional Word document is generated containing all chapters, formatted tables, structured headings, and properly ordered content</li>
+        <li data-step="4">The file downloads automatically to your computer</li>
+      </ol>
+
+      <h3>16.2 Print Layout</h3>
+      <p>Use <strong>Ctrl+P</strong> (or Cmd+P on Mac) to access the print-optimized layout. The sidebar and navigation elements are automatically hidden. All content is formatted for clean A4 printing with proper page breaks between sections.</p>
+
+      <h3>16.3 Project Summary</h3>
+      <p>Click the <strong>Summary</strong> button to generate an AI-powered executive summary (max 800 words) covering: Project Overview, Problem &amp; Need, Solution &amp; Approach, Key Results &amp; Impact, and EU Added Value. The summary follows the intervention logic golden thread and can be used as a project abstract.</p>
+    </div>
+
+    <!-- ═══ SECTION 17 ═══ -->
+    <div class="section-card" id="s17">
+      <h2><span class="section-dot" style="background:#F97316"></span> 17. Administration Panel</h2>
+      <p>The Admin Panel is available to <strong>organisation administrators</strong> only. If you don't see it in your navigation, contact your organisation admin.</p>
+
+      <h3>17.1 Admin Features</h3>
+      <table>
+        <thead><tr><th>Feature</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>User Management</strong></td><td>View and manage users within your organisation</td></tr>
+          <tr><td><strong>Knowledge Base</strong></td><td>Upload reference documents (PDFs, Word files) that AI uses as mandatory context</td></tr>
+          <tr><td><strong>AI Instructions Override</strong></td><td>Customize AI generation rules for any section &mdash; quality gates, task instructions, etc.</td></tr>
+          <tr><td><strong>Global Instructions</strong></td><td>Set organisation-wide generation preferences and overrides</td></tr>
+          <tr><td><strong>2FA Management</strong></td><td>Enable and configure Two-Factor Authentication for the organisation</td></tr>
+        </tbody>
+      </table>
+
+      <h3>17.2 Knowledge Base</h3>
+      <ol class="step-list">
+        <li data-step="1">Go to Admin Panel &rarr; <strong>Knowledge Base</strong></li>
+        <li data-step="2">Click <strong>"Upload Document"</strong></li>
+        <li data-step="3">Select a PDF or Word file (e.g., call text, programme guide, previous project proposal, policy documents)</li>
+        <li data-step="4">The system extracts and stores the text content</li>
+        <li data-step="5">When any user in the organisation generates content, the AI will <strong>automatically consider</strong> these documents as authoritative reference material</li>
+      </ol>
+
+      <div class="tip-box">
+        <div class="tip-label">&#128161; Pro Tip</div>
+        <p>Upload the actual call text or programme guide for your target funding programme. The AI will align generated content with the specific requirements, terminology, and evaluation criteria of that programme.</p>
+      </div>
+
+      <h3>17.3 AI Instructions Override</h3>
+      <p>Administrators can view and override any AI rule category: quality gates per section, task instructions, global rules, academic rigor requirements, humanization rules, and more. Overrides take effect immediately for all users in the organisation. Click <strong>"Reset to defaults"</strong> to restore original rules at any time.</p>
+    </div>
+
+    <!-- ═══ SECTION 18 ═══ -->
+    <div class="section-card" id="s18">
+      <h2><span class="section-dot" style="background:#22C55E"></span> 18. Tips &amp; Troubleshooting</h2>
+
+      <h3>18.1 Recommended Workflow for a New Project</h3>
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Problem Analysis</h4>
+            <p>Write core problem title &amp; description &rarr; Regenerate &rarr; Review &amp; edit &rarr; Enhance</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Project Idea</h4>
+            <p>Regenerate to get title, acronym, state of the art, proposed solution, policies, readiness levels</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Objectives</h4>
+            <p>Generate general objectives first, then specific S.M.A.R.T. objectives with KPI indicators</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Activities</h4>
+            <p>Generate work packages (1&ndash;3 min for 6&ndash;10 WPs) &mdash; review dates and dependencies</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Project Management &amp; Risks</h4>
+            <p>Generate management narrative and risk register &mdash; review mitigation strategies</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>Expected Results &amp; KERs</h4>
+            <p>Use composite generation for consistent outputs, outcomes, impacts, and KER exploitation strategies</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <h4>Partnership</h4>
+            <p>Generate a balanced consortium covering all WP competences</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <h4>Finance</h4>
+            <p>AI-allocate partners to tasks with realistic budgets respecting EU rules</p>
+          </div>
+        </div>
+        <div class="workflow-step">
+          <div class="step-num">9</div>
+          <div class="step-content">
+            <h4>Review &amp; Export</h4>
+            <p>Review all sections, enhance weak areas, generate summary, export to DOCX</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>18.2 Common Issues &amp; Solutions</h3>
+      <table>
+        <thead><tr><th>Issue</th><th>Solution</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-red">Missing API key</span></td><td>Go to Settings and enter your API key (see Section 3)</td></tr>
+          <tr><td><span class="badge badge-yellow">Insufficient credits</span></td><td>Add credits to your OpenRouter account, or switch to Gemini (free tier)</td></tr>
+          <tr><td><span class="badge badge-yellow">Rate limit error</span></td><td>Wait 1&ndash;2 minutes and try again &mdash; you've hit the API request limit</td></tr>
+          <tr><td><span class="badge badge-blue">Generation takes long</span></td><td>Activities generation takes 1&ndash;3 min for 6&ndash;10 WPs &mdash; this is normal</td></tr>
+          <tr><td><span class="badge badge-blue">Charts not appearing</span></td><td>Click the "Generate visualizations" button manually after content generation</td></tr>
+          <tr><td><span class="badge badge-red">Cannot login</span></td><td>Check your email for the confirmation link &mdash; your account may not be activated</td></tr>
+          <tr><td><span class="badge badge-yellow">Empty fields after generation</span></td><td>Use <strong>Fill</strong> mode to fill only missing fields, or <strong>Regenerate</strong> the section</td></tr>
+        </tbody>
+      </table>
+
+      <h3>18.3 Supported Browsers</h3>
+      <p><strong>Google Chrome</strong> (recommended), Mozilla Firefox, Microsoft Edge, Safari. For best performance, use the latest version of your browser.</p>
+
+      <h3>18.4 Data Safety</h3>
+      <div class="success-box">
+        <div class="tip-label">&#10004; Your Data is Safe</div>
+        <p>All project data is stored securely in the cloud (Supabase). Your projects are accessible from any device after login and are saved automatically as you work. No manual saving required.</p>
+      </div>
+
+      <h3>18.5 Keyboard Shortcuts</h3>
+      <table>
+        <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><code>Ctrl + P</code></td><td>Print / Print-optimized layout</td></tr>
+          <tr><td><code>Tab</code></td><td>Move between form fields</td></tr>
+          <tr><td><code>Esc</code></td><td>Close modals and popups</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <div style="text-align:center; padding:40px 0 20px; color:var(--text-muted); font-size:13px;">
+      <p><strong>Euro-Office</strong> &mdash; EU Intervention Logic AI Assistant</p>
+      <p style="margin-top:6px;">&copy; 2026 INFINITA d.o.o. &bull; <a href="https://euro-office.net" style="color:var(--primary); text-decoration:none;">euro-office.net</a> &bull; <a href="mailto:beno.stern@infinita.si" style="color:var(--primary); text-decoration:none;">beno.stern@infinita.si</a></p>
+    </div>
+
+  </div><!-- /content-area -->
+</div><!-- /main-content -->
+
+<script>
+function navigateTo(el, sectionId) {
+  // Remove active from all nav items
+  document.querySelectorAll('.nav-item, .nav-sub-item').forEach(function(item) {
+    item.classList.remove('active');
+  });
+  // Add active to clicked item
+  el.classList.add('active');
+  // Scroll to section
+  var target = document.getElementById(sectionId);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  // Close mobile sidebar
+  document.querySelector('.sidebar').classList.remove('open');
+}
+
+// Highlight active nav item on scroll
+var sections = [];
+var navItems = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.section-card').forEach(function(card) {
+    sections.push(card);
+  });
+  document.querySelectorAll('.nav-item[href], .nav-sub-item[href]').forEach(function(item) {
+    var href = item.getAttribute('href');
+    if (href && href.startsWith('#')) {
+      navItems[href.substring(1)] = item;
+    }
+  });
+});
+
+var scrollTimeout;
+window.addEventListener('scroll', function() {
+  clearTimeout(scrollTimeout);
+  scrollTimeout = setTimeout(function() {
+    var scrollPos = window.scrollY + 120;
+    var currentSection = null;
+
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].offsetTop <= scrollPos) {
+        currentSection = sections[i].id;
+      }
+    }
+
+    if (currentSection && navItems[currentSection]) {
+      document.querySelectorAll('.nav-item, .nav-sub-item').forEach(function(item) {
+        item.classList.remove('active');
+      });
+      navItems[currentSection].classList.add('active');
+    }
+  }, 50);
+});
+</script>
 
 </body>
 </html>
