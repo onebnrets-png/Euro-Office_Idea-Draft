@@ -534,10 +534,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* ═══ FOOTER ═══ */}
-        <div style={{ padding: isCollapsed ? `${spacing.md} ${spacing.sm}` : spacing.lg, borderTop: `1px solid ${tc.border.light}`, flexShrink: 0 }}>
+        <div style={{ padding: isCollapsed ? spacing.md + ' ' + spacing.sm : spacing.lg, borderTop: '1px solid ' + tc.border.light, flexShrink: 0 }}>
           {!isCollapsed && (
             <button onClick={() => onOpenAdminPanel()} style={{
-              width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
+              width: '100%', textAlign: 'left', padding: spacing.sm + ' ' + spacing.lg, borderRadius: radii.lg,
               border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
               color: isSuperAdmin ? '#D97706' : isDark ? '#A5B4FC' : tc.primary[600],
               fontWeight: typography.fontWeight.medium,
@@ -549,7 +549,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
           {isCollapsed && (
             <button onClick={() => onOpenAdminPanel()} style={{
-              width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
+              width: '100%', display: 'flex', justifyContent: 'center', padding: spacing.sm + ' 0',
               borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginBottom: '2px',
             }} title={footerLabel}>
               <span style={{ fontSize: '18px' }}>{footerIcon}</span>
@@ -558,7 +558,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {!isCollapsed && (
             <button onClick={() => { toggleTheme(); }} style={{
-              width: '100%', textAlign: 'left', padding: `${spacing.sm} ${spacing.lg}`, borderRadius: radii.lg,
+              width: '100%', textAlign: 'left', padding: spacing.sm + ' ' + spacing.lg, borderRadius: radii.lg,
               border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
               color: tc.text.muted, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: '2px', fontFamily: 'inherit',
             }}>
@@ -567,12 +567,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               ) : (
                 <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
               )}
-              <span>{isDark ? (language === 'si' ? 'Svetli način' : 'Light Mode') : (language === 'si' ? 'Temni način' : 'Dark Mode')}</span>
+              <span>{isDark ? (language === 'si' ? 'Svetli nacin' : 'Light Mode') : (language === 'si' ? 'Temni nacin' : 'Dark Mode')}</span>
             </button>
           )}
           {isCollapsed && (
             <button onClick={() => { toggleTheme(); }} style={{
-              width: '100%', display: 'flex', justifyContent: 'center', padding: `${spacing.sm} 0`,
+              width: '100%', display: 'flex', justifyContent: 'center', padding: spacing.sm + ' 0',
               borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginBottom: '2px', color: tc.text.muted,
             }} title={isDark ? 'Light Mode' : 'Dark Mode'}>
               {isDark ? (
@@ -583,40 +583,67 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          <button onClick={onLogout} style={{
-            width: '100%', textAlign: isCollapsed ? 'center' : 'left',
-            padding: `${spacing.sm} ${isCollapsed ? '0' : spacing.lg}`, borderRadius: radii.lg, border: 'none',
-            background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm, color: tc.text.muted,
-            display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start',
-            gap: spacing.sm, fontFamily: 'inherit', transition: `color ${animation.duration.fast}`,
-          }}>
-            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-            {!isCollapsed && <span>{t.auth.logout}</span>}
-          </button>
+          {/* ★ v3.3: User Guide link */}
+          {!isCollapsed && (
+            <a href="/guide.html" target="_blank" rel="noopener noreferrer" style={{
+              width: '100%', textAlign: 'left', padding: spacing.sm + ' ' + spacing.lg, borderRadius: radii.lg,
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
+              color: tc.text.muted, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: '2px', fontFamily: 'inherit',
+              textDecoration: 'none',
+            }}>
+              <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+              <span>{language === 'si' ? 'Uporabniski prirocnik' : 'User Guide'}</span>
+            </a>
+          )}
+          {isCollapsed && (
+            <a href="/guide.html" target="_blank" rel="noopener noreferrer" style={{
+              width: '100%', display: 'flex', justifyContent: 'center', padding: spacing.sm + ' 0',
+              borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginBottom: '2px', color: tc.text.muted,
+              textDecoration: 'none',
+            }} title={language === 'si' ? 'Uporabniski prirocnik' : 'User Guide'}>
+              <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+            </a>
+          )}
 
           {!isCollapsed && (
-            <p style={{ fontSize: '10px', color: tc.text.muted, textAlign: 'center', marginTop: spacing.sm, opacity: 0.6 }}>© 2026 INFINITA d.o.o.</p>
+            <button onClick={onLogout} style={{
+              width: '100%', textAlign: 'left', padding: spacing.sm + ' ' + spacing.lg, borderRadius: radii.lg,
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
+              color: tc.text.muted, display: 'flex', alignItems: 'center', gap: spacing.sm, fontFamily: 'inherit',
+            }}>
+              <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              <span>{language === 'si' ? 'Odjava' : 'Logout'}</span>
+            </button>
+          )}
+          {isCollapsed && (
+            <button onClick={onLogout} style={{
+              width: '100%', display: 'flex', justifyContent: 'center', padding: spacing.sm + ' 0',
+              borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', color: tc.text.muted,
+            }} title={language === 'si' ? 'Odjava' : 'Logout'}>
+              <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+          )}
+
+          {!isCollapsed && (
+            <button onClick={() => { setIsCollapsed(true); onCollapseChange?.(true); }} style={{
+              width: '100%', textAlign: 'left', padding: spacing.sm + ' ' + spacing.lg, borderRadius: radii.lg,
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: typography.fontSize.sm,
+              color: tc.text.muted, display: 'flex', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, fontFamily: 'inherit',
+            }}>
+              <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+              <span>{language === 'si' ? 'Strni meni' : 'Collapse'}</span>
+            </button>
+          )}
+          {isCollapsed && (
+            <button onClick={() => { setIsCollapsed(false); onCollapseChange?.(false); }} style={{
+              width: '100%', display: 'flex', justifyContent: 'center', padding: spacing.sm + ' 0',
+              borderRadius: radii.lg, border: 'none', background: 'transparent', cursor: 'pointer', marginTop: spacing.sm, color: tc.text.muted,
+            }} title={language === 'si' ? 'Razsiri meni' : 'Expand'}>
+              <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+            </button>
           )}
         </div>
       </aside>
-
-      {(isDesktop || isSidebarOpen) && (
-        <button
-          onClick={() => { const next = !isCollapsed; setIsCollapsed(next); onCollapseChange?.(next); }}
-          style={{
-            position: 'fixed', top: 12, left: sidebarWidth - 12, width: 24, height: 24, borderRadius: radii.full,
-            background: tc.primary[500], border: `2px solid ${tc.surface.card}`,
-            color: tc.text.inverse, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', zIndex: zIndex.sidebar + 1, boxShadow: shadows.md,
-            transition: `left ${animation.duration.normal} ${animation.easing.default}, transform ${animation.duration.fast} ${animation.easing.default}`,
-          }}
-          title={isCollapsed ? 'Expand' : 'Collapse'}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d={isCollapsed ? "M4 2L8 6L4 10" : "M8 2L4 6L8 10"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      )}
     </>
   );
 };
