@@ -1235,8 +1235,26 @@ export const useGeneration = ({
           return;
         }
 
-        // ═══ DATA INSERTION ═══
+                // ═══ DATA INSERTION ═══
         let newData = { ...projectData };
+
+        // ★ v7.6 FIX: Unwrap AI response if wrapped in parent/field keys
+        if (subMapping && generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+          var unwrapped = generatedData;
+          var uwParent = subMapping.path[0];
+          if (unwrapped[uwParent] && typeof unwrapped[uwParent] === 'object') {
+            console.log('[executeGeneration] ★ UNWRAP: stripped parent "' + uwParent + '"');
+            unwrapped = unwrapped[uwParent];
+          }
+          if (subMapping.path.length === 2) {
+            var uwField = subMapping.path[1];
+            if (unwrapped[uwField] !== undefined) {
+              console.log('[executeGeneration] ★ UNWRAP: stripped field "' + uwField + '"');
+              unwrapped = unwrapped[uwField];
+            }
+          }
+          generatedData = unwrapped;
+        }
 
         if (subMapping) {
           if (sectionKey === 'projectTitleAcronym') {
@@ -1246,21 +1264,33 @@ export const useGeneration = ({
               projectAcronym: generatedData.projectAcronym || newData.projectIdea.projectAcronym,
             };
           } else if (subMapping.isString) {
-            const parentKey = subMapping.path[0];
-            const fieldKey = subMapping.path[1];
-            newData[parentKey] = {
-              ...newData[parentKey],
-              [fieldKey]: generatedData,
+            var parentKeyS = subMapping.path[0];
+            var fieldKeyS = subMapping.path[1];
+            var stringVal = generatedData;
+            if (typeof stringVal !== 'string' && stringVal && typeof stringVal === 'object') {
+              if (typeof stringVal[fieldKeyS] === 'string') {
+                stringVal = stringVal[fieldKeyS];
+              } else {
+                var sVals = Object.values(stringVal);
+                var sFirst = sVals.find(function(v) { return typeof v === 'string' && (v as string).trim().length > 0; });
+                if (sFirst) { stringVal = sFirst; }
+              }
+              console.log('[executeGeneration] ★ UNWRAP string for "' + sectionKey + '"');
+            }
+            newData[parentKeyS] = {
+              ...newData[parentKeyS],
+              [fieldKeyS]: stringVal,
             };
           } else if (subMapping.path.length === 2) {
-            const parentKey = subMapping.path[0];
-            const fieldKey = subMapping.path[1];
-            newData[parentKey] = {
-              ...newData[parentKey],
-              [fieldKey]: generatedData,
+            var parentKeyP = subMapping.path[0];
+            var fieldKeyP = subMapping.path[1];
+            newData[parentKeyP] = {
+              ...newData[parentKeyP],
+              [fieldKeyP]: generatedData,
             };
           }
         } else if (sectionKey === 'partners') {
+
           newData.partners = generatedData;
         } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
   // ★ FIX: projectManagement is an OBJECT {description, structure} — never an array
