@@ -2218,8 +2218,20 @@ export const useGeneration = ({
                       id: (item.id && item.id.trim()) ? item.id : `RISK${idx + 1}`,
                     }));
                   }
-                  next[s] = generatedData;
+                                    // ★ v7.6 FIX: Unwrap if AI returned { outputs: [...] } instead of [...]
+                  if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+                    var wrappedArr = generatedData[s];
+                    if (Array.isArray(wrappedArr)) {
+                      console.log('[runComposite] ★ UNWRAP: extracted array from "' + s + '" wrapper (' + wrappedArr.length + ' items)');
+                      next[s] = wrappedArr;
+                    } else {
+                      next[s] = generatedData;
+                    }
+                  } else {
+                    next[s] = generatedData;
+                  }
                     return next;
+
                   });
                   successCount++;
                   success = true;
