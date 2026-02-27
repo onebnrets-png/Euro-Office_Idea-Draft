@@ -1292,9 +1292,17 @@ export const useGeneration = ({
         } else if (sectionKey === 'partners') {
 
           newData.partners = generatedData;
-        } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
+                } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
+  // ★ v7.6 FIX: Unwrap if AI returned { problemAnalysis: {...} } or { projectIdea: {...} }
+  if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+    if (generatedData[sectionKey] && typeof generatedData[sectionKey] === 'object' && !Array.isArray(generatedData[sectionKey])) {
+      console.log('[executeGeneration] ★ UNWRAP: stripped "' + sectionKey + '" wrapper from full-section response');
+      generatedData = generatedData[sectionKey];
+    }
+  }
   // ★ FIX: projectManagement is an OBJECT {description, structure} — never an array
   if (sectionKey === 'projectManagement') {
+
     // Guard: AI sometimes returns activities array instead of PM object
     if (Array.isArray(generatedData)) {
       console.error(`[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (${generatedData.length} items) — this is activities data, NOT PM! Keeping original.`);
