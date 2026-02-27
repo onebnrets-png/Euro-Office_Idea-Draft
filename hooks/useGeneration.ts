@@ -1,6 +1,16 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.7 — 2026-02-27 — SMART MERGE + DEEP EMPTY FIELD DETECTION
+//
+// CHANGES v7.7:
+//   ★ FIX: ObjectFill for problemAnalysis now detects empty causes/consequences arrays
+//   ★ FIX: ObjectFill for projectIdea now detects empty policies with empty name/description
+//   ★ FIX: ObjectFill for projectManagement now detects empty structure sub-fields
+//   ★ FIX: DATA INSERTION uses SMART MERGE — AI empty responses never overwrite existing data
+//   ★ FIX: Deep merge for nested objects (coreProblem) — only non-empty fields overwrite
+//   ★ All previous v7.5/v7.6 changes preserved.
+//
 // v7.5 — 2026-02-24 — ABORT/CANCEL SUPPORT + TOKEN OPTIMIZATION ALIGNMENT
 //
 // CHANGES v7.5:
