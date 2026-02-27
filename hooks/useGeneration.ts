@@ -1,3 +1,1760 @@
+// hooks/useGeneration.ts
+// ═══════════════════════════════════════════════════════════════
+// AI content generation — sections, fields, summaries.
+// v7.7 — 2026-02-27 — SMART MERGE + DEEP EMPTY FIELD DETECTION
+//
+// CHANGES v7.7:
+//   ★ FIX: ObjectFill for problemAnalysis now detects empty causes/consequences arrays
+//   ★ FIX: ObjectFill for projectIdea now detects empty policies with empty name/description
+//   ★ FIX: ObjectFill for projectManagement now detects empty structure sub-fields
+//   ★ FIX: DATA INSERTION uses SMART MERGE — AI empty responses never overwrite existing data
+//   ★ FIX: Deep merge for nested objects (coreProblem) — only non-empty fields overwrite
+//   ★ FIX: ARRAY sections (objectives, outputs, kers, risks) use smart merge — empty AI items don't overwrite
+//   ★ FIX: runComposite (expectedResults) uses smart merge for array sections
+//   ★ All previous v7.5/v7.6 changes preserved.
+//
+// v7.5 — 2026-02-24 — ABORT/CANCEL SUPPORT + TOKEN OPTIMIZATION ALIGNMENT
+//
+// CHANGES v7.5:
+//   ★ NEW: abortControllerRef — stores active AbortController
+//   ★ NEW: cancelGeneration() — aborts current generation, resets state
+//   ★ CHANGED: executeGeneration() creates AbortController, passes signal
+//     to all generate* functions
+//   ★ CHANGED: handleGenerateField() creates AbortController, passes signal
+//   ★ CHANGED: runSummaryGeneration() creates AbortController, passes signal
+//   ★ CHANGED: handleAIError() recognizes AbortError — no modal shown
+//   ★ EXPORTED: cancelGeneration from hook return
+//   ★ All previous v7.2 changes preserved.
+//
+// v7.2 — 2026-02-23 — SMART AI CREDIT PROTECTION
+// v7.0 — 2026-02-22 — FULL v7.0 ALIGNMENT
+// v5.0 — 2026-02-22 — PARTNERS (CONSORTIUM) AI GENERATION
+// v4.2 — 2026-02-16 — SUB-SECTION GENERATION
+// v3.9 — 2026-02-16 — PER-WP GENERATION COMPLETE
+// v3.8 — 2026-02-16 — PER-WP GENERATION
+// v3.7 — 2026-02-15 — SMART FILL COMPOSITE
+// v3.6 — 2026-02-15 — RETRY + BACKOFF + FRIENDLY MODALS
+// v3.5.2 — 2026-02-14 — AUTO PM + ROBUST CHECKS + 3-OPTION MODAL
+// ═══════════════════════════════════════════════════════════════
+
+import { useState, useCallback, useRef } from 'react';
+import {
+  generateSectionContent,
+  generateFieldContent,
+  generateProjectSummary,
+  generateTargetedFill,
+  generateActivitiesPerWP,
+  generateObjectFill,
+  generatePartnerAllocations,
+} from '../services/geminiService.ts';
+import { getRateLimitStatus } from '../services/aiProvider.ts';
+import { generateSummaryDocx } from '../services/docxGenerator.ts';
+import { recalculateProjectSchedule, downloadBlob, set } from '../utils.ts';
+import { TEXT } from '../locales.ts';
+import { storageService } from '../services/storageService.ts';
+import { smartTranslateProject } from '../services/translationDiffService.ts';
+import { isValidPartnerType } from '../services/Instructions.ts';
+
+interface UseGenerationProps {
+  projectData: any;
+  setProjectData: (fn: any) => void;
+  language: 'en' | 'si';
+  ensureApiKey: () => boolean;
+  setIsSettingsOpen: (val: boolean) => void;
+  setHasUnsavedTranslationChanges: (val: boolean) => void;
+  handleUpdateData: (path: (string | number)[], value: any) => void;
+  checkSectionHasContent: (sectionKey: string) => boolean;
+  setModalConfig: (config: any) => void;
+  closeModal: () => void;
+  currentProjectId: string | null;
+  projectVersions: { en: any; si: any };
+  setLanguage: (lang: 'en' | 'si') => void;
+  setProjectVersions: (fn: (prev: { en: any; si: any }) => { en: any; si: any }) => void;
+}
+
+// ★ v7.7: Helper — check if an array item has real content (excluding 'id' fields)
+function _arrayItemHasContent(item: any): boolean {
+  if (!item || typeof item !== 'object') return false;
+  return Object.entries(item).some(function(entry: [string, any]) {
+    if (entry[0] === 'id') return false;
+    return typeof entry[1] === 'string' && entry[1].trim().length > 0;
+  });
+}
+
+// ★ v7.7: Helper — check if an array has any items with real content
+function _arrayHasRealContent(arr: any[]): boolean {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  return arr.some(function(item: any) { return _arrayItemHasContent(item); });
+}
+
+// ★ v7.7: Helper — smart merge array: don't overwrite existing content with empty AI items
+function _smartMergeArray(existingArr: any[], newArr: any[], sectionKey: string): any[] {
+  var newHasContent = _arrayHasRealContent(newArr);
+  var existingHasContent = _arrayHasRealContent(existingArr);
+
+  if (newHasContent) {
+    if (newArr.length >= existingArr.length) {
+      // AI returned same or more items — use new data
+      return newArr;
+    }
+    // AI returned fewer items — merge: use new where it has content, keep existing otherwise
+    var merged: any[] = [];
+    for (var mi = 0; mi < Math.max(newArr.length, existingArr.length); mi++) {
+      if (mi < newArr.length && _arrayItemHasContent(newArr[mi])) {
+        merged.push(newArr[mi]);
+      } else if (mi < existingArr.length) {
+        merged.push(existingArr[mi]);
+      } else if (mi < newArr.length) {
+        merged.push(newArr[mi]);
+      }
+    }
+    console.log('[v7.7 SMART MERGE ARRAY] "' + sectionKey + '": merged ' + newArr.length + ' new + kept extras from ' + existingArr.length + ' existing');
+    return merged;
+  }
+
+  // New array has NO real content — keep existing
+  if (existingHasContent) {
+    console.log('[v7.7 SMART MERGE ARRAY] keeping existing "' + sectionKey + '" (' + existingArr.length + ' items) — AI returned empty array');
+    return existingArr;
+  }
+
+  // Both empty — use new
+  return newArr;
+}
+
+export const useGeneration = ({
+  projectData,
+  setProjectData,
+  language,
+  ensureApiKey,
+  setIsSettingsOpen,
+  setHasUnsavedTranslationChanges,
+  handleUpdateData,
+  checkSectionHasContent,
+  setModalConfig,
+  closeModal,
+  currentProjectId,
+  projectVersions,
+  setLanguage,
+  setProjectVersions,
+}: UseGenerationProps) => {
+    const [isLoading, setIsLoading] = useState<boolean | string>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Summary state
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  // ★ v7.2: Global generation lock
+  const isGeneratingRef = useRef(false);
+  const sessionCallCountRef = useRef(0);
+  // ★ v7.5: AbortController for cancellation
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const t = TEXT[language] || TEXT['en'];
+
+  // ★ v7.5: Cancel active generation
+  const cancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      console.log('[useGeneration] Cancelling active generation...');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    isGeneratingRef.current = false;
+    setIsLoading(false);
+    setError(
+      language === 'si'
+        ? 'Generiranje preklicano.'
+        : 'Generation cancelled.'
+    );
+    setTimeout(() => setError(null), 3000);
+  }, [language]);
+
+  // ★ v7.2: Pre-generation guard
+  const preGenerationGuard = useCallback(
+    (context: string): boolean => {
+      if (isGeneratingRef.current) {
+        console.warn(`[useGeneration] Blocked: already generating (${context})`);
+        return false;
+      }
+
+      const status = getRateLimitStatus();
+      if (status.requestsInWindow >= status.maxRequests - 1) {
+        const waitSec = Math.ceil(status.windowMs / 1000);
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Preveč zahtevkov' : 'Too Many Requests',
+          message: language === 'si'
+            ? `V zadnji minuti ste poslali ${status.requestsInWindow} zahtevkov (omejitev: ${status.maxRequests}/min).\n\nPočakajte ~${waitSec} sekund preden nadaljujete, da se izognete blokiranju s strani AI ponudnika.\n\nTa seja: ${sessionCallCountRef.current} AI klicev.`
+            : `You've made ${status.requestsInWindow} requests in the last minute (limit: ${status.maxRequests}/min).\n\nPlease wait ~${waitSec} seconds before continuing to avoid being blocked by the AI provider.\n\nThis session: ${sessionCallCountRef.current} AI calls.`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return false;
+      }
+
+      return true;
+    },
+    [language, setModalConfig, closeModal]
+  );
+
+  // ─── DEEP CONTENT CHECKER ─────────────────────────────────────
+
+  const hasDeepContent = useCallback((data: any): boolean => {
+    if (!data) return false;
+    if (typeof data === 'string') return data.trim().length > 0;
+    if (Array.isArray(data)) {
+      return data.length > 0 && data.some((item: any) => hasDeepContent(item));
+    }
+    if (typeof data === 'object') {
+      return Object.values(data).some((v: any) => hasDeepContent(v));
+    }
+    return false;
+  }, []);
+
+  // ─── ROBUST content checker ────────────────────────────────────
+
+  const robustCheckSectionHasContent = useCallback(
+    (sectionKey: string): boolean => {
+      const section = projectData[sectionKey];
+      if (!section) return false;
+      return hasDeepContent(section);
+    },
+    [projectData, hasDeepContent]
+  );
+
+  // ─── Check if a section needs generation ───────────────────────
+
+  const sectionNeedsGeneration = useCallback(
+    (sectionKey: string): { needsFill: boolean; needsFullGeneration: boolean; emptyIndices: number[] } => {
+      const section = projectData[sectionKey];
+
+      if (!section) {
+        return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
+      }
+
+      if (Array.isArray(section)) {
+        if (section.length === 0) {
+          return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
+        }
+
+        const emptyIndices: number[] = [];
+        let hasAnyContent = false;
+
+        section.forEach((item: any, index: number) => {
+          if (!item || !hasDeepContent(item)) {
+            emptyIndices.push(index);
+          } else {
+        const hasEmptyFields = Object.entries(item).some(([key, val]) => {
+              if (key === 'id') return false;
+              if (val === undefined || val === null) return true;
+              if (typeof val === 'string' && (val.trim().length === 0 || val.includes('[AI did not generate'))) return true;
+              return false;
+            });
+            const EXPECTED_FIELDS_MAP: Record<string, string[]> = {
+              generalObjectives: ['title', 'description', 'indicator'],
+              specificObjectives: ['title', 'description', 'indicator'],
+              outputs: ['title', 'description', 'indicator'],
+              outcomes: ['title', 'description', 'indicator'],
+              impacts: ['title', 'description', 'indicator'],
+              kers: ['title', 'description', 'exploitationStrategy'],
+              risks: ['title', 'description', 'mitigation'],
+            };
+            const _expectedKeys = EXPECTED_FIELDS_MAP[sectionKey] || [];
+            const hasMissingFields = _expectedKeys.length > 0 && _expectedKeys.some(k => !(k in item) || item[k] === undefined || item[k] === null || (typeof item[k] === 'string' && item[k].trim().length === 0));
+            if (hasEmptyFields || hasMissingFields) {
+              emptyIndices.push(index);
+            }
+            hasAnyContent = true;
+          }
+        });
+
+        if (!hasAnyContent) {
+          return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
+        }
+
+        if (emptyIndices.length > 0) {
+          return { needsFill: true, needsFullGeneration: false, emptyIndices };
+        }
+
+        return { needsFill: false, needsFullGeneration: false, emptyIndices: [] };
+      }
+
+      if (typeof section === 'object') {
+        const hasContent = hasDeepContent(section);
+        if (!hasContent) {
+          return { needsFill: false, needsFullGeneration: true, emptyIndices: [] };
+        }
+        const hasEmptyFields = Object.entries(section).some(([_key, val]) => {
+          return typeof val === 'string' && val.trim().length === 0;
+        });
+        if (hasEmptyFields) {
+          return { needsFill: true, needsFullGeneration: false, emptyIndices: [] };
+        }
+        return { needsFill: false, needsFullGeneration: false, emptyIndices: [] };
+      }
+
+      return { needsFill: false, needsFullGeneration: false, emptyIndices: [] };
+    },
+    [projectData, hasDeepContent]
+  );
+
+  // ─── Sub-section mapping ───────────────────────────────────────
+
+  const SUB_SECTION_MAP: Record<string, { parent: string; path: string[]; isString?: boolean }> = {
+    coreProblem:        { parent: 'problemAnalysis', path: ['problemAnalysis', 'coreProblem'] },
+    causes:             { parent: 'problemAnalysis', path: ['problemAnalysis', 'causes'] },
+    consequences:       { parent: 'problemAnalysis', path: ['problemAnalysis', 'consequences'] },
+    projectTitleAcronym:{ parent: 'projectIdea',     path: ['projectIdea'] },
+    mainAim:            { parent: 'projectIdea',     path: ['projectIdea', 'mainAim'], isString: true },
+    stateOfTheArt:      { parent: 'projectIdea',     path: ['projectIdea', 'stateOfTheArt'], isString: true },
+    proposedSolution:   { parent: 'projectIdea',     path: ['projectIdea', 'proposedSolution'], isString: true },
+    readinessLevels:    { parent: 'projectIdea',     path: ['projectIdea', 'readinessLevels'] },
+    policies:           { parent: 'projectIdea',     path: ['projectIdea', 'policies'] },
+  };
+
+  // ─── Comprehensive error handler ───────────────────────────────
+
+  const handleAIError = useCallback(
+    (e: any, context: string = '') => {
+      const msg = e.message || e.toString();
+
+      if (e.name === 'AbortError' || msg.includes('abort') || msg.includes('cancelled') || msg.includes('Generation cancelled')) {
+        console.log(`[useGeneration] Generation cancelled by user (${context})`);
+        return;
+      }
+
+      const parts = msg.split('|');
+      const errorCode = parts[0] || '';
+      const provider = parts[1] || '';
+      const providerLabel = provider === 'gemini' ? 'Google Gemini' : provider === 'openrouter' ? 'OpenRouter' : 'AI';
+
+      console.warn(`[AI Error] ${context}: ${errorCode} (${provider})`, e);
+
+      if (msg === 'MISSING_API_KEY' || errorCode === 'MISSING_API_KEY') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Manjkajoč API ključ' : 'Missing API Key',
+          message: language === 'si'
+            ? 'API ključ za AI ponudnika ni nastavljen ali ni veljaven.\n\nOdprite Nastavitve in vnesite veljaven API ključ.'
+            : 'The AI provider API key is not set or is invalid.\n\nOpen Settings and enter a valid API key.',
+          confirmText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          secondaryText: '',
+          cancelText: language === 'si' ? 'Zapri' : 'Close',
+          onConfirm: () => { closeModal(); setIsSettingsOpen(true); },
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'RATE_LIMIT') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Omejitev hitrosti dosežena' : 'Rate Limit Reached',
+          message: language === 'si'
+            ? `${providerLabel} je začasno omejil število zahtevkov.\n\nTo se zgodi pri brezplačnih načrtih (npr. 15 zahtevkov/minuto pri Gemini).\n\nMožne rešitve:\n• Počakajte 1–2 minuti in poskusite ponovno\n• V Nastavitvah zamenjajte na drug model\n• Nadgradite na plačljiv načrt pri ${providerLabel}`
+            : `${providerLabel} has temporarily limited the number of requests.\n\nThis happens on free plans (e.g., 15 requests/minute on Gemini).\n\nPossible solutions:\n• Wait 1–2 minutes and try again\n• Switch to a different model in Settings\n• Upgrade to a paid plan with ${providerLabel}`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'INSUFFICIENT_CREDITS') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Nezadostna sredstva' : 'Insufficient Credits',
+          message: language === 'si'
+            ? `${providerLabel} nima dovolj sredstev za to zahtevo.\n\nMožne rešitve:\n• Dopolnite kredit pri ${providerLabel}\n• V Nastavitvah izberite cenejši ali brezplačen model\n• Preklopite na drugega AI ponudnika (npr. Gemini ima brezplačen načrt)`
+            : `${providerLabel} does not have enough credits for this request.\n\nPossible solutions:\n• Top up credits with ${providerLabel}\n• Choose a cheaper or free model in Settings\n• Switch to another AI provider (e.g., Gemini has a free plan)`,
+          confirmText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          secondaryText: '',
+          cancelText: language === 'si' ? 'Zapri' : 'Close',
+          onConfirm: () => { closeModal(); setIsSettingsOpen(true); },
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'MODEL_OVERLOADED') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Model začasno nedosegljiv' : 'Model Temporarily Unavailable',
+          message: language === 'si'
+            ? `Model pri ${providerLabel} je trenutno preobremenjen z visoko obremenitvijo.\n\nTo je začasna težava — model bo kmalu spet dosegljiv.\n\nMožne rešitve:\n• Počakajte 2–5 minut in poskusite ponovno\n• V Nastavitvah zamenjajte na drug model (npr. Gemini 2.5 Flash)`
+            : `The model at ${providerLabel} is currently experiencing high demand.\n\nThis is a temporary issue — the model will be available again shortly.\n\nPossible solutions:\n• Wait 2–5 minutes and try again\n• Switch to a different model in Settings (e.g., Gemini 2.5 Flash)`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'SERVER_ERROR') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Napaka strežnika' : 'Server Error',
+          message: language === 'si'
+            ? `Strežnik ${providerLabel} je vrnil napako.\n\nTo je običajno začasna težava na strani ponudnika.\n\nMožne rešitve:\n• Poskusite ponovno čez 1–2 minuti\n• Če se napaka ponavlja, zamenjajte model v Nastavitvah`
+            : `The ${providerLabel} server returned an error.\n\nThis is usually a temporary issue on the provider's side.\n\nPossible solutions:\n• Try again in 1–2 minutes\n• If the error persists, switch models in Settings`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'TIMEOUT') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Zahteva je potekla' : 'Request Timed Out',
+          message: language === 'si'
+            ? `Zahteva do ${providerLabel} je trajala predolgo in je potekla.\n\nTo se lahko zgodi pri velikih sekcijah (npr. aktivnosti z 8+ delovnimi sklopi).\n\nMožne rešitve:\n• Poskusite ponovno — včasih je strežnik le začasno počasen\n• V Nastavitvah izberite hitrejši model (npr. Gemini Flash)`
+            : `The request to ${providerLabel} took too long and timed out.\n\nThis can happen with large sections (e.g., activities with 8+ work packages).\n\nPossible solutions:\n• Try again — sometimes the server is just temporarily slow\n• Choose a faster model in Settings (e.g., Gemini Flash)`,
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'NETWORK_ERROR' ||
+          msg.includes('fetch') || msg.includes('network') ||
+          msg.includes('Failed to fetch') || msg.includes('ERR_')) {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Omrežna napaka' : 'Network Error',
+          message: language === 'si'
+            ? 'Ni bilo mogoče vzpostaviti povezave z AI strežnikom.\n\nMožni vzroki:\n• Internetna povezava je prekinjena\n• Požarni zid ali VPN blokira dostop\n• AI strežnik je začasno nedosegljiv\n\nPreverite internetno povezavo in poskusite ponovno.'
+            : 'Could not connect to the AI server.\n\nPossible causes:\n• Internet connection is down\n• Firewall or VPN is blocking access\n• AI server is temporarily unreachable\n\nCheck your internet connection and try again.',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'CONTENT_BLOCKED') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Vsebina blokirana' : 'Content Blocked',
+          message: language === 'si'
+            ? 'AI varnostni filter je blokiral generiranje vsebine.\n\nTo se lahko zgodi, če projektna tema vsebuje občutljive izraze.\n\nMožne rešitve:\n• Preoblikujte opis projekta z manj občutljivimi izrazi\n• Poskusite z drugim AI modelom v Nastavitvah'
+            : 'The AI safety filter blocked the content generation.\n\nThis can happen if the project topic contains sensitive terms.\n\nPossible solutions:\n• Rephrase the project description with less sensitive terms\n• Try a different AI model in Settings',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'CONTEXT_TOO_LONG') {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Projekt prevelik za model' : 'Project Too Large for Model',
+          message: language === 'si'
+            ? 'Projektni podatki presegajo kontekstno okno izbranega AI modela.\n\nTo se zgodi pri zelo obsežnih projektih z veliko delovnimi sklopi.\n\nMožne rešitve:\n• V Nastavitvah izberite model z večjim kontekstom (npr. Gemini 2.5 Pro — 1M tokenov)\n• Generirajte posamezne razdelke namesto celotnega projekta'
+            : 'The project data exceeds the context window of the selected AI model.\n\nThis happens with very large projects with many work packages.\n\nPossible solutions:\n• Choose a model with a larger context in Settings (e.g., Gemini 2.5 Pro — 1M tokens)\n• Generate individual sections instead of the entire project',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      if (errorCode === 'INVALID_JSON' ||
+          msg.includes('JSON') || msg.includes('Unexpected token') || msg.includes('parse')) {
+        setModalConfig({
+          isOpen: true,
+          title: language === 'si' ? 'Napaka formata odgovora' : 'Response Format Error',
+          message: language === 'si'
+            ? 'AI je vrnil nepravilen format odgovora (neveljaven JSON).\n\nTo se občasno zgodi — AI modeli niso vedno 100% zanesljivi pri strukturiranih odgovorih.\n\nPoskusite ponovno — naslednji poskus bo verjetno uspešen.'
+            : 'The AI returned an invalid response format (invalid JSON).\n\nThis happens occasionally — AI models are not always 100% reliable with structured responses.\n\nPlease try again — the next attempt will likely succeed.',
+          confirmText: language === 'si' ? 'V redu' : 'OK',
+          secondaryText: '',
+          cancelText: '',
+          onConfirm: closeModal,
+          onSecondary: null,
+          onCancel: closeModal,
+        });
+        return;
+      }
+
+      console.error(`[AI Error] Unclassified: ${context}:`, e);
+      setModalConfig({
+        isOpen: true,
+        title: language === 'si' ? 'Nepričakovana napaka' : 'Unexpected Error',
+        message: language === 'si'
+          ? `Pri komunikaciji z AI ponudnikom (${providerLabel}) je prišlo do nepričakovane napake.\n\nPodrobnosti: ${msg.substring(0, 200)}\n\nMožne rešitve:\n• Poskusite ponovno čez nekaj sekund\n• Če se napaka ponavlja, zamenjajte model ali ponudnika v Nastavitvah\n• Preverite konzolo brskalnika (F12) za več podrobnosti`
+          : `An unexpected error occurred while communicating with the AI provider (${providerLabel}).\n\nDetails: ${msg.substring(0, 200)}\n\nPossible solutions:\n• Try again in a few seconds\n• If the error persists, switch models or providers in Settings\n• Check the browser console (F12) for more details`,
+        confirmText: language === 'si' ? 'V redu' : 'OK',
+        secondaryText: language === 'si' ? 'Odpri nastavitve' : 'Open Settings',
+        cancelText: '',
+        onConfirm: closeModal,
+        onSecondary: () => { closeModal(); setIsSettingsOpen(true); },
+        onCancel: closeModal,
+      });
+    },
+    [language, setIsSettingsOpen, setModalConfig, closeModal]
+  );
+
+  // ─── Check other language content ──────────────────────────────
+
+  const checkOtherLanguageHasContent = useCallback(
+    async (sectionKey: string): Promise<any | null> => {
+      const otherLang = language === 'en' ? 'si' : 'en';
+
+      const checkVersion = (projectVersion: any): any | null => {
+        if (!projectVersion) return null;
+        const sectionData = projectVersion[sectionKey];
+        if (!sectionData) return null;
+        if (hasDeepContent(sectionData)) {
+          return projectVersion;
+        }
+        return null;
+      };
+
+      const cachedResult = checkVersion(projectVersions[otherLang]);
+      if (cachedResult) return cachedResult;
+
+      try {
+        const loaded = await storageService.loadProject(otherLang, currentProjectId);
+        const loadedResult = checkVersion(loaded);
+        if (loadedResult) return loadedResult;
+      } catch (e) {
+        console.warn('[useGeneration] Could not load other language version:', e);
+      }
+
+      return null;
+    },
+    [language, projectVersions, currentProjectId, hasDeepContent]
+  );
+
+  // ─── Perform translation from other language ───────────────────
+
+  const performTranslationFromOther = useCallback(
+    async (otherLangData: any) => {
+      closeModal();
+      setIsLoading(language === 'si' ? 'Prevajanje iz EN...' : 'Translating from SI...');
+      setError(null);
+
+      try {
+        const { translatedData, stats } = await smartTranslateProject(
+          otherLangData,
+          language,
+          projectData,
+          currentProjectId!
+        );
+
+        if (stats.failed > 0 && stats.translated === 0) {
+          throw new Error('credits');
+        }
+
+        setProjectData(translatedData);
+        setHasUnsavedTranslationChanges(false);
+        await storageService.saveProject(translatedData, language, currentProjectId);
+
+        setProjectVersions((prev) => ({
+          ...prev,
+          [language]: translatedData,
+        }));
+
+        if (stats.failed > 0) {
+          setError(
+            language === 'si'
+              ? `Prevod delno uspel: ${stats.translated}/${stats.changed} polj prevedenih.`
+              : `Translation partially done: ${stats.translated}/${stats.changed} fields translated.`
+          );
+        }
+      } catch (e: any) {
+        handleAIError(e, 'translateFromOtherLanguage');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [
+      language,
+      projectData,
+      currentProjectId,
+      closeModal,
+      setProjectData,
+      setHasUnsavedTranslationChanges,
+      setProjectVersions,
+      handleAIError,
+    ]
+  );
+
+  // ─── Execute section generation ────────────────────────────────
+
+    const executeGeneration = useCallback(
+    async (sectionKey: string, mode: string = 'regenerate') => {
+      if (!preGenerationGuard(sectionKey)) return;
+
+      isGeneratingRef.current = true;
+      sessionCallCountRef.current++;
+
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const signal = abortController.signal;
+
+      closeModal();
+      setIsLoading(`${t.generating} ${sectionKey}...`);
+      setError(null);
+
+      try {
+        let generatedData;
+
+        const subMapping = SUB_SECTION_MAP[sectionKey];
+
+        if (subMapping) {
+          generatedData = await generateSectionContent(
+            sectionKey,
+            projectData,
+            language,
+            mode,
+            null,
+            signal
+          );
+
+        } else if (sectionKey === 'partnerAllocations') {
+          const pa_partners = Array.isArray(projectData.partners) ? projectData.partners : [];
+          const pa_activities = Array.isArray(projectData.activities) ? projectData.activities : [];
+
+          if (pa_partners.length === 0 || pa_activities.length === 0) {
+            setModalConfig({
+              isOpen: true,
+              title: language === 'si' ? 'Manjkajo podatki' : 'Missing Data',
+              message: language === 'si'
+                ? 'Za generiranje alokacij partnerjev potrebujete definirane partnerje IN delovne pakete z nalogami.\n\nNajprej generirajte partnerje (Konzorcij) in aktivnosti (Delovni načrt).'
+                : 'To generate partner allocations you need defined partners AND work packages with tasks.\n\nFirst generate Partners (Consortium) and Activities (Work Plan).',
+              confirmText: language === 'si' ? 'V redu' : 'OK',
+              secondaryText: '',
+              cancelText: '',
+              onConfirm: () => closeModal(),
+              onSecondary: null,
+              onCancel: () => closeModal(),
+            });
+            setIsLoading(false);
+            isGeneratingRef.current = false;
+            abortControllerRef.current = null;
+            return;
+          }
+
+          setIsLoading(
+            language === 'si'
+              ? 'Generiram alokacije partnerjev na naloge...'
+              : 'Generating partner allocations for tasks...'
+          );
+
+          const allocResult = await generatePartnerAllocations(
+            projectData,
+            language,
+            (msg: string) => setIsLoading(msg),
+            signal
+          );
+
+          const updatedActivities = pa_activities.map((wp: any) => ({
+            ...wp,
+            tasks: (wp.tasks || []).map((task: any) => {
+              const taskAlloc = allocResult.find(
+                (a: any) => a.taskId === task.id
+              );
+              if (taskAlloc && Array.isArray(taskAlloc.allocations) && taskAlloc.allocations.length > 0) {
+                return {
+                  ...task,
+                  partnerAllocations: taskAlloc.allocations,
+                };
+              }
+              return task;
+            }),
+          }));
+
+          const newAllocData = { ...projectData, activities: updatedActivities };
+          setProjectData(newAllocData);
+          setHasUnsavedTranslationChanges(true);
+
+          const totalAllocations = allocResult.reduce((s: number, t: any) => s + (t.allocations?.length || 0), 0);
+          console.log(`[useGeneration] Partner allocations applied: ${totalAllocations} allocations across ${allocResult.length} tasks`);
+
+          setIsLoading(false);
+          isGeneratingRef.current = false;
+          abortControllerRef.current = null;
+          return;
+
+        } else if (sectionKey === 'partners') {
+          const existingPartners = projectData.partners || [];
+
+          if (mode === 'regenerate' || existingPartners.length === 0) {
+            setIsLoading(
+              language === 'si'
+                ? 'Generiram konzorcij (partnerji)...'
+                : 'Generating consortium (partners)...'
+            );
+            generatedData = await generateSectionContent(
+              'partners',
+              projectData,
+              language,
+              'regenerate',
+              null,
+              signal
+            );
+          } else if (mode === 'enhance') {
+            setIsLoading(
+              language === 'si'
+                ? 'Izboljšujem konzorcij...'
+                : 'Enhancing consortium...'
+            );
+            generatedData = await generateSectionContent(
+              'partners',
+              projectData,
+              language,
+              'enhance',
+              null,
+              signal
+            );
+          } else {
+            const needsFill = existingPartners.some((p: any) =>
+              !p.name || p.name.trim() === '' || !p.expertise || p.expertise.trim() === '' || !p.pmRate
+            );
+            if (needsFill) {
+              setIsLoading(
+                language === 'si'
+                  ? 'Dopolnjujem podatke o partnerjih...'
+                  : 'Filling partner data...'
+              );
+              generatedData = await generateSectionContent(
+                'partners',
+                { ...projectData, partners: existingPartners },
+                language,
+                'fill',
+                null,
+                signal
+              );
+            } else {
+              generatedData = existingPartners;
+            }
+          }
+
+          if (Array.isArray(generatedData)) {
+            generatedData = generatedData.map((p: any, idx: number) => ({
+              ...p,
+              id: p.id || `partner-${idx + 1}`,
+              code: p.code || (idx === 0 ? (language === 'si' ? 'KO' : 'CO') : `P${idx + 1}`),
+              partnerType: (p.partnerType && isValidPartnerType(p.partnerType))
+                ? p.partnerType
+                : 'other',
+            }));
+            console.log(`[useGeneration] Partners post-processed: ${generatedData.length} partners, types: ${generatedData.map((p: any) => p.partnerType).join(', ')}`);
+          }
+
+        } else if (sectionKey === 'activities') {
+          const existingWPs = projectData.activities || [];
+          const emptyWPIndices: number[] = [];
+
+          const hasPMWP = existingWPs.some((wp: any) => {
+            const title = (wp.title || '').toLowerCase();
+            return title.includes('management') || title.includes('coordination')
+              || title.includes('upravljanje') || title.includes('koordinacija');
+          });
+          const hasDissWP = existingWPs.some((wp: any) => {
+            const title = (wp.title || '').toLowerCase();
+            return title.includes('dissemination') || title.includes('communication')
+              || title.includes('diseminacija') || title.includes('komunikacija');
+          });
+
+          const missingPM = !hasPMWP && existingWPs.length > 0;
+          const missingDiss = !hasDissWP && existingWPs.length > 0;
+          const hasMissingMandatory = missingPM || missingDiss;
+
+          existingWPs.forEach((wp: any, idx: number) => {
+            const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0
+              && wp.tasks.some((t: any) => t.title && t.title.trim().length > 0);
+            const hasMilestones = wp.milestones && Array.isArray(wp.milestones) && wp.milestones.length > 0;
+            const hasDeliverables = wp.deliverables && wp.deliverables.length > 0
+              && wp.deliverables.some((d: any) => d.title && d.title.trim().length > 0);
+            if (!hasTasks || !hasMilestones || !hasDeliverables) {
+              emptyWPIndices.push(idx);
+            }
+          });
+
+          if (mode === 'regenerate' || existingWPs.length === 0) {
+            generatedData = await generateActivitiesPerWP(
+              projectData,
+              language,
+              mode,
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
+                if (wpIndex === -1) {
+                  setIsLoading(language === 'si' ? 'Generiranje strukture DS...' : 'Generating WP structure...');
+                } else {
+                  setIsLoading(
+                    language === 'si'
+                      ? `Generiram DS ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                      : `Generating WP ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                  );
+                }
+              },
+              undefined,
+              undefined,
+              signal
+            );
+
+          } else if (hasMissingMandatory && mode !== 'enhance') {
+            const durationMonths = projectData.projectIdea?.durationMonths || 24;
+            const augmentedWPs = [...existingWPs];
+            const mandatoryIndicesToGenerate: number[] = [];
+
+            const missingNames: string[] = [];
+
+            if (missingPM) {
+              missingNames.push(language === 'si' ? 'Upravljanje projekta' : 'Project Management');
+
+              const wpPfx2 = language === 'si' ? 'DS' : 'WP';
+              const pmPlaceholder = {
+                id: `${wpPfx2}${augmentedWPs.length + 1}`,
+                title: language === 'si' ? 'Upravljanje in koordinacija projekta' : 'Project Management and Coordination',
+                startDate: projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0],
+                endDate: '',
+                startMonth: 1,
+                endMonth: durationMonths,
+                tasks: [],
+                milestones: [],
+                deliverables: [],
+                leader: '',
+                participants: [],
+              };
+              augmentedWPs.push(pmPlaceholder);
+              mandatoryIndicesToGenerate.push(augmentedWPs.length - 1);
+            }
+
+            if (missingDiss) {
+              missingNames.push(language === 'si' ? 'Diseminacija' : 'Dissemination');
+
+              const dissInsertIdx = missingPM ? augmentedWPs.length - 1 : augmentedWPs.length;
+              const dissPlaceholder = {
+                id: '',
+                title: language === 'si' ? 'Diseminacija, komunikacija in izkoriščanje rezultatov' : 'Dissemination, Communication and Exploitation of Results',
+                startDate: projectData.projectIdea?.startDate || new Date().toISOString().split('T')[0],
+                endDate: '',
+                startMonth: 1,
+                endMonth: durationMonths,
+                tasks: [],
+                milestones: [],
+                deliverables: [],
+                leader: '',
+                participants: [],
+              };
+
+              augmentedWPs.splice(dissInsertIdx, 0, dissPlaceholder);
+
+              if (missingPM) {
+                mandatoryIndicesToGenerate[mandatoryIndicesToGenerate.length - 1] = augmentedWPs.length - 1;
+              }
+              mandatoryIndicesToGenerate.push(dissInsertIdx);
+            }
+            const wpPfx = language === 'si' ? 'DS' : 'WP';
+            augmentedWPs.forEach((wp, idx) => {
+              wp.id = `${wpPfx}${idx + 1}`;
+            });
+            console.warn(`[Activities] Adding missing mandatory WPs: ${missingNames.join(', ')} — generating only indices [${mandatoryIndicesToGenerate.join(', ')}]`);
+
+            const finalIndicesToGenerate: number[] = [];
+            augmentedWPs.forEach((wp: any, idx: number) => {
+              const hasTasks = wp.tasks && Array.isArray(wp.tasks) && wp.tasks.length > 0
+                && wp.tasks.some((t: any) => t.title && t.title.trim().length > 0);
+              const hasMilestones = wp.milestones && Array.isArray(wp.milestones) && wp.milestones.length > 0;
+              const hasDeliverableContent = wp.deliverables && wp.deliverables.length > 0
+                && wp.deliverables.some((d: any) => d.title && d.title.trim().length > 0);
+              if (!hasTasks || !hasMilestones || !hasDeliverableContent) {
+                finalIndicesToGenerate.push(idx);
+              }
+            });
+
+            generatedData = await generateActivitiesPerWP(
+              { ...projectData, activities: augmentedWPs },
+              language,
+              'fill',
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
+                if (wpIndex === -1) {
+                  setIsLoading(
+                    language === 'si'
+                      ? `Dodajam manjkajoče DS (${missingNames.join(' + ')})...`
+                      : `Adding missing WPs (${missingNames.join(' + ')})...`
+                  );
+                } else {
+                  setIsLoading(
+                    language === 'si'
+                      ? `Generiram DS ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                      : `Generating WP ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                  );
+                }
+              },
+              augmentedWPs,
+              finalIndicesToGenerate,
+              signal
+            );
+
+          } else if (emptyWPIndices.length > 0) {
+            generatedData = await generateActivitiesPerWP(
+              projectData,
+              language,
+              'fill',
+              (wpIndex: number, wpTotal: number, wpTitle: string) => {
+                if (wpIndex === -1) {
+                  setIsLoading(
+                    language === 'si'
+                      ? `Dopolnjujem ${emptyWPIndices.length} nepopolnih DS...`
+                      : `Filling ${emptyWPIndices.length} incomplete WPs...`
+                  );
+                } else {
+                  setIsLoading(
+                    language === 'si'
+                      ? `Dopolnjujem DS ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                      : `Filling WP ${wpIndex + 1}/${wpTotal}: ${wpTitle}...`
+                  );
+                }
+              },
+              existingWPs,
+              emptyWPIndices,
+              signal
+            );
+
+          } else if (mode === 'enhance') {
+            generatedData = await generateSectionContent(
+              sectionKey,
+              projectData,
+              language,
+              mode,
+              null,
+              signal
+            );
+
+          } else {
+            generatedData = existingWPs;
+          }
+
+        } else if (
+          mode === 'fill' &&
+          ['projectIdea', 'problemAnalysis', 'projectManagement'].includes(sectionKey) &&
+          projectData[sectionKey] &&
+          typeof projectData[sectionKey] === 'object' &&
+          !Array.isArray(projectData[sectionKey])
+        ) {
+          // ★ v7.7 FIX: Detect ALL empty fields including arrays and nested objects
+          var sectionData = projectData[sectionKey];
+          var emptyFields: string[] = [];
+
+          // Check top-level string fields
+          for (var _efKey of Object.keys(sectionData)) {
+            var _efVal = sectionData[_efKey];
+            if (typeof _efVal === 'string' && _efVal.trim().length === 0) {
+              emptyFields.push(_efKey);
+            }
+          }
+
+          // Check expected string fields that might be missing entirely
+          var expectedFields: Record<string, string[]> = {
+            projectIdea: ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution'],
+            problemAnalysis: [],
+            projectManagement: ['description'],
+          };
+          var expected = expectedFields[sectionKey] || [];
+          for (var _exf of expected) {
+            if (!sectionData[_exf] || (typeof sectionData[_exf] === 'string' && sectionData[_exf].trim().length === 0)) {
+              if (!emptyFields.includes(_exf)) {
+                emptyFields.push(_exf);
+              }
+            }
+          }
+
+          // ★ v7.7: Check ARRAY sub-fields (causes, consequences, policies, etc.)
+          if (sectionKey === 'problemAnalysis') {
+            var _paCauses = sectionData.causes;
+            if (!_paCauses || !Array.isArray(_paCauses) || _paCauses.length === 0) {
+              if (!emptyFields.includes('causes')) emptyFields.push('causes');
+            } else {
+              var _hasEmptyCause = _paCauses.some(function(c: any) {
+                return !c || !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0;
+              });
+              if (_hasEmptyCause && !emptyFields.includes('causes')) emptyFields.push('causes');
+            }
+            var _paConseq = sectionData.consequences;
+            if (!_paConseq || !Array.isArray(_paConseq) || _paConseq.length === 0) {
+              if (!emptyFields.includes('consequences')) emptyFields.push('consequences');
+            } else {
+              var _hasEmptyConseq = _paConseq.some(function(c: any) {
+                return !c || !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0;
+              });
+              if (_hasEmptyConseq && !emptyFields.includes('consequences')) emptyFields.push('consequences');
+            }
+            var _paCp = sectionData.coreProblem;
+            if (!_paCp || !_paCp.title || _paCp.title.trim().length === 0 || !_paCp.description || _paCp.description.trim().length === 0) {
+              if (!emptyFields.includes('coreProblem')) emptyFields.push('coreProblem');
+            }
+          }
+
+          if (sectionKey === 'projectIdea') {
+            var rl = sectionData.readinessLevels;
+            if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
+              if (!emptyFields.includes('readinessLevels')) {
+                emptyFields.push('readinessLevels');
+              }
+            } else {
+              for (var _rlLevel of ['TRL', 'SRL', 'ORL', 'LRL']) {
+                if (rl[_rlLevel] && typeof rl[_rlLevel].justification === 'string' && rl[_rlLevel].justification.trim().length === 0) {
+                  if (!emptyFields.includes('readinessLevels')) {
+                    emptyFields.push('readinessLevels');
+                  }
+                  break;
+                }
+              }
+            }
+
+            var _piPolicies = sectionData.policies;
+            if (!_piPolicies || !Array.isArray(_piPolicies) || _piPolicies.length === 0) {
+              if (!emptyFields.includes('policies')) {
+                emptyFields.push('policies');
+              }
+            } else {
+              var _hasEmptyPolicy = _piPolicies.some(function(p: any) {
+                return !p || !p.name || p.name.trim().length === 0 || !p.description || p.description.trim().length === 0;
+              });
+              if (_hasEmptyPolicy && !emptyFields.includes('policies')) {
+                emptyFields.push('policies');
+              }
+            }
+          }
+
+          // ★ v7.7: Check projectManagement nested structure
+          if (sectionKey === 'projectManagement') {
+            var _pmStructure = sectionData.structure;
+            if (!_pmStructure) {
+              if (!emptyFields.includes('structure')) emptyFields.push('structure');
+            } else {
+              for (var _pmField of ['coordinator', 'steeringCommittee', 'advisoryBoard', 'wpLeaders']) {
+                if (!_pmStructure[_pmField] || _pmStructure[_pmField].trim().length === 0) {
+                  if (!emptyFields.includes('structure')) emptyFields.push('structure');
+                  break;
+                }
+              }
+            }
+          }
+
+          console.log('[ObjectFill] v7.7 ' + sectionKey + ': detected empty fields: [' + emptyFields.join(', ') + ']');
+
+          if (emptyFields.length === 0) {
+            setModalConfig({
+              isOpen: true,
+              title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
+              message: language === 'si'
+                ? 'Vsa polja v tem razdelku so že izpolnjena. Če želite izboljšati vsebino, uporabite možnost "Izboljšaj obstoječe".'
+                : 'All fields in this section are already filled. To improve content, use the "Enhance existing" option.',
+              confirmText: language === 'si' ? 'V redu' : 'OK',
+              secondaryText: '',
+              cancelText: '',
+              onConfirm: () => closeModal(),
+              onSecondary: null,
+              onCancel: () => closeModal(),
+            });
+            generatedData = sectionData;
+          } else {
+            var fieldNames = emptyFields.join(', ');
+            console.log('[ObjectFill] ' + sectionKey + ': Empty fields detected: [' + fieldNames + ']');
+            setIsLoading(
+              language === 'si'
+                ? 'Dopolnjujem ' + emptyFields.length + ' praznih polj: ' + fieldNames + '...'
+                : 'Filling ' + emptyFields.length + ' empty fields: ' + fieldNames + '...'
+            );
+
+            generatedData = await generateObjectFill(
+              sectionKey,
+              projectData,
+              projectData[sectionKey],
+              emptyFields,
+              language,
+              signal
+            );
+          }
+
+        } else if (mode === 'fill') {
+          const sectionData = projectData[sectionKey];
+
+          if (!sectionData || (Array.isArray(sectionData) && sectionData.length === 0) || !hasDeepContent(sectionData)) {
+            console.log(`[SmartFill] ${sectionKey}: No data → full regeneration`);
+            setIsLoading(
+              language === 'si'
+                ? `Generiram ${sectionKey} (ni obstoječih podatkov)...`
+                : `Generating ${sectionKey} (no existing data)...`
+            );
+            generatedData = await generateSectionContent(
+              sectionKey,
+              projectData,
+              language,
+              'regenerate',
+              null,
+              signal
+            );
+
+          } else if (Array.isArray(sectionData)) {
+            const emptyIndices: number[] = [];
+            sectionData.forEach((item: any, index: number) => {
+              if (!item || !hasDeepContent(item)) {
+                emptyIndices.push(index);
+              } else {
+            const hasEmptyFields = Object.entries(item).some(([key, val]) => {
+              if (key === 'id') return false;
+              if (val === undefined || val === null) return true;
+              if (typeof val === 'string' && (val.trim().length === 0 || val.includes('[AI did not generate'))) return true;
+              return false;
+            });
+            const EXPECTED_FIELDS_MAP: Record<string, string[]> = {
+              generalObjectives: ['title', 'description', 'indicator'],
+              specificObjectives: ['title', 'description', 'indicator'],
+              outputs: ['title', 'description', 'indicator'],
+              outcomes: ['title', 'description', 'indicator'],
+              impacts: ['title', 'description', 'indicator'],
+              kers: ['title', 'description', 'exploitationStrategy'],
+              risks: ['title', 'description', 'mitigation'],
+            };
+            const _expectedKeys = EXPECTED_FIELDS_MAP[sectionKey] || [];
+            const hasMissingFields = _expectedKeys.length > 0 && _expectedKeys.some(k => !(k in item) || item[k] === undefined || item[k] === null || (typeof item[k] === 'string' && item[k].trim().length === 0));
+            if (hasEmptyFields || hasMissingFields) {
+              emptyIndices.push(index);
+                }
+              }
+            });
+
+            if (emptyIndices.length === 0) {
+              console.log(`[SmartFill] ${sectionKey}: All ${sectionData.length} items complete → nothing to fill`);
+              setModalConfig({
+                isOpen: true,
+                title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
+                message: language === 'si'
+                  ? `Vsi elementi v razdelku "${sectionKey}" so že izpolnjeni. Za izboljšanje vsebine uporabite "Izboljšaj obstoječe".`
+                  : `All items in "${sectionKey}" are already filled. To improve content, use "Enhance existing".`,
+                confirmText: language === 'si' ? 'V redu' : 'OK',
+                secondaryText: '',
+                cancelText: '',
+                onConfirm: () => closeModal(),
+                onSecondary: null,
+                onCancel: () => closeModal(),
+              });
+              generatedData = sectionData;
+            } else {
+              console.log(`[SmartFill] ${sectionKey}: ${emptyIndices.length} of ${sectionData.length} items need filling at indices [${emptyIndices.join(', ')}]`);
+              setIsLoading(
+                language === 'si'
+                  ? `Dopolnjujem ${emptyIndices.length} od ${sectionData.length} elementov v ${sectionKey}...`
+                  : `Filling ${emptyIndices.length} of ${sectionData.length} items in ${sectionKey}...`
+              );
+              generatedData = await generateTargetedFill(
+                sectionKey,
+                projectData,
+                sectionData,
+                language,
+                signal
+              );
+            }
+
+          } else if (typeof sectionData === 'object') {
+            const emptyFields: string[] = [];
+
+            if (sectionKey === 'projectIdea') {
+              for (const field of ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution']) {
+                const val = sectionData[field];
+                if (!val || (typeof val === 'string' && val.trim().length === 0)) {
+                  emptyFields.push(field);
+                }
+              }
+              const rl = sectionData.readinessLevels;
+              if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
+                emptyFields.push('readinessLevels');
+              } else {
+                for (const level of ['TRL', 'SRL', 'ORL', 'LRL']) {
+                  if (rl[level] && (!rl[level].justification || rl[level].justification.trim().length === 0)) {
+                    if (!emptyFields.includes('readinessLevels')) emptyFields.push('readinessLevels');
+                    break;
+                  }
+                }
+              }
+              const policies = sectionData.policies;
+              if (!policies || !Array.isArray(policies) || policies.length === 0) {
+                emptyFields.push('policies');
+              } else {
+                const hasEmptyPolicy = policies.some((p: any) =>
+                  !p.name || p.name.trim().length === 0 || !p.description || p.description.trim().length === 0
+                );
+                if (hasEmptyPolicy && !emptyFields.includes('policies')) {
+                  emptyFields.push('policies');
+                }
+              }
+
+            } else if (sectionKey === 'problemAnalysis') {
+              const cp = sectionData.coreProblem;
+              if (!cp || !cp.title || cp.title.trim().length === 0 || !cp.description || cp.description.trim().length === 0) {
+                emptyFields.push('coreProblem');
+              }
+              const causes = sectionData.causes;
+              if (!causes || !Array.isArray(causes) || causes.length === 0) {
+                emptyFields.push('causes');
+              } else {
+                const hasEmptyCause = causes.some((c: any) =>
+                  !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0
+                );
+                if (hasEmptyCause && !emptyFields.includes('causes')) {
+                  emptyFields.push('causes');
+                }
+              }
+              const consequences = sectionData.consequences;
+              if (!consequences || !Array.isArray(consequences) || consequences.length === 0) {
+                emptyFields.push('consequences');
+              } else {
+                const hasEmptyConseq = consequences.some((c: any) =>
+                  !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0
+                );
+                if (hasEmptyConseq && !emptyFields.includes('consequences')) {
+                  emptyFields.push('consequences');
+                }
+              }
+
+            } else if (sectionKey === 'projectManagement') {
+              if (!sectionData.description || sectionData.description.trim().length === 0) {
+                emptyFields.push('description');
+              }
+              const structure = sectionData.structure;
+              if (!structure) {
+                emptyFields.push('structure');
+              } else {
+                for (const field of ['coordinator', 'steeringCommittee', 'advisoryBoard', 'wpLeaders']) {
+                  if (!structure[field] || structure[field].trim().length === 0) {
+                    if (!emptyFields.includes('structure')) emptyFields.push('structure');
+                    break;
+                  }
+                }
+              }
+
+            } else {
+              for (const [key, val] of Object.entries(sectionData)) {
+                if (typeof val === 'string' && val.trim().length === 0) {
+                  emptyFields.push(key);
+                }
+              }
+            }
+
+            if (emptyFields.length === 0) {
+              console.log(`[SmartFill] ${sectionKey}: All fields complete → nothing to fill`);
+              setModalConfig({
+                isOpen: true,
+                title: language === 'si' ? 'Vse je izpolnjeno' : 'Everything is filled',
+                message: language === 'si'
+                  ? `Vsa polja v razdelku "${sectionKey}" so že izpolnjena. Za izboljšanje vsebine uporabite "Izboljšaj obstoječe".`
+                  : `All fields in "${sectionKey}" are already filled. To improve content, use "Enhance existing".`,
+                confirmText: language === 'si' ? 'V redu' : 'OK',
+                secondaryText: '',
+                cancelText: '',
+                onConfirm: () => closeModal(),
+                onSecondary: null,
+                onCancel: () => closeModal(),
+              });
+              generatedData = sectionData;
+            } else {
+              const fieldNames = emptyFields.join(', ');
+              console.log(`[SmartFill] ${sectionKey}: Empty fields detected: [${fieldNames}]`);
+              setIsLoading(
+                language === 'si'
+                  ? `Dopolnjujem ${emptyFields.length} praznih polj (${fieldNames})...`
+                  : `Filling ${emptyFields.length} empty fields (${fieldNames})...`
+              );
+              generatedData = await generateObjectFill(
+                sectionKey,
+                projectData,
+                sectionData,
+                emptyFields,
+                language,
+                signal
+              );
+            }
+
+          } else {
+            generatedData = await generateSectionContent(
+              sectionKey,
+              projectData,
+              language,
+              mode,
+              null,
+              signal
+            );
+          }
+
+        } else {
+          generatedData = await generateSectionContent(
+            sectionKey,
+            projectData,
+            language,
+            mode,
+            null,
+            signal
+          );
+        }
+        // ★ DIAGNOSTIC: Log what AI actually returned
+        console.log(`[executeGeneration] ★ generatedData for "${sectionKey}":`, 
+          JSON.stringify(generatedData)?.substring(0, 500),
+          '| type:', typeof generatedData,
+          '| isArray:', Array.isArray(generatedData),
+          '| length:', Array.isArray(generatedData) ? generatedData.length : 'N/A'
+        );
+        // ★ GUARD: If AI returned nothing, don't overwrite existing data
+        if (generatedData === undefined || generatedData === null) {
+          console.error(`[executeGeneration] ★ CRITICAL: generatedData is ${generatedData} for "${sectionKey}" — aborting data insertion`);
+          setError(
+            language === 'si'
+              ? 'AI ni vrnil podatkov. Poskusite ponovno.'
+              : 'AI returned no data. Please try again.'
+          );
+          setIsLoading(false);
+          isGeneratingRef.current = false;
+          abortControllerRef.current = null;
+          return;
+        }
+
+        // ═══ DATA INSERTION ═══
+        let newData = { ...projectData };
+
+        // ★ v7.6 FIX: Unwrap AI response if wrapped in parent/field keys
+        if (subMapping && generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+          var unwrapped = generatedData;
+          var uwParent = subMapping.path[0];
+          if (unwrapped[uwParent] && typeof unwrapped[uwParent] === 'object') {
+            console.log('[executeGeneration] ★ UNWRAP: stripped parent "' + uwParent + '"');
+            unwrapped = unwrapped[uwParent];
+          }
+          if (subMapping.path.length === 2) {
+            var uwField = subMapping.path[1];
+            if (unwrapped[uwField] !== undefined) {
+              console.log('[executeGeneration] ★ UNWRAP: stripped field "' + uwField + '"');
+              unwrapped = unwrapped[uwField];
+            }
+          }
+          generatedData = unwrapped;
+        }
+
+        if (subMapping) {
+          if (sectionKey === 'projectTitleAcronym') {
+            newData.projectIdea = {
+              ...newData.projectIdea,
+              projectTitle: generatedData.projectTitle || newData.projectIdea.projectTitle,
+              projectAcronym: generatedData.projectAcronym || newData.projectIdea.projectAcronym,
+            };
+          } else if (subMapping.isString) {
+            var parentKeyS = subMapping.path[0];
+            var fieldKeyS = subMapping.path[1];
+            var stringVal = generatedData;
+            if (typeof stringVal !== 'string' && stringVal && typeof stringVal === 'object') {
+              if (typeof stringVal[fieldKeyS] === 'string') {
+                stringVal = stringVal[fieldKeyS];
+              } else {
+                var sVals = Object.values(stringVal);
+                var sFirst = sVals.find(function(v) { return typeof v === 'string' && (v as string).trim().length > 0; });
+                if (sFirst) { stringVal = sFirst; }
+              }
+              console.log('[executeGeneration] ★ UNWRAP string for "' + sectionKey + '"');
+            }
+            newData[parentKeyS] = {
+              ...newData[parentKeyS],
+              [fieldKeyS]: stringVal,
+            };
+          } else if (subMapping.path.length === 2) {
+            var parentKeyP = subMapping.path[0];
+            var fieldKeyP = subMapping.path[1];
+            newData[parentKeyP] = {
+              ...newData[parentKeyP],
+              [fieldKeyP]: generatedData,
+            };
+          }
+        } else if (sectionKey === 'partners') {
+
+          newData.partners = generatedData;
+
+        } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
+          // ★ v7.6 FIX: Unwrap if AI returned { problemAnalysis: {...} } or { projectIdea: {...} }
+          if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+            if (generatedData[sectionKey] && typeof generatedData[sectionKey] === 'object' && !Array.isArray(generatedData[sectionKey])) {
+              console.log('[executeGeneration] ★ UNWRAP: stripped "' + sectionKey + '" wrapper from full-section response');
+              generatedData = generatedData[sectionKey];
+            }
+          }
+          if (sectionKey === 'projectManagement') {
+            if (Array.isArray(generatedData)) {
+              console.error('[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (' + generatedData.length + ' items) — this is activities data, NOT PM! Keeping original.');
+            } else if (generatedData && typeof generatedData === 'object') {
+              var pmData = generatedData.projectManagement && typeof generatedData.projectManagement === 'object'
+                ? generatedData.projectManagement
+                : generatedData;
+              console.log('[executeGeneration] ★ PM merge — unwrapped: ' + (!!generatedData.projectManagement) + ', desc length: ' + (pmData?.description?.length || 0));
+              newData[sectionKey] = {
+                ...newData[sectionKey],
+                ...pmData,
+                structure: {
+                  ...(newData[sectionKey]?.structure || {}),
+                  ...(pmData?.structure || {}),
+                },
+              };
+            }
+          } else {
+            // ★ v7.7 FIX: SMART MERGE — do NOT overwrite existing data with empty AI responses
+            if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+              var _smartMerged = { ...newData[sectionKey] };
+              var _mergeKeys = Object.keys(generatedData);
+              for (var _mki = 0; _mki < _mergeKeys.length; _mki++) {
+                var _mk = _mergeKeys[_mki];
+                var _newVal = generatedData[_mk];
+                var _existingVal = _smartMerged[_mk];
+
+                // Rule 1: If new value is a non-empty string, always use it
+                if (typeof _newVal === 'string' && _newVal.trim().length > 0) {
+                  _smartMerged[_mk] = _newVal;
+                  continue;
+                }
+
+                // Rule 2: If new value is an array with real content, use it
+                if (Array.isArray(_newVal) && _newVal.length > 0) {
+                  if (_arrayHasRealContent(_newVal)) {
+                    _smartMerged[_mk] = _newVal;
+                    continue;
+                  }
+                  if (Array.isArray(_existingVal) && _arrayHasRealContent(_existingVal)) {
+                    console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty array)');
+                    continue;
+                  }
+                  _smartMerged[_mk] = _newVal;
+                  continue;
+                }
+
+                // Rule 3: If new value is an object with content, deep merge
+                if (_newVal && typeof _newVal === 'object' && !Array.isArray(_newVal)) {
+                  var _objHasContent = Object.values(_newVal).some(function(v: any) {
+                    return typeof v === 'string' && v.trim().length > 0;
+                  });
+                  if (_objHasContent) {
+                    if (_existingVal && typeof _existingVal === 'object' && !Array.isArray(_existingVal)) {
+                      var _deepMerged = { ..._existingVal };
+                      var _dvKeys = Object.keys(_newVal);
+                      for (var _dvi = 0; _dvi < _dvKeys.length; _dvi++) {
+                        var _dvk = _dvKeys[_dvi];
+                        if (typeof _newVal[_dvk] === 'string' && _newVal[_dvk].trim().length > 0) {
+                          _deepMerged[_dvk] = _newVal[_dvk];
+                        }
+                      }
+                      _smartMerged[_mk] = _deepMerged;
+                    } else {
+                      _smartMerged[_mk] = _newVal;
+                    }
+                    continue;
+                  }
+                  if (_existingVal && typeof _existingVal === 'object') {
+                    var _existObjHasContent = false;
+                    if (Array.isArray(_existingVal)) {
+                      _existObjHasContent = _existingVal.length > 0;
+                    } else {
+                      _existObjHasContent = Object.values(_existingVal).some(function(v: any) {
+                        return typeof v === 'string' && v.trim().length > 0;
+                      });
+                    }
+                    if (_existObjHasContent) {
+                      console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty object)');
+                      continue;
+                    }
+                  }
+                  _smartMerged[_mk] = _newVal;
+                  continue;
+                }
+
+                // Rule 4: If new value is empty string and existing has content — keep existing
+                if (typeof _newVal === 'string' && _newVal.trim().length === 0) {
+                  if (typeof _existingVal === 'string' && _existingVal.trim().length > 0) {
+                    console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty string)');
+                    continue;
+                  }
+                }
+
+                // Rule 5: If new value is empty array and existing has data — keep existing
+                if (Array.isArray(_newVal) && _newVal.length === 0 && Array.isArray(_existingVal) && _existingVal.length > 0) {
+                  console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty array [])');
+                  continue;
+                }
+
+                // Default: use new value
+                _smartMerged[_mk] = _newVal;
+              }
+              console.log('[executeGeneration] ★ v7.7 SMART MERGE complete for "' + sectionKey + '": keys merged: [' + _mergeKeys.join(', ') + ']');
+              newData[sectionKey] = _smartMerged;
+            } else {
+              newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
+            }
+          }
+
+        } else if (sectionKey === 'activities') {
+          if (Array.isArray(generatedData)) {
+            newData[sectionKey] = generatedData;
+          } else if (generatedData && Array.isArray(generatedData.activities)) {
+            newData[sectionKey] = generatedData.activities;
+          } else if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+            newData[sectionKey] = [generatedData];
+          } else {
+            console.warn('[executeGeneration] activities: unexpected format, keeping original');
+          }
+        } else if (sectionKey === 'expectedResults') {
+          const compositeData = generatedData as any;
+          if (compositeData.outputs) newData.outputs = compositeData.outputs;
+          if (compositeData.outcomes) newData.outcomes = compositeData.outcomes;
+          if (compositeData.impacts) newData.impacts = compositeData.impacts;
+        } else {
+          // ★ v7.7 FIX: Smart merge for ARRAY sections (generalObjectives, specificObjectives, outputs, etc.)
+          var _finalArrayData = generatedData;
+
+          // Step 1: Unwrap if AI returned object wrapper
+          if (_finalArrayData && typeof _finalArrayData === 'object' && !Array.isArray(_finalArrayData)) {
+            var _wrapValues = Object.values(_finalArrayData);
+            var _wrapNestedArr = _wrapValues.find(function(v: any) { return Array.isArray(v) && v.length > 0; });
+            if (_wrapNestedArr) {
+              console.warn('[executeGeneration] ★ "' + sectionKey + '" returned as object, extracted nested array (' + (_wrapNestedArr as any[]).length + ' items)');
+              _finalArrayData = _wrapNestedArr;
+            }
+          }
+
+          // Step 2: Smart merge arrays — protect existing content
+          if (Array.isArray(_finalArrayData) && Array.isArray(newData[sectionKey]) && newData[sectionKey].length > 0) {
+            newData[sectionKey] = _smartMergeArray(newData[sectionKey], _finalArrayData as any[], sectionKey);
+          } else if (Array.isArray(_finalArrayData)) {
+            newData[sectionKey] = _finalArrayData;
+          } else if (_finalArrayData === null || _finalArrayData === undefined) {
+            console.warn('[executeGeneration] ★ "' + sectionKey + '" generatedData is null/undefined — keeping original');
+          } else {
+            newData[sectionKey] = _finalArrayData;
+          }
+        }
+
+        // ★ FIX: Auto-assign IDs for KERs and Risks if AI didn't generate them
+        if (Array.isArray(newData.kers)) {
+          newData.kers = newData.kers.map((item: any, idx: number) => ({
+            ...item,
+            id: (item.id && item.id.trim()) ? item.id : `KER${idx + 1}`,
+          }));
+        }
+        if (Array.isArray(newData.risks)) {
+          newData.risks = newData.risks.map((item: any, idx: number) => ({
+            ...item,
+            id: (item.id && item.id.trim()) ? item.id : `RISK${idx + 1}`,
+          }));
+        }
+
+        if (sectionKey === 'activities') {
+          const schedResult = recalculateProjectSchedule(newData);
+          newData = schedResult.projectData;
+          if (schedResult.warnings.length > 0) {
+            console.warn('Schedule warnings:', schedResult.warnings);
+          }
+
+          await new Promise(r => setTimeout(r, 3000));
+          setIsLoading(`${t.generating} ${t.subSteps.implementation}...`);
+          try {
+            const pmContent = await generateSectionContent(
+              'projectManagement',
+              newData,
+              language,
+              mode,
+              null,
+              signal
+            );
+            newData.projectManagement = {
+              ...newData.projectManagement,
+              ...pmContent,
+              structure: {
+                ...(newData.projectManagement?.structure || {}),
+                ...(pmContent?.structure || {}),
+              },
+            };
+          } catch (e: any) {
+            if (e.name === 'AbortError') throw e;
+
+            console.error('[Auto-gen projectManagement]:', e);
+            const emsg = e.message || '';
+            const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+            if (isRateLimit) {
+              console.warn('[Auto-gen projectManagement] Rate limit hit — retrying in 20s...');
+              setIsLoading(
+                language === 'si'
+                  ? 'Čakam na API kvoto... 20s → Implementacija'
+                  : 'Waiting for API quota... 20s → Implementation'
+              );
+              await new Promise(r => setTimeout(r, 20000));
+              if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+              setIsLoading(`${t.generating} ${t.subSteps.implementation}...`);
+              try {
+                const pmRetry = await generateSectionContent('projectManagement', newData, language, mode, null, signal);
+                newData.projectManagement = {
+                  ...newData.projectManagement,
+                  ...pmRetry,
+                  structure: {
+                    ...(newData.projectManagement?.structure || {}),
+                    ...(pmRetry?.structure || {}),
+                  },
+                };
+              } catch (e2: any) {
+                if (e2.name === 'AbortError') throw e2;
+                console.error('[Auto-gen projectManagement] Retry also failed:', e2);
+                setError(
+                  language === 'si'
+                    ? 'Implementacija ni bila generirana (omejitev API). Generirajte jo ročno v koraku 5 → Implementacija.'
+                    : 'Implementation was not generated (API limit). Generate it manually in Step 5 → Implementation.'
+                );
+              }
+            } else {
+              setError(
+                language === 'si'
+                  ? 'Implementacija ni bila generirana. Generirajte jo ročno v koraku 5 → Implementacija.'
+                  : 'Implementation was not generated. Generate it manually in Step 5 → Implementation.'
+              );
+            }
+          }
+
+          await new Promise(r => setTimeout(r, 3000));
+          if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+          setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
+          try {
+            const risksContent = await generateSectionContent(
+              'risks',
+              newData,
+              language,
+              mode,
+              null,
+              signal
+            );
+            if (Array.isArray(risksContent)) {
+              newData.risks = risksContent;
+            } else if (risksContent && Array.isArray(risksContent.risks)) {
+              newData.risks = risksContent.risks;
+            } else {
+              console.warn('[executeGeneration] risks: unexpected format, keeping original');
+            }
+          } catch (e: any) {
+            if (e.name === 'AbortError') throw e;
+
+            console.error('[Auto-gen risks]:', e);
+            const emsg = e.message || '';
+            const isRateLimit = emsg.includes('429') || emsg.includes('Quota') || emsg.includes('rate limit') || emsg.includes('RESOURCE_EXHAUSTED');
+            if (isRateLimit) {
+              console.warn('[Auto-gen risks] Rate limit hit — retrying in 20s...');
+              setIsLoading(
+                language === 'si'
+                  ? 'Čakam na API kvoto... 20s → Obvladovanje tveganj'
+                  : 'Waiting for API quota... 20s → Risk Mitigation'
+              );
+              await new Promise(r => setTimeout(r, 20000));
+              if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+              setIsLoading(`${t.generating} ${t.subSteps.riskMitigation}...`);
+              try {
+                const risksRetry = await generateSectionContent('risks', newData, language, mode, null, signal);
+                if (Array.isArray(risksRetry)) {
+                  newData.risks = risksRetry;
+                } else if (risksRetry && Array.isArray((risksRetry as any).risks)) {
+                  newData.risks = (risksRetry as any).risks;
+                }
+              } catch (e2: any) {
+                if (e2.name === 'AbortError') throw e2;
+                console.error('[Auto-gen risks] Retry also failed:', e2);
+                setModalConfig({
+                  isOpen: true,
+                  title: language === 'si' ? 'Tveganja niso bila generirana' : 'Risks Were Not Generated',
+                  message: language === 'si'
+                    ? 'Avtomatsko generiranje tveganj ni uspelo zaradi omejitve API ponudnika.\n\nTo ni kritična napaka — aktivnosti in implementacija so uspešno generirani.\n\nTveganja lahko generirate ročno:\n• Pojdite na korak 5 → Obvladovanje tveganj\n• Kliknite "Generiraj z UI"'
+                    : 'Automatic risk generation failed due to API provider limits.\n\nThis is not a critical error — activities and implementation were generated successfully.\n\nYou can generate risks manually:\n• Go to Step 5 → Risk Mitigation\n• Click "Generate with AI"',
+                  confirmText: language === 'si' ? 'V redu' : 'OK',
+                  secondaryText: '',
+                  cancelText: '',
+                  onConfirm: () => closeModal(),
+                  onSecondary: null,
+                  onCancel: () => closeModal(),
+                });
+              }
+            } else {
+              setModalConfig({
+                isOpen: true,
+                title: language === 'si' ? 'Tveganja niso bila generirana' : 'Risks Were Not Generated',
+                message: language === 'si'
+                  ? 'Avtomatsko generiranje tveganj ni uspelo.\n\nTo ni kritična napaka — aktivnosti in implementacija so uspešno generirani.\n\nTveganja lahko generirate ročno:\n• Pojdite na korak 5 → Obvladovanje tveganj\n• Kliknite "Generiraj z UI"'
+                  : 'Automatic risk generation failed.\n\nThis is not a critical error — activities and implementation were generated successfully.\n\nYou can generate risks manually:\n• Go to Step 5 → Risk Mitigation\n• Click "Generate with AI"',
+                confirmText: language === 'si' ? 'V redu' : 'OK',
+                secondaryText: '',
+                cancelText: '',
+                onConfirm: () => closeModal(),
+                onSecondary: null,
+                onCancel: () => closeModal(),
+              });
+            }
+          }
+        }
+
+        setProjectData((prev: any) => {
+          const savedData = { ...prev, ...newData };
+          if (currentProjectId) {
+            storageService.saveProject(savedData, language, currentProjectId)
+              .then(() => console.log(`[executeGeneration] ★ Explicit save after ${sectionKey} — lang=${language}, generalObjectives: ${Array.isArray(savedData.generalObjectives) && savedData.generalObjectives.some((o: any) => o.title?.trim()) ? '✅ HAS' : '⚠️ EMPTY'}`))
+              .catch((e: any) => console.error(`[executeGeneration] ★ Explicit save failed:`, e));
+          }
+          return savedData;
+        });
+        setHasUnsavedTranslationChanges(true);
+
+      } catch (e: any) {
+        handleAIError(e, `generateSection(${sectionKey})`);
+      } finally {
+
+        setIsLoading(false);
+        isGeneratingRef.current = false;
+        abortControllerRef.current = null;
+      }
+    },
+    [
+      projectData,
+      language,
+      t,
+      closeModal,
+      setProjectData,
+      setHasUnsavedTranslationChanges,
+      handleAIError,
+      preGenerationGuard,
+      currentProjectId,
+    ]
+  );
   // ─── 3-option generation modal helper ──────────────────────────
 
   const show3OptionModal = useCallback(
@@ -628,7 +2385,7 @@
                   onConfirm: () => closeModal(),
                   onSecondary: null,
                   onCancel: () => closeModal(),
-                                  });
+                });
                 setIsLoading(false);
                 isGeneratingRef.current = false;
                 abortControllerRef.current = null;
@@ -939,7 +2696,7 @@
       currentProjectId,
     ]
   );
-  // ─── Single field generation ───────────────────────────────────
+    // ─── Single field generation ───────────────────────────────────
 
   const handleGenerateField = useCallback(
     async (path: (string | number)[]) => {
