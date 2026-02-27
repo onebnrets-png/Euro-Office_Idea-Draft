@@ -1671,7 +1671,7 @@ export const useGeneration = ({
         return;
       }
 
-      if (currentHasContent) {
+            if (currentHasContent) {
         show3OptionModal(
           () => executeGeneration(sectionKey, 'enhance'),
           () => executeGeneration(sectionKey, 'fill'),
@@ -1680,7 +1680,33 @@ export const useGeneration = ({
         return;
       }
 
+      // ★ v7.6 FIX: For parent sections (problemAnalysis, projectIdea), check if ANY sub-field has content
+      // The hasDeepContent check above may miss content in nested sub-fields after sub-section generation
+      if (sectionKey === 'problemAnalysis' || sectionKey === 'projectIdea') {
+        var parentData = projectData[sectionKey];
+        if (parentData && typeof parentData === 'object' && Object.keys(parentData).length > 0) {
+          var anyContent = false;
+          for (var pKey in parentData) {
+            if (parentData[pKey] && typeof parentData[pKey] === 'string' && parentData[pKey].trim().length > 0) { anyContent = true; break; }
+            if (parentData[pKey] && typeof parentData[pKey] === 'object') {
+              var pVals = Object.values(parentData[pKey]);
+              if (pVals.some(function(v) { return typeof v === 'string' && (v as string).trim().length > 0; })) { anyContent = true; break; }
+            }
+          }
+          if (anyContent) {
+            console.log('[handleGenerateSection] ★ v7.6: Detected content in ' + sectionKey + ' sub-fields — offering fill option');
+            show3OptionModal(
+              () => executeGeneration(sectionKey, 'enhance'),
+              () => executeGeneration(sectionKey, 'fill'),
+              () => executeGeneration(sectionKey, 'regenerate')
+            );
+            return;
+          }
+        }
+      }
+
       executeGeneration(sectionKey, 'regenerate');
+
     },
     [
       ensureApiKey,
