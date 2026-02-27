@@ -904,45 +904,76 @@ export const useGeneration = ({
             generatedData = existingWPs;
           }
 
-        } else if (
+                } else if (
           mode === 'fill' &&
           ['projectIdea', 'problemAnalysis', 'projectManagement'].includes(sectionKey) &&
           projectData[sectionKey] &&
           typeof projectData[sectionKey] === 'object' &&
           !Array.isArray(projectData[sectionKey])
         ) {
-          const sectionData = projectData[sectionKey];
-          const emptyFields: string[] = [];
+          // ★ v7.7 FIX: Detect ALL empty fields including arrays and nested objects
+          var sectionData = projectData[sectionKey];
+          var emptyFields: string[] = [];
 
-          for (const [key, val] of Object.entries(sectionData)) {
-            if (typeof val === 'string' && val.trim().length === 0) {
-              emptyFields.push(key);
+          // Check top-level string fields
+          for (var _efKey of Object.keys(sectionData)) {
+            var _efVal = sectionData[_efKey];
+            if (typeof _efVal === 'string' && _efVal.trim().length === 0) {
+              emptyFields.push(_efKey);
             }
           }
 
-          const expectedFields: Record<string, string[]> = {
+          // Check expected string fields that might be missing entirely
+          var expectedFields: Record<string, string[]> = {
             projectIdea: ['projectTitle', 'projectAcronym', 'mainAim', 'stateOfTheArt', 'proposedSolution'],
             problemAnalysis: [],
             projectManagement: ['description'],
           };
-          const expected = expectedFields[sectionKey] || [];
-          for (const field of expected) {
-            if (!sectionData[field] || (typeof sectionData[field] === 'string' && sectionData[field].trim().length === 0)) {
-              if (!emptyFields.includes(field)) {
-                emptyFields.push(field);
+          var expected = expectedFields[sectionKey] || [];
+          for (var _exf of expected) {
+            if (!sectionData[_exf] || (typeof sectionData[_exf] === 'string' && sectionData[_exf].trim().length === 0)) {
+              if (!emptyFields.includes(_exf)) {
+                emptyFields.push(_exf);
               }
             }
           }
 
+          // ★ v7.7: Check ARRAY sub-fields (causes, consequences, policies, etc.)
+          if (sectionKey === 'problemAnalysis') {
+            var _paCauses = sectionData.causes;
+            if (!_paCauses || !Array.isArray(_paCauses) || _paCauses.length === 0) {
+              if (!emptyFields.includes('causes')) emptyFields.push('causes');
+            } else {
+              var _hasEmptyCause = _paCauses.some(function(c: any) {
+                return !c || !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0;
+              });
+              if (_hasEmptyCause && !emptyFields.includes('causes')) emptyFields.push('causes');
+            }
+            var _paConseq = sectionData.consequences;
+            if (!_paConseq || !Array.isArray(_paConseq) || _paConseq.length === 0) {
+              if (!emptyFields.includes('consequences')) emptyFields.push('consequences');
+            } else {
+              var _hasEmptyConseq = _paConseq.some(function(c: any) {
+                return !c || !c.title || c.title.trim().length === 0 || !c.description || c.description.trim().length === 0;
+              });
+              if (_hasEmptyConseq && !emptyFields.includes('consequences')) emptyFields.push('consequences');
+            }
+            // ★ v7.7: Also check coreProblem
+            var _paCp = sectionData.coreProblem;
+            if (!_paCp || !_paCp.title || _paCp.title.trim().length === 0 || !_paCp.description || _paCp.description.trim().length === 0) {
+              if (!emptyFields.includes('coreProblem')) emptyFields.push('coreProblem');
+            }
+          }
+
           if (sectionKey === 'projectIdea') {
-            const rl = sectionData.readinessLevels;
+            var rl = sectionData.readinessLevels;
             if (!rl || !rl.TRL || !rl.SRL || !rl.ORL || !rl.LRL) {
               if (!emptyFields.includes('readinessLevels')) {
                 emptyFields.push('readinessLevels');
               }
             } else {
-              for (const level of ['TRL', 'SRL', 'ORL', 'LRL']) {
-                if (rl[level] && typeof rl[level].justification === 'string' && rl[level].justification.trim().length === 0) {
+              for (var _rlLevel of ['TRL', 'SRL', 'ORL', 'LRL']) {
+                if (rl[_rlLevel] && typeof rl[_rlLevel].justification === 'string' && rl[_rlLevel].justification.trim().length === 0) {
                   if (!emptyFields.includes('readinessLevels')) {
                     emptyFields.push('readinessLevels');
                   }
@@ -951,13 +982,37 @@ export const useGeneration = ({
               }
             }
 
-            const policies = sectionData.policies;
-            if (!policies || !Array.isArray(policies) || policies.length === 0) {
+            var _piPolicies = sectionData.policies;
+            if (!_piPolicies || !Array.isArray(_piPolicies) || _piPolicies.length === 0) {
               if (!emptyFields.includes('policies')) {
+                emptyFields.push('policies');
+              }
+            } else {
+              var _hasEmptyPolicy = _piPolicies.some(function(p: any) {
+                return !p || !p.name || p.name.trim().length === 0 || !p.description || p.description.trim().length === 0;
+              });
+              if (_hasEmptyPolicy && !emptyFields.includes('policies')) {
                 emptyFields.push('policies');
               }
             }
           }
+
+          // ★ v7.7: Check projectManagement nested structure
+          if (sectionKey === 'projectManagement') {
+            var _pmStructure = sectionData.structure;
+            if (!_pmStructure) {
+              if (!emptyFields.includes('structure')) emptyFields.push('structure');
+            } else {
+              for (var _pmField of ['coordinator', 'steeringCommittee', 'advisoryBoard', 'wpLeaders']) {
+                if (!_pmStructure[_pmField] || _pmStructure[_pmField].trim().length === 0) {
+                  if (!emptyFields.includes('structure')) emptyFields.push('structure');
+                  break;
+                }
+              }
+            }
+          }
+
+          console.log('[ObjectFill] v7.7 ' + sectionKey + ': detected empty fields: [' + emptyFields.join(', ') + ']');
 
           if (emptyFields.length === 0) {
             setModalConfig({
@@ -975,23 +1030,24 @@ export const useGeneration = ({
             });
             generatedData = sectionData;
           } else {
-            const fieldNames = emptyFields.join(', ');
-            console.log(`[ObjectFill] ${sectionKey}: Empty fields detected: [${fieldNames}]`);
+            var fieldNames = emptyFields.join(', ');
+            console.log('[ObjectFill] ' + sectionKey + ': Empty fields detected: [' + fieldNames + ']');
             setIsLoading(
               language === 'si'
-                ? `Dopolnjujem ${emptyFields.length} praznih polj: ${fieldNames}...`
-                : `Filling ${emptyFields.length} empty fields: ${fieldNames}...`
+                ? 'Dopolnjujem ' + emptyFields.length + ' praznih polj: ' + fieldNames + '...'
+                : 'Filling ' + emptyFields.length + ' empty fields: ' + fieldNames + '...'
             );
 
             generatedData = await generateObjectFill(
               sectionKey,
               projectData,
-              projectData[sectionKey],  // currentData
+              projectData[sectionKey],
               emptyFields,
               language,
-              signal  // ★ v7.5
+              signal
             );
           }
+
 
         } else if (mode === 'fill') {
           const sectionData = projectData[sectionKey];
