@@ -1348,7 +1348,7 @@ export const useGeneration = ({
         } else if (sectionKey === 'partners') {
 
           newData.partners = generatedData;
-                } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
+                        } else if (['problemAnalysis', 'projectIdea', 'projectManagement'].includes(sectionKey)) {
   // ★ v7.6 FIX: Unwrap if AI returned { problemAnalysis: {...} } or { projectIdea: {...} }
   if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
     if (generatedData[sectionKey] && typeof generatedData[sectionKey] === 'object' && !Array.isArray(generatedData[sectionKey])) {
@@ -1358,16 +1358,14 @@ export const useGeneration = ({
   }
   // ★ FIX: projectManagement is an OBJECT {description, structure} — never an array
   if (sectionKey === 'projectManagement') {
-
     // Guard: AI sometimes returns activities array instead of PM object
     if (Array.isArray(generatedData)) {
-      console.error(`[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (${generatedData.length} items) — this is activities data, NOT PM! Keeping original.`);
+      console.error('[executeGeneration] ★ CRITICAL: AI returned ARRAY for projectManagement (' + generatedData.length + ' items) — this is activities data, NOT PM! Keeping original.');
     } else if (generatedData && typeof generatedData === 'object') {
-      // ★ FIX: AI sometimes wraps response as {projectManagement: {description, structure}}
-      const pmData = generatedData.projectManagement && typeof generatedData.projectManagement === 'object'
+      var pmData = generatedData.projectManagement && typeof generatedData.projectManagement === 'object'
         ? generatedData.projectManagement
         : generatedData;
-      console.log(`[executeGeneration] ★ PM merge — unwrapped: ${!!generatedData.projectManagement}, desc length: ${pmData?.description?.length || 0}`);
+      console.log('[executeGeneration] ★ PM merge — unwrapped: ' + (!!generatedData.projectManagement) + ', desc length: ' + (pmData?.description?.length || 0));
       newData[sectionKey] = {
         ...newData[sectionKey],
         ...pmData,
@@ -1378,8 +1376,118 @@ export const useGeneration = ({
       };
     }
   } else {
-    newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
+    // ★ v7.7 FIX: SMART MERGE — do NOT overwrite existing data with empty AI responses
+    // AI often returns the full section object but with empty sub-fields for parts it didn't generate
+    if (generatedData && typeof generatedData === 'object' && !Array.isArray(generatedData)) {
+      var _smartMerged = { ...newData[sectionKey] };
+      var _mergeKeys = Object.keys(generatedData);
+      for (var _mki = 0; _mki < _mergeKeys.length; _mki++) {
+        var _mk = _mergeKeys[_mki];
+        var _newVal = generatedData[_mk];
+        var _existingVal = _smartMerged[_mk];
+
+        // Rule 1: If new value is a non-empty string, always use it
+        if (typeof _newVal === 'string' && _newVal.trim().length > 0) {
+          _smartMerged[_mk] = _newVal;
+          continue;
+        }
+
+        // Rule 2: If new value is an array with real content, use it
+        if (Array.isArray(_newVal) && _newVal.length > 0) {
+          var _arrHasContent = _newVal.some(function(item: any) {
+            if (!item || typeof item !== 'object') return false;
+            return Object.entries(item).some(function(entry: [string, any]) {
+              if (entry[0] === 'id') return false;
+              return typeof entry[1] === 'string' && entry[1].trim().length > 0;
+            });
+          });
+          if (_arrHasContent) {
+            _smartMerged[_mk] = _newVal;
+            continue;
+          }
+          // Array with only empty items — keep existing if it has content
+          if (Array.isArray(_existingVal) && _existingVal.length > 0) {
+            var _existingHasContent = _existingVal.some(function(item: any) {
+              if (!item || typeof item !== 'object') return false;
+              return Object.entries(item).some(function(entry: [string, any]) {
+                if (entry[0] === 'id') return false;
+                return typeof entry[1] === 'string' && entry[1].trim().length > 0;
+              });
+            });
+            if (_existingHasContent) {
+              console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty array)');
+              continue; // keep existing
+            }
+          }
+          _smartMerged[_mk] = _newVal;
+          continue;
+        }
+
+        // Rule 3: If new value is an object with content, use it (deep merge for nested objects like coreProblem)
+        if (_newVal && typeof _newVal === 'object' && !Array.isArray(_newVal)) {
+          var _objHasContent = Object.values(_newVal).some(function(v: any) {
+            return typeof v === 'string' && v.trim().length > 0;
+          });
+          if (_objHasContent) {
+            // Deep merge: keep existing fields, overwrite only non-empty new fields
+            if (_existingVal && typeof _existingVal === 'object' && !Array.isArray(_existingVal)) {
+              var _deepMerged = { ..._existingVal };
+              var _dvKeys = Object.keys(_newVal);
+              for (var _dvi = 0; _dvi < _dvKeys.length; _dvi++) {
+                var _dvk = _dvKeys[_dvi];
+                if (typeof _newVal[_dvk] === 'string' && _newVal[_dvk].trim().length > 0) {
+                  _deepMerged[_dvk] = _newVal[_dvk];
+                }
+              }
+              _smartMerged[_mk] = _deepMerged;
+            } else {
+              _smartMerged[_mk] = _newVal;
+            }
+            continue;
+          }
+          // Object with no content — keep existing
+          if (_existingVal && typeof _existingVal === 'object') {
+            var _existObjHasContent = false;
+            if (Array.isArray(_existingVal)) {
+              _existObjHasContent = _existingVal.length > 0;
+            } else {
+              _existObjHasContent = Object.values(_existingVal).some(function(v: any) {
+                return typeof v === 'string' && v.trim().length > 0;
+              });
+            }
+            if (_existObjHasContent) {
+              console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty object)');
+              continue;
+            }
+          }
+          _smartMerged[_mk] = _newVal;
+          continue;
+        }
+
+        // Rule 4: If new value is empty string and existing has content — keep existing
+        if (typeof _newVal === 'string' && _newVal.trim().length === 0) {
+          if (typeof _existingVal === 'string' && _existingVal.trim().length > 0) {
+            console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty string)');
+            continue;
+          }
+        }
+
+        // Rule 5: If new value is empty array and existing has data — keep existing
+        if (Array.isArray(_newVal) && _newVal.length === 0 && Array.isArray(_existingVal) && _existingVal.length > 0) {
+          console.log('[executeGeneration] ★ v7.7 SMART MERGE: keeping existing "' + _mk + '" (AI returned empty array [])');
+          continue;
+        }
+
+        // Default: use new value
+        _smartMerged[_mk] = _newVal;
+      }
+      console.log('[executeGeneration] ★ v7.7 SMART MERGE complete for "' + sectionKey + '": keys merged: [' + _mergeKeys.join(', ') + ']');
+      newData[sectionKey] = _smartMerged;
+    } else {
+      newData[sectionKey] = { ...newData[sectionKey], ...generatedData };
+    }
   }
+
         } else if (sectionKey === 'activities') {
           if (Array.isArray(generatedData)) {
             newData[sectionKey] = generatedData;
