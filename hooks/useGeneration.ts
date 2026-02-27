@@ -1587,7 +1587,7 @@ export const useGeneration = ({
 
   // ─── SMART Handle generate (4-level logic) ─────────────────────
 
-  const handleGenerateSection = useCallback(
+    const handleGenerateSection = useCallback(
     async (sectionKey: string) => {
       if (!ensureApiKey()) {
         setIsSettingsOpen(true);
@@ -1599,15 +1599,47 @@ export const useGeneration = ({
       const subMapping = SUB_SECTION_MAP[sectionKey];
       const contentCheckKey = subMapping ? subMapping.parent : sectionKey;
 
-      const currentHasContent = subMapping
-        ? (() => {
-            let data: any = projectData;
-            for (const key of subMapping.path) {
-              data = data?.[key];
+      // ★ v7.6 FIX: Read fresh data from current projectData to avoid stale closure
+      // For parent sections, also check all nested sub-fields for any content
+      var freshHasContent = false;
+      if (subMapping) {
+        var subData = projectData;
+        for (var si = 0; si < subMapping.path.length; si++) {
+          subData = subData ? subData[subMapping.path[si]] : undefined;
+        }
+        freshHasContent = hasDeepContent(subData);
+      } else {
+        freshHasContent = robustCheckSectionHasContent(sectionKey);
+        // ★ v7.6: Double-check for composite objects (problemAnalysis, projectIdea, projectManagement)
+        // hasDeepContent may return false if structure is shallow, so check nested values directly
+        if (!freshHasContent && projectData[sectionKey] && typeof projectData[sectionKey] === 'object' && !Array.isArray(projectData[sectionKey])) {
+          var secObj = projectData[sectionKey];
+          var secKeys = Object.keys(secObj);
+          for (var ski = 0; ski < secKeys.length; ski++) {
+            var secVal = secObj[secKeys[ski]];
+            if (typeof secVal === 'string' && secVal.trim().length > 0) { freshHasContent = true; break; }
+            if (secVal && typeof secVal === 'object' && !Array.isArray(secVal)) {
+              var nestedVals = Object.values(secVal);
+              for (var nvi = 0; nvi < nestedVals.length; nvi++) {
+                if (typeof nestedVals[nvi] === 'string' && (nestedVals[nvi] as string).trim().length > 0) { freshHasContent = true; break; }
+              }
+              if (freshHasContent) break;
             }
-            return hasDeepContent(data);
-          })()
-        : robustCheckSectionHasContent(sectionKey);
+            if (Array.isArray(secVal) && secVal.length > 0) {
+              var hasArrContent = secVal.some(function(item) {
+                if (!item || typeof item !== 'object') return false;
+                return Object.values(item).some(function(v) { return typeof v === 'string' && (v as string).trim().length > 0; });
+              });
+              if (hasArrContent) { freshHasContent = true; break; }
+            }
+          }
+          if (freshHasContent) {
+            console.log('[handleGenerateSection] ★ v7.6: Deep check found content in "' + sectionKey + '" that robustCheck missed');
+          }
+        }
+      }
+      var currentHasContent = freshHasContent;
+
 
       const otherLangData = await checkOtherLanguageHasContent(contentCheckKey);
 
