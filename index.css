@@ -791,40 +791,26 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     box-shadow: none !important;
     border: 1px solid #CCCCCC !important;
   }
-   /* Force Gantt and PERT charts to full print width */
-  #print-layout-container .chart-container-white,
+     /* Charts in print layout — fixed width, no overflow clipping */
   #print-layout-container [id*="gantt"],
-  #print-layout-container [id*="pert"] {
-    width: 100% !important;
-    min-width: 100% !important;
+  #print-layout-container [id*="pert"],
+  #print-layout-container [id*="organigram"] {
+    width: 960px !important;
+    max-width: 960px !important;
     overflow: visible !important;
+    page-break-inside: avoid;
   }
 
+  /* SVG elements inside charts — scale to container */
   #print-layout-container svg {
-    max-width: 100% !important;
-    height: auto !important;
+    max-width: 960px !important;
+    overflow: visible !important;
   }
 
-  /* Gantt chart — landscape-friendly sizing */
-  #gantt-chart-print {
-    width: 100% !important;
-    min-height: 400px !important;
+  /* Ensure chart containers don't collapse */
+  #print-layout-container .chart-container-white {
     overflow: visible !important;
-    page-break-inside: avoid;
-  }
-
-  #pert-chart-print {
-    width: 100% !important;
-    min-height: 300px !important;
-    overflow: visible !important;
-    page-break-inside: avoid;
-  }
-
-  #organigram-print {
-    width: 100% !important;
-    min-height: 200px !important;
-    overflow: visible !important;
-    page-break-inside: avoid;
+    width: 960px !important;
   }
 }
 /* ═══════════════════════════════════════════════════════════════
