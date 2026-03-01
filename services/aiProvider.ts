@@ -75,7 +75,7 @@ function recordRequest(): void {
 
 // ─── Retry with exponential backoff ──────────────────────────────
 
-const RETRYABLE_ERRORS = new Set(['RATE_LIMIT', 'SERVER_ERROR', 'TIMEOUT', 'MODEL_OVERLOADED']);
+const RETRYABLE_ERRORS = new Set(['RATE_LIMIT', 'SERVER_ERROR', 'TIMEOUT', 'MODEL_OVERLOADED', 'INVALID_JSON']);
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 2_000;
 
