@@ -1,7 +1,9 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v4.1 — 2026-03-01
+// v4.2 — 2026-03-01
+// ★ v4.2: NEW "Organizations" tab for SuperAdmin — list all orgs,
+//          delete empty orgs, merge duplicate orgs
 // ★ v4.1: Organization column + edit, Expandable Error Log + export, Audit Log export
 // ═══════════════════════════════════════════════════════════════
 
@@ -34,7 +36,7 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-type TabId = 'users' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
+type TabId = 'users' | 'organizations' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
 
 const QRCodeImage = ({ value, size = 200, colors: c }: { value: string; size?: number; colors?: typeof lightColors }) => {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
@@ -73,7 +75,7 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users', instructions: 'Instructions', ai: 'AI Provider',
+      users: 'Users', organizations: 'Organizations', instructions: 'Instructions', ai: 'AI Provider',
       profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base',
     },
     users: {
@@ -93,10 +95,36 @@ const ADMIN_TEXT = {
       deleteConfirmSuffix: '? All their projects and data will be removed. This cannot be undone.',
       deleteSuccess: 'User deleted successfully.', deleteFailed: 'Failed to delete user:',
       removeFromOrg: 'Remove from Org',
-            removeFromOrgConfirm: 'Remove user from this organization? Their projects in this org will be deleted.',
+      removeFromOrgConfirm: 'Remove user from this organization? Their projects in this org will be deleted.',
       organization: 'Organization', changeOrg: 'Change Organization',
       orgChanged: 'Organization changed successfully.', orgChangeFailed: 'Failed to change organization:',
       selectOrg: 'Select organization...', noOrg: 'No organization',
+    },
+    organizations: {
+      title: 'Organization Management',
+      subtitle: 'View, delete empty, and merge duplicate organizations',
+      name: 'Organization Name', members: 'Members', created: 'Created',
+      actions: 'Actions', noOrgs: 'No organizations found.',
+      totalOrgs: 'Total organizations',
+      deleteOrg: 'Delete Organization',
+      deleteConfirm: 'Are you sure you want to delete organization',
+      deleteConfirmSuffix: '? This organization has no members and will be permanently removed.',
+      deleteSuccess: 'Organization deleted successfully.',
+      deleteFailed: 'Failed to delete organization:',
+      cannotDeleteWithMembers: 'Cannot delete organization with active members. Remove members first.',
+      mergeOrgs: 'Merge Organizations',
+      mergeTitle: 'Merge Duplicate Organizations',
+      mergeSource: 'Source (will be deleted)',
+      mergeTarget: 'Target (will keep)',
+      mergeConfirm: 'Merge source into target? All members, projects, and data from the source will be moved to the target. The source organization will be deleted.',
+      mergeSuccess: 'Organizations merged successfully.',
+      mergeFailed: 'Failed to merge organizations:',
+      mergeButton: 'Merge',
+      selectSource: 'Select source org...',
+      selectTarget: 'Select target org...',
+      empty: 'Empty',
+      refreshing: 'Refreshing...',
+      refresh: 'Refresh',
     },
     instructions: {
       title: 'AI Instructions', subtitle: 'Edit the global AI instructions that apply to all users',
@@ -123,14 +151,15 @@ const ADMIN_TEXT = {
         instructions_reset: 'Instructions Reset', user_block: 'User Blocked',
         user_delete: 'User Deleted', org_user_remove: 'User Removed from Org',
         org_delete: 'Organization Deleted', org_change: 'Organization Changed',
-        },
+        org_merge: 'Organizations Merged',
+      },
     },
     errors: {
       title: 'Error Log', subtitle: 'System errors captured from all users',
       date: 'Date', user: 'User', component: 'Component', error: 'Error', code: 'Code',
       noErrors: 'No errors in system!', copyForDev: 'Copy for developer',
       clearAll: 'Clear all', clearConfirm: 'Clear all error logs?',
-            copied: 'Logs copied to clipboard!', cleared: 'Logs cleared.',
+      copied: 'Logs copied to clipboard!', cleared: 'Logs cleared.',
       exportTxt: 'Export TXT', exportJson: 'Export JSON',
       stackTrace: 'Stack Trace', context: 'Context', collapse: 'Collapse',
       expand: 'Click row to expand full detail',
@@ -172,7 +201,7 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Nastavi AI ponudnika, profil in varnost',
     subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
-      users: 'Uporabniki', instructions: 'Pravila', ai: 'AI Ponudnik',
+      users: 'Uporabniki', organizations: 'Organizacije', instructions: 'Pravila', ai: 'AI Ponudnik',
       profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
     },
     users: {
@@ -196,6 +225,32 @@ const ADMIN_TEXT = {
       organization: 'Organizacija', changeOrg: 'Spremeni organizacijo',
       orgChanged: 'Organizacija uspe\u0161no spremenjena.', orgChangeFailed: 'Napaka pri spremembi organizacije:',
       selectOrg: 'Izberi organizacijo...', noOrg: 'Brez organizacije',
+    },
+    organizations: {
+      title: 'Upravljanje organizacij',
+      subtitle: 'Pregled, brisanje praznih in zdru\u017Eevanje podvojenih organizacij',
+      name: 'Ime organizacije', members: '\u010Clani', created: 'Ustvarjena',
+      actions: 'Akcije', noOrgs: 'Ni najdenih organizacij.',
+      totalOrgs: 'Skupaj organizacij',
+      deleteOrg: 'Izbri\u0161i organizacijo',
+      deleteConfirm: 'Ali ste prepri\u010Dani, da \u017Eelite izbrisati organizacijo',
+      deleteConfirmSuffix: '? Ta organizacija nima \u010Dlanov in bo trajno odstranjena.',
+      deleteSuccess: 'Organizacija uspe\u0161no izbrisana.',
+      deleteFailed: 'Napaka pri brisanju organizacije:',
+      cannotDeleteWithMembers: 'Ni mogo\u010De izbrisati organizacije z aktivnimi \u010Dlani. Najprej odstranite \u010Dlane.',
+      mergeOrgs: 'Zdru\u017Ei organizacije',
+      mergeTitle: 'Zdru\u017Ei podvojene organizacije',
+      mergeSource: 'Vir (bo izbrisan)',
+      mergeTarget: 'Cilj (ostane)',
+      mergeConfirm: 'Zdru\u017Ei vir v cilj? Vsi \u010Dlani, projekti in podatki iz vira bodo prene\u0161eni v cilj. Izvorna organizacija bo izbrisana.',
+      mergeSuccess: 'Organizaciji uspe\u0161no zdru\u017Eeni.',
+      mergeFailed: 'Napaka pri zdru\u017Eevanju organizacij:',
+      mergeButton: 'Zdru\u017Ei',
+      selectSource: 'Izberi izvorno org...',
+      selectTarget: 'Izberi ciljno org...',
+      empty: 'Prazna',
+      refreshing: 'Osve\u017Eujem...',
+      refresh: 'Osve\u017Ei',
     },
     instructions: {
       title: 'AI Pravila', subtitle: 'Urejanje globalnih AI pravil, ki veljajo za vse uporabnike',
@@ -222,6 +277,7 @@ const ADMIN_TEXT = {
         instructions_reset: 'Pravila ponastavljena', user_block: 'Uporabnik blokiran',
         user_delete: 'Uporabnik izbrisan', org_user_remove: 'Uporabnik odstranjen iz org',
         org_delete: 'Organizacija izbrisana', org_change: 'Sprememba organizacije',
+        org_merge: 'Organizaciji zdru\u017Eeni',
       },
     },
     errors: {
@@ -334,7 +390,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
   const adminTabs: TabId[] = isUserSuperAdmin
-    ? ['users', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
+    ? ['users', 'organizations', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
     : ['users', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
   const regularTabs: TabId[] = ['ai', 'profile'];
   const availableTabs = isUserAdmin ? adminTabs : regularTabs;
@@ -354,7 +410,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [modelName, setModelName] = useState('');
-  const [secondaryModelName, setSecondaryModelName] = useState('');  // ★ v4.0
+  const [secondaryModelName, setSecondaryModelName] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
 
@@ -388,9 +444,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [errorFilterComponent, setErrorFilterComponent] = useState('');
   const [errorFilterUser, setErrorFilterUser] = useState('');
   // ★ v4.1: Organization change
-  const [allOrgs, setAllOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [allOrgs, setAllOrgs] = useState<Array<{ id: string; name: string; created_at?: string }>>([]);
   const [editingOrgUserId, setEditingOrgUserId] = useState<string | null>(null);
   const [selectedNewOrgId, setSelectedNewOrgId] = useState('');
+
+  // ★ v4.2: Organizations tab state
+  const [orgMemberCounts, setOrgMemberCounts] = useState<Record<string, number>>({});
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [deletingOrgId, setDeletingOrgId] = useState<string | null>(null);
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [merging, setMerging] = useState(false);
 
   useEffect(() => { if (isOpen) { if (isUserAdmin) { admin.fetchUsers(); admin.fetchGlobalInstructions(); } loadSettingsData(); } }, [isOpen, isUserAdmin]);
   useEffect(() => { if (activeTab === 'audit' && isOpen && isUserAdmin) { admin.fetchAdminLog(); } }, [activeTab, isOpen, isUserAdmin]);
@@ -400,14 +464,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       errorLogService.getErrorLogs(200).then(logs => { setErrorLogs(logs); setErrorLogsLoading(false); });
     }
   }, [activeTab, isOpen, isUserSuperAdmin]);
-    // ★ v4.1: Load all organizations for org-change dropdown
+  // ★ v4.1: Load all organizations for org-change dropdown
   useEffect(() => {
-    if (activeTab === 'users' && isOpen && isUserAdmin) {
-      organizationService.getAllOrgs().then((orgs) => {
-        setAllOrgs(orgs.map((o) => ({ id: o.id, name: o.name })));
-      });
+    if ((activeTab === 'users' || activeTab === 'organizations') && isOpen && isUserAdmin) {
+      loadAllOrgs();
     }
   }, [activeTab, isOpen, isUserAdmin]);
+
+  // ★ v4.2: Load member counts when organizations tab is active
+  useEffect(() => {
+    if (activeTab === 'organizations' && isOpen && isUserSuperAdmin && allOrgs.length > 0) {
+      loadOrgMemberCounts();
+    }
+  }, [activeTab, isOpen, isUserSuperAdmin, allOrgs]);
 
   useEffect(() => {
     if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
@@ -431,6 +500,102 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 4000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(timer); } }, [message]);
 
+  // ★ v4.2: Load all orgs helper
+  const loadAllOrgs = async () => {
+    setOrgsLoading(true);
+    try {
+      const orgs = await organizationService.getAllOrgs();
+      setAllOrgs(orgs.map((o: any) => ({ id: o.id, name: o.name, created_at: o.created_at || null })));
+    } catch (err) {
+      console.error('Failed to load orgs:', err);
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
+
+  // ★ v4.2: Load member counts for all orgs
+  const loadOrgMemberCounts = async () => {
+    const counts: Record<string, number> = {};
+    for (const org of allOrgs) {
+      try {
+        const result = await organizationService.getOrgMembers(org.id);
+        counts[org.id] = result.success ? (result.data?.length || 0) : 0;
+      } catch {
+        counts[org.id] = 0;
+      }
+    }
+    setOrgMemberCounts(counts);
+  };
+
+  // ★ v4.2: Delete empty organization
+  const handleDeleteOrg = useCallback((orgId: string, orgName: string, memberCount: number) => {
+    const tOrg = (t as any).organizations;
+    if (memberCount > 0) {
+      setToast({ message: tOrg.cannotDeleteWithMembers, type: 'error' });
+      return;
+    }
+    setConfirmModal({
+      isOpen: true,
+      title: tOrg.deleteOrg,
+      message: `${tOrg.deleteConfirm} "${orgName}"${tOrg.deleteConfirmSuffix}`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setDeletingOrgId(orgId);
+        try {
+          const result = await organizationService.deleteOrg(orgId);
+          if (result.success) {
+            setToast({ message: tOrg.deleteSuccess, type: 'success' });
+            // Log audit
+            try { await admin.logAction('org_delete', null, { orgName, orgId }); } catch {}
+            // Refresh list
+            setAllOrgs(prev => prev.filter(o => o.id !== orgId));
+            setOrgMemberCounts(prev => { const next = { ...prev }; delete next[orgId]; return next; });
+          } else {
+            setToast({ message: `${tOrg.deleteFailed} ${result.error || ''}`, type: 'error' });
+          }
+        } catch (err: any) {
+          setToast({ message: `${tOrg.deleteFailed} ${err.message || ''}`, type: 'error' });
+        } finally {
+          setDeletingOrgId(null);
+        }
+      },
+    });
+  }, [t, admin]);
+
+  // ★ v4.2: Merge organizations
+  const handleMergeOrgs = useCallback(() => {
+    const tOrg = (t as any).organizations;
+    if (!mergeSourceId || !mergeTargetId || mergeSourceId === mergeTargetId) return;
+    const sourceName = allOrgs.find(o => o.id === mergeSourceId)?.name || mergeSourceId;
+    const targetName = allOrgs.find(o => o.id === mergeTargetId)?.name || mergeTargetId;
+    setConfirmModal({
+      isOpen: true,
+      title: tOrg.mergeTitle,
+      message: `${tOrg.mergeConfirm}\n\n${language === 'si' ? 'Vir' : 'Source'}: ${sourceName}\n${language === 'si' ? 'Cilj' : 'Target'}: ${targetName}`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setMerging(true);
+        try {
+          const result = await organizationService.mergeOrganizations(mergeSourceId, mergeTargetId);
+          if (result.success) {
+            setToast({ message: tOrg.mergeSuccess, type: 'success' });
+            try { await admin.logAction('org_merge', null, { sourceOrgId: mergeSourceId, sourceName, targetOrgId: mergeTargetId, targetName }); } catch {}
+            setMergeSourceId('');
+            setMergeTargetId('');
+            // Refresh
+            await loadAllOrgs();
+          } else {
+            setToast({ message: `${tOrg.mergeFailed} ${result.error || ''}`, type: 'error' });
+          }
+        } catch (err: any) {
+          setToast({ message: `${tOrg.mergeFailed} ${err.message || ''}`, type: 'error' });
+        } finally {
+          setMerging(false);
+        }
+      },
+    });
+  }, [mergeSourceId, mergeTargetId, allOrgs, t, language, admin]);
+
   const loadSettingsData = async () => {
     setSettingsLoading(true);
     try {
@@ -442,7 +607,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       setOpenaiKey(storageService.getOpenAIKey() || '');
       const model = storageService.getCustomModel();
       setModelName(model || (provider === 'gemini' ? 'gemini-3-pro-preview' : provider === 'openai' ? 'gpt-5.2' : 'deepseek/deepseek-v3.2'));
-      setSecondaryModelName(storageService.getSecondaryModel() || '');  // ★ v4.0
+      setSecondaryModelName(storageService.getSecondaryModel() || '');
       setCustomLogo(storageService.getCustomLogo());
       setAppInstructions(JSON.parse(JSON.stringify(getFullInstructions())));
       setInstructionsChanged(false);
@@ -478,7 +643,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       onConfirm: async () => { setConfirmModal(null); const result = await admin.deleteOrgUser(user.id, activeOrgId); if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); } else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
-    // ★ v4.1: Change user's organization
+  // ★ v4.1: Change user's organization
   const handleChangeOrg = useCallback(async (userId: string) => {
     if (!selectedNewOrgId) return;
     const orgInfo = allOrgs.find((o) => o.id === selectedNewOrgId);
@@ -521,14 +686,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     if (provider === 'gemini') setModelName('gemini-3-pro-preview');
     else if (provider === 'openai') setModelName('gpt-5.2');
     else if (provider === 'openrouter') setModelName('deepseek/deepseek-v3.2');
-    setSecondaryModelName('');  // ★ v4.0: reset light model on provider change
+    setSecondaryModelName('');
   };
 
   const handleAISave = async () => {
     setIsValidating(true); setMessage(tAuth.validating || "Validating..."); setIsError(false);
     await storageService.setAIProvider(aiProvider);
     await storageService.setCustomModel(modelName.trim());
-    await storageService.setSecondaryModel(secondaryModelName.trim());  // ★ v4.0
+    await storageService.setSecondaryModel(secondaryModelName.trim());
     await storageService.setApiKey(geminiKey.trim());
     await storageService.setOpenRouterKey(openRouterKey.trim());
     await storageService.setOpenAIKey(openaiKey.trim());
@@ -638,7 +803,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
+  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
 
@@ -798,7 +963,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                             </div>
                           </td>
                           <td style={{ padding: '10px 12px', color: colors.text.body }}>{user.displayName}</td>
-                                                    {/* ★ v4.1: Organization column */}
+                          {/* ★ v4.1: Organization column */}
                           <td style={{ padding: '10px 12px', fontSize: typography.fontSize.sm }}>
                             {editingOrgUserId === user.id ? (
                               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -867,6 +1032,140 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             </div>
           )}
 
+          {/* ═══ ORGANIZATIONS TAB ═══ ★ v4.2 */}
+          {activeTab === 'organizations' && isUserSuperAdmin && (
+            <div>
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                  <div>
+                    <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
+                      {'\uD83C\uDFE2'} {(t as any).organizations.title}
+                    </h3>
+                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{(t as any).organizations.subtitle}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                      {(t as any).organizations.totalOrgs}: {allOrgs.length}
+                    </span>
+                    <button onClick={async () => { await loadAllOrgs(); }} disabled={orgsLoading}
+                      style={{ fontSize: '11px', padding: '5px 12px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: orgsLoading ? 'wait' : 'pointer' }}>
+                      {orgsLoading ? (t as any).organizations.refreshing : `\u21BB ${(t as any).organizations.refresh}`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Merge section */}
+              <div style={{ padding: '16px', borderRadius: radii.lg, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, marginBottom: '20px' }}>
+                <h4 style={{ color: secondaryInfoText, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, margin: '0 0 12px' }}>
+                  {'\uD83D\uDD00'} {(t as any).organizations.mergeTitle}
+                </h4>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <label style={{ fontSize: typography.fontSize.xs, color: secondaryInfoText, display: 'block', marginBottom: '4px' }}>{(t as any).organizations.mergeSource}</label>
+                    <select value={mergeSourceId} onChange={(e) => setMergeSourceId(e.target.value)}
+                      style={{ width: '100%', fontSize: '12px', padding: '6px 10px', borderRadius: radii.md, border: '1px solid ' + secondaryInfoBorder, background: colors.surface.card, color: colors.text.body }}>
+                      <option value="">{(t as any).organizations.selectSource}</option>
+                      {allOrgs.filter(o => o.id !== mergeTargetId).map((org) => (
+                        <option key={org.id} value={org.id}>{org.name} ({orgMemberCounts[org.id] !== undefined ? orgMemberCounts[org.id] : '?'} {(t as any).organizations.members})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ fontSize: '20px', color: secondaryInfoText, paddingTop: '18px' }}>{'\u2192'}</div>
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <label style={{ fontSize: typography.fontSize.xs, color: secondaryInfoText, display: 'block', marginBottom: '4px' }}>{(t as any).organizations.mergeTarget}</label>
+                    <select value={mergeTargetId} onChange={(e) => setMergeTargetId(e.target.value)}
+                      style={{ width: '100%', fontSize: '12px', padding: '6px 10px', borderRadius: radii.md, border: '1px solid ' + secondaryInfoBorder, background: colors.surface.card, color: colors.text.body }}>
+                      <option value="">{(t as any).organizations.selectTarget}</option>
+                      {allOrgs.filter(o => o.id !== mergeSourceId).map((org) => (
+                        <option key={org.id} value={org.id}>{org.name} ({orgMemberCounts[org.id] !== undefined ? orgMemberCounts[org.id] : '?'} {(t as any).organizations.members})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={handleMergeOrgs} disabled={!mergeSourceId || !mergeTargetId || mergeSourceId === mergeTargetId || merging}
+                    style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: (mergeSourceId && mergeTargetId && mergeSourceId !== mergeTargetId && !merging) ? colors.primary[600] : colors.border.light, color: '#fff', cursor: (mergeSourceId && mergeTargetId && mergeSourceId !== mergeTargetId && !merging) ? 'pointer' : 'not-allowed', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, marginTop: '18px' }}>
+                    {merging ? '...' : `\uD83D\uDD00 ${(t as any).organizations.mergeButton}`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Organizations table */}
+              {orgsLoading ? <SkeletonTable rows={5} cols={4} /> : allOrgs.length === 0 ? (
+                <p style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>{(t as any).organizations.noOrgs}</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${colors.border.light}` }}>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{(t as any).organizations.name}</th>
+                        <th style={{ textAlign: 'center', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{(t as any).organizations.members}</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{(t as any).organizations.created}</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{(t as any).organizations.actions}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allOrgs
+                        .sort((a, b) => {
+                          const countA = orgMemberCounts[a.id] ?? 999;
+                          const countB = orgMemberCounts[b.id] ?? 999;
+                          if (countA === 0 && countB !== 0) return -1;
+                          if (countB === 0 && countA !== 0) return 1;
+                          return a.name.localeCompare(b.name);
+                        })
+                        .map((org) => {
+                          const memberCount = orgMemberCounts[org.id];
+                          const isEmpty = memberCount === 0;
+                          const isDeleting = deletingOrgId === org.id;
+                          return (
+                            <tr key={org.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: isEmpty ? (isDark ? 'rgba(239,68,68,0.05)' : '#FEF2F2') : rowDefaultBg }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = isEmpty ? (isDark ? 'rgba(239,68,68,0.1)' : '#FEE2E2') : rowHoverBg; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = isEmpty ? (isDark ? 'rgba(239,68,68,0.05)' : '#FEF2F2') : rowDefaultBg; }}>
+                              <td style={{ padding: '10px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '18px' }}>{'\uD83C\uDFE2'}</span>
+                                  <div>
+                                    <div style={{ color: colors.text.body, fontWeight: typography.fontWeight.medium }}>{org.name}</div>
+                                    <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.mono }}>{org.id.substring(0, 8)}...</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                {memberCount !== undefined ? (
+                                  <span style={{
+                                    padding: '2px 10px', borderRadius: radii.full, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold,
+                                    background: isEmpty ? dangerBtnBg : primaryBadgeBg,
+                                    border: `1px solid ${isEmpty ? dangerBtnBorder : primaryBadgeBorder}`,
+                                    color: isEmpty ? dangerBtnText : primaryBadgeText,
+                                  }}>
+                                    {isEmpty ? `0 — ${(t as any).organizations.empty}` : memberCount}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: colors.text.muted, fontSize: typography.fontSize.xs }}>...</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(org.created_at || null, true)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                                {isEmpty ? (
+                                  <button onClick={() => handleDeleteOrg(org.id, org.name, memberCount)} disabled={isDeleting}
+                                    style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '4px 14px', cursor: isDeleting ? 'wait' : 'pointer', color: dangerBtnText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, opacity: isDeleting ? 0.6 : 1 }}
+                                    onMouseEnter={(e) => { if (!isDeleting) e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.25)' : '#FEE2E2'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = dangerBtnBg; }}>
+                                    {isDeleting ? '...' : `\uD83D\uDDD1\uFE0F ${(t as any).organizations.deleteOrg}`}
+                                  </button>
+                                ) : (
+                                  <span style={{ color: colors.text.muted, fontSize: typography.fontSize.xs }}>{'\u2014'}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ═══ INSTRUCTIONS TAB ═══ */}
           {activeTab === 'instructions' && isUserAdmin && (
             <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
@@ -911,15 +1210,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 <label style={labelStyle}>{aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'} API Key</label>
                 <input type="password" value={aiProvider === 'gemini' ? geminiKey : aiProvider === 'openai' ? openaiKey : openRouterKey} onChange={(e) => { if (aiProvider === 'gemini') setGeminiKey(e.target.value); else if (aiProvider === 'openai') setOpenaiKey(e.target.value); else setOpenRouterKey(e.target.value); }} placeholder={`Enter ${aiProvider} API key...`} style={inputStyle} />
               </div>
-                            <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{language === 'si' ? 'Glavni model (generiranje vsebine)' : 'Primary Model (content generation)'}</label>
                 <select value={modelName} onChange={(e) => setModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
                 <div style={{ marginTop: '6px', padding: '8px 12px', borderRadius: radii.md, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, fontSize: typography.fontSize.xs, color: secondaryInfoText }}>
                   {language === 'si'
-                    ? `💡 Priporočen: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro — najboljši za kompleksno generiranje' : aiProvider === 'openai' ? 'GPT-5 Mini — odlično razmerje cena/kvaliteta' : 'DeepSeek V3.2 — top open-source model'}`
-                    : `💡 Recommended: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro — best for complex generation' : aiProvider === 'openai' ? 'GPT-5 Mini — great price/quality ratio' : 'DeepSeek V3.2 — top open-source model'}`}
+                    ? `\uD83D\uDCA1 Priporo\u010Den: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro \u2014 najbolj\u0161i za kompleksno generiranje' : aiProvider === 'openai' ? 'GPT-5 Mini \u2014 odli\u010Dno razmerje cena/kvaliteta' : 'DeepSeek V3.2 \u2014 top open-source model'}`
+                    : `\uD83D\uDCA1 Recommended: ${aiProvider === 'gemini' ? 'Gemini 2.5 Pro \u2014 best for complex generation' : aiProvider === 'openai' ? 'GPT-5 Mini \u2014 great price/quality ratio' : 'DeepSeek V3.2 \u2014 top open-source model'}`}
                   {(() => {
                     const recommended: Record<string, string> = { gemini: 'gemini-2.5-pro', openai: 'gpt-5-mini', openrouter: 'deepseek/deepseek-v3.2' };
                     return modelName !== recommended[aiProvider] ? (
@@ -928,32 +1227,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                         onClick={() => setModelName(recommended[aiProvider])}
                         style={{ marginLeft: '8px', padding: '2px 10px', borderRadius: radii.md, border: `1px solid ${secondaryInfoBorder}`, background: 'transparent', color: secondaryInfoText, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}
                       >
-                        {language === 'si' ? 'Uporabi priporočenega' : 'Use recommended'}
+                        {language === 'si' ? 'Uporabi priporo\u010Denega' : 'Use recommended'}
                       </button>
                     ) : null;
                   })()}
                 </div>
               </div>
 
-
-              {/* ★ v4.1: Light Model for translations, chatbot, field generation */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>{language === 'si' ? 'Hitri model (prevodi, chatbot, polja)' : 'Light Model (translations, chatbot, fields)'}</label>
                 <select value={secondaryModelName} onChange={(e) => setSecondaryModelName(e.target.value)} style={{ ...inputStyle, fontFamily: typography.fontFamily.body }}>
-                  <option value="">{language === 'si' ? '— Uporabi glavni model —' : '— Use primary model —'}</option>
+                  <option value="">{language === 'si' ? '\u2014 Uporabi glavni model \u2014' : '\u2014 Use primary model \u2014'}</option>
                   {currentModels.map((m: any) => <option key={m.id || m} value={m.id || m}>{m.name || m.id || m}</option>)}
                 </select>
                 <div style={{ marginTop: '6px', padding: '8px 12px', borderRadius: radii.md, background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, fontSize: typography.fontSize.xs, color: secondaryInfoText }}>
                   {language === 'si'
-                    ? `💡 Priporočen: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — hitrejši in cenejši za prevode in chatbot. Isti API ključ.`
-                    : `💡 Recommended: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '—'} — faster & cheaper for translations and chatbot. Same API key.`}
+                    ? `\uD83D\uDCA1 Priporo\u010Den: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '\u2014'} \u2014 hitrej\u0161i in cenej\u0161i za prevode in chatbot. Isti API klju\u010D.`
+                    : `\uD83D\uDCA1 Recommended: ${RECOMMENDED_LIGHT_MODELS[aiProvider]?.name || '\u2014'} \u2014 faster & cheaper for translations and chatbot. Same API key.`}
                   {secondaryModelName !== (RECOMMENDED_LIGHT_MODELS[aiProvider]?.id || '') && (
                     <button
                       type="button"
                       onClick={() => setSecondaryModelName(RECOMMENDED_LIGHT_MODELS[aiProvider]?.id || '')}
                       style={{ marginLeft: '8px', padding: '2px 10px', borderRadius: radii.md, border: `1px solid ${secondaryInfoBorder}`, background: 'transparent', color: secondaryInfoText, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}
                     >
-                      {language === 'si' ? 'Uporabi priporočenega' : 'Use recommended'}
+                      {language === 'si' ? 'Uporabi priporo\u010Denega' : 'Use recommended'}
                     </button>
                   )}
                 </div>
@@ -1019,7 +1316,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <p style={{ color: secondaryInfoText, fontSize: typography.fontSize.xs, margin: 0, opacity: 0.85 }}>{t.whiteLabel.logoNotice}</p>
                 </div>
               )}
-              <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
+              <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.
+              lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
                 <h4 style={{ color: dangerBtnText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>{'\u26A0\uFE0F'} {t.selfDelete.title}</h4>
                 <p style={{ color: isDark ? '#FDA4AF' : '#991B1B', fontSize: typography.fontSize.sm, margin: '0 0 16px', lineHeight: '1.5' }}>{t.selfDelete.warning}</p>
                 {storageService.isSuperAdmin() ? (
@@ -1147,26 +1445,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                                 <tr>
                                   <td colSpan={5} style={{ padding: '0 12px 16px 12px', background: isDark ? '#1C2940' : '#EFF6FF' }}>
                                     <div style={{ padding: '12px', borderRadius: radii.lg, border: '1px solid ' + colors.border.light, background: colors.surface.card, fontSize: typography.fontSize.xs }}>
-                                      {/* Full error message */}
                                       <div style={{ marginBottom: '10px' }}>
                                         <strong style={{ color: colors.text.heading }}>{t.errors.error}:</strong>
                                         <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#F8FAFC', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: colors.text.body, fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + colors.border.light, maxHeight: '150px', overflow: 'auto' }}>{log.error_message}</pre>
                                       </div>
-                                      {/* Stack trace */}
                                       {log.error_stack && (
                                         <div style={{ marginBottom: '10px' }}>
                                           <strong style={{ color: colors.text.heading }}>{(t.errors as any).stackTrace || 'Stack Trace'}:</strong>
                                           <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#FEF2F2', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: isDark ? '#FCA5A5' : '#991B1B', fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + (isDark ? 'rgba(239,68,68,0.2)' : '#FECACA'), maxHeight: '300px', overflow: 'auto' }}>{log.error_stack}</pre>
                                         </div>
                                       )}
-                                      {/* Context JSON */}
                                       {log.context && Object.keys(log.context).length > 0 && (
                                         <div style={{ marginBottom: '10px' }}>
                                           <strong style={{ color: colors.text.heading }}>{(t.errors as any).context || 'Context'}:</strong>
                                           <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#F0FDF4', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: colors.text.body, fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + (isDark ? 'rgba(34,197,94,0.2)' : '#BBF7D0'), maxHeight: '200px', overflow: 'auto' }}>{JSON.stringify(log.context, null, 2)}</pre>
                                         </div>
                                       )}
-                                      {/* Meta info */}
                                       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' as const, color: colors.text.muted, fontSize: '11px' }}>
                                         <span><strong>ID:</strong> {log.id}</span>
                                         <span><strong>User ID:</strong> {log.user_id || '\u2014'}</span>
@@ -1188,10 +1482,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               })()}
             </div>
           )}
+
           {/* ═══ KNOWLEDGE BASE TAB ═══ */}
           {activeTab === 'knowledge' && isUserAdmin && (
             <div>
-              {/* KB Header row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>{'\uD83D\uDCDA'} {t.knowledge.title}</h3>
@@ -1209,11 +1503,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </span>
                 </div>
               </div>
-              {/* KB Info banner */}
               <div style={{ padding: '12px 16px', borderRadius: radii.lg, marginBottom: '16px', background: secondaryInfoBg, border: `1px solid ${secondaryInfoBorder}`, color: secondaryInfoText, fontSize: typography.fontSize.sm, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {'\uD83D\uDCA1'} {t.knowledge.info}
               </div>
-              {/* KB Drag & Drop */}
               <div
                 onDrop={handleKBDrop}
                 onDragOver={(e) => { e.preventDefault(); setKbDragOver(true); }}
@@ -1232,7 +1524,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   </React.Fragment>
                 )}
               </div>
-              {/* KB Document table */}
               {kbLoading ? <SkeletonTable rows={3} cols={5} /> : kbDocuments.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted, fontSize: typography.fontSize.sm }}>{'\uD83D\uDCC2'} {t.knowledge.noDocuments}</div>
               ) : (
