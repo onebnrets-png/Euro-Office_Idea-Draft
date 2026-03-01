@@ -2120,11 +2120,23 @@ export const useGeneration = ({
             if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
             setIsLoading(stepLabel(currentStep, 'Generiram konzorcij', 'Generating consortium'));
 
-            try {
+              try {
               let partnersResult = await generateSectionContent(
                 'partners', newData, language, mode, null, signal
               );
+              // ★ v7.8 FIX: Unwrap partners if AI returned object wrapper { partners: [...] }
+              if (partnersResult && typeof partnersResult === 'object' && !Array.isArray(partnersResult)) {
+                var _pValues = Object.values(partnersResult);
+                var _pArr = _pValues.find(function(v) { return Array.isArray(v) && (v as any[]).length > 0; });
+                if (_pArr) {
+                  console.log('[Composite/activities] ★ v7.8 UNWRAP: partners was object, extracted array (' + (_pArr as any[]).length + ' items)');
+                  partnersResult = _pArr as any[];
+                } else {
+                  console.warn('[Composite/activities] ★ v7.8 WARN: partners was object but no nested array found:', Object.keys(partnersResult));
+                }
+              }
               if (Array.isArray(partnersResult)) {
+
                 partnersResult = partnersResult.map((p: any, idx: number) => ({
                   ...p,
                   id: p.id || `partner-${idx + 1}`,
