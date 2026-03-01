@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // services/geminiService.ts
-// v7.6 — 2026-03-01 — BUDGET ENFORCEMENT POST-PROCESSING
+// v7.7 — 2026-03-01 — FIX: Partner allocations use correct categoryKeys per funding model
+// v7.6 — 2026-03-01 — POST-PROCESSING BUDGET ENFORCEMENT (from previous session)
+// v7.5 — 2026-02-24 — TOKEN OPTIMIZATION + ABORT SIGNAL
 //
 // CHANGES v7.6:
 //   ★ NEW: generatePartnerAllocations() post-processing budget enforcement
@@ -1762,15 +1764,47 @@ CRITICAL:
           return { ...dc, id: dc.id || `dc-${Date.now()}-${dcIdx}`, amount: Math.max(0, Math.round(dc.amount || 0)) };
         });
 
-        const hasLabour = directCosts.some((dc: any) => dc.categoryKey === 'labourCosts');
+                // ★ v7.7: Check for correct labour key based on funding model
+        var hasLabour = directCosts.some(function(dc) {
+          return dc.categoryKey === labourCategoryKey || dc.categoryKey === 'labourCosts' || dc.categoryKey === 'salariesReimbursements';
+        });
         if (!hasLabour && hours > 0) {
           directCosts.unshift({
-            id: `dc-labour-${Date.now()}`,
-            categoryKey: 'labourCosts',
-            name: language === 'si' ? 'Stroški dela' : 'Staff / Personnel costs',
+            id: 'dc-labour-' + Date.now(),
+            categoryKey: labourCategoryKey,
+            name: labourCategoryName,
             amount: labourCost,
           });
         }
+
+        // ★ v7.7: Remap wrong-model categoryKeys to correct model
+        var validKeysSet = new Set(directCostDefsForPrompt.map(function(c) { return c.key; }));
+        var centralToDecentralMap = {
+          'labourCosts': 'salariesReimbursements',
+          'subContractorCosts': 'externalServiceCosts',
+          'travelCosts': 'vat',
+          'depreciationEquipment': 'depreciationBasicAssets',
+          'investmentCosts': 'tangibleAssetInvestment',
+          'materials': 'intangibleAssetInvestment',
+          'otherProjectCosts': 'infoCommunication',
+        };
+        var decentralToCentralMap = {};
+        Object.keys(centralToDecentralMap).forEach(function(k) {
+          decentralToCentralMap[centralToDecentralMap[k]] = k;
+        });
+        var remapSource = fundingModel === 'decentralized' ? centralToDecentralMap : decentralToCentralMap;
+
+        directCosts.forEach(function(dc) {
+          if (!validKeysSet.has(dc.categoryKey)) {
+            var remapped = remapSource[dc.categoryKey];
+            if (remapped) {
+              console.log('[generatePartnerAllocations] v7.7 REMAP: ' + dc.categoryKey + ' -> ' + remapped);
+              var catDef = directCostDefsForPrompt.find(function(c) { return c.key === remapped; });
+              dc.categoryKey = remapped;
+              if (catDef) dc.name = catDef[language === 'si' ? 'si' : 'en'];
+            }
+          }
+        });
 
         const totalDirectCost = directCosts.reduce((s: number, dc: any) => s + (dc.amount || 0), 0);
 
