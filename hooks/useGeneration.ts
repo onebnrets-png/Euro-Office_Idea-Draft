@@ -2075,10 +2075,18 @@ export const useGeneration = ({
             if (signal.aborted) throw new DOMException('Generation cancelled', 'AbortError');
             setIsLoading(stepLabel(currentStep, 'Generiram implementacijo', 'Generating implementation'));
 
-            try {
-              const pmContent = await generateSectionContent(
+              try {
+              var pmContentRaw = await generateSectionContent(
                 'projectManagement', newData, language, mode, null, signal
               );
+              // ★ v7.8 FIX: Unwrap PM if AI returned { projectManagement: { ... } }
+              var pmContent = pmContentRaw;
+              if (pmContent && typeof pmContent === 'object' && !Array.isArray(pmContent)) {
+                if (pmContent.projectManagement && typeof pmContent.projectManagement === 'object' && !Array.isArray(pmContent.projectManagement)) {
+                  console.log('[Composite/activities] ★ v7.8 UNWRAP: PM was double-wrapped { projectManagement: {...} }');
+                  pmContent = pmContent.projectManagement;
+                }
+              }
               newData.projectManagement = {
                 ...newData.projectManagement,
                 ...pmContent,
@@ -2090,6 +2098,7 @@ export const useGeneration = ({
               successCount++;
               console.log('[Composite/activities] PM content check — description length:', pmContent?.description?.length || 0, '| structure:', JSON.stringify(pmContent?.structure)?.substring(0, 200));
               console.log('[Composite/activities] Step 1/5: projectManagement ✅');
+
             } catch (e: any) {
               if (e.name === 'AbortError') throw e;
               console.error('[Composite/activities] projectManagement failed:', e);
