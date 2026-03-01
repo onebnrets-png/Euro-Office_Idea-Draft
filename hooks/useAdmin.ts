@@ -3,7 +3,9 @@
 // Admin hook — user management, role changes, delete users,
 // delete organizations, self-delete, instructions, audit log.
 //
-// v1.4 — 2026-02-19
+// v1.5 — 2026-03-01
+//   ★ v1.5: fetchUsers() returns orgName per user.
+//           New: changeUserOrganization() for Admin/SuperAdmin.
 //   ★ v1.4: Organization isolation — users only see their own org members
 //     - fetchUsers() filters by active organization for admin/owner
 //     - SuperAdmin still sees ALL users across all organizations
@@ -33,6 +35,7 @@ export interface AdminUser {
   createdAt: string;
   lastSignIn: string | null;
   orgRole?: string; // ★ v1.4: role within the organization (owner/admin/member)
+  orgName?: string; // ★ v1.5: organization name for display
 }
 
 export interface AdminLogEntry {
@@ -108,16 +111,47 @@ export const useAdmin = () => {
           return;
         }
 
-        const mapped: AdminUser[] = (data || []).map((p: any) => ({
-          id: p.id,
-          email: p.email,
-          displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
-          role: p.role || 'user',
-          createdAt: p.created_at,
-          lastSignIn: p.last_sign_in,
-        }));
+                var mapped: AdminUser[] = (data || []).map(function(p: any) {
+          return {
+            id: p.id,
+            email: p.email,
+            displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
+            role: p.role || 'user',
+            createdAt: p.created_at,
+            lastSignIn: p.last_sign_in,
+          };
+        });
 
-        setUsers(mapped);
+        // ★ v1.5: Fetch organization names for all users
+        try {
+          var userIdsForOrg = mapped.map(function(u) { return u.id; });
+          var membershipsResult = await supabase
+            .from('organization_members')
+            .select('user_id, organization_id, org_role, organizations(name)')
+            .in('user_id', userIdsForOrg);
+
+          if (membershipsResult.data) {
+            var orgMap: Record<string, { name: string; role: string }> = {};
+            for (var m of membershipsResult.data) {
+              var orgData = (m as any).organizations;
+              var orgNameVal = orgData ? (orgData.name || '') : '';
+              if (!orgMap[m.user_id]) {
+                orgMap[m.user_id] = { name: orgNameVal, role: m.org_role || 'member' };
+              }
+            }
+            mapped = mapped.map(function(u) {
+              var info = orgMap[u.id];
+              return Object.assign({}, u, {
+                orgName: info ? info.name : '',
+                orgRole: info ? info.role : undefined,
+              });
+            });
+          }
+        } catch (orgErr) {
+          console.warn('fetchUsers: org lookup failed:', orgErr);
+        }
+
+       setUsers(mapped);
 
       } else {
         // ────────────────────────────────────────────────────
@@ -165,17 +199,32 @@ export const useAdmin = () => {
           return;
         }
 
-        const mapped: AdminUser[] = (data || []).map((p: any) => ({
-          id: p.id,
-          email: p.email,
-          displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
-          role: p.role || 'user',
-          createdAt: p.created_at,
-          lastSignIn: p.last_sign_in,
-          orgRole: orgRoleMap[p.id] || 'member',
-        }));
+        // ★ v1.5: Get org name for display
+        var activeOrgName = '';
+        try {
+          var orgNameResult = await supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', activeOrgId)
+            .single();
+          activeOrgName = orgNameResult.data?.name || '';
+        } catch (e) { /* ignore */ }
+
+        var mapped: AdminUser[] = (data || []).map(function(p: any) {
+          return {
+            id: p.id,
+            email: p.email,
+            displayName: p.display_name || p.email?.split('@')[0] || 'Unknown',
+            role: p.role || 'user',
+            createdAt: p.created_at,
+            lastSignIn: p.last_sign_in,
+            orgRole: orgRoleMap[p.id] || 'member',
+            orgName: activeOrgName,
+          };
+        });
 
         setUsers(mapped);
+
       }
     } catch (err: any) {
       console.error('fetchUsers exception:', err);
@@ -770,6 +819,69 @@ export const useAdmin = () => {
       setIsSavingInstructions(false);
     }
   }, [checkAdminStatus]);
+    // ─── ★ v1.5: Change user's organization ─────────────────────
+  const changeUserOrganization = useCallback(async (
+    userId: string,
+    newOrgId: string,
+    newOrgName: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    if (!checkAdminStatus()) return { success: false, message: 'Not authorized' };
+    var currentUserId = await storageService.getCurrentUserId();
+
+    try {
+      // Remove from ALL current organizations
+      var removeResult = await supabase
+        .from('organization_members')
+        .delete()
+        .eq('user_id', userId);
+
+      if (removeResult.error) {
+        return { success: false, message: 'Failed to remove from current org: ' + removeResult.error.message };
+      }
+
+      // Add to new organization as member
+      var addResult = await supabase
+        .from('organization_members')
+        .insert({ organization_id: newOrgId, user_id: userId, org_role: 'member' });
+
+      if (addResult.error) {
+        return { success: false, message: 'Failed to add to new org: ' + addResult.error.message };
+      }
+
+      // Update active_organization_id in profile
+      await supabase
+        .from('profiles')
+        .update({ active_organization_id: newOrgId })
+        .eq('id', userId);
+
+      // Move projects to new org
+      await supabase
+        .from('projects')
+        .update({ organization_id: newOrgId })
+        .eq('owner_id', userId);
+
+      // Audit log
+      var targetUser = users.find(function(u) { return u.id === userId; });
+      await supabase.from('admin_log').insert({
+        admin_id: currentUserId,
+        action: 'org_change',
+        target_user_id: userId,
+        details: {
+          target_email: targetUser?.email || 'unknown',
+          old_org: targetUser?.orgName || 'unknown',
+          new_org: newOrgName,
+          new_org_id: newOrgId,
+          changed_at: new Date().toISOString(),
+        },
+      });
+
+      // Refresh user list
+      await fetchUsers();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to change organization' };
+    }
+  }, [checkAdminStatus, users, fetchUsers]);
 
   // ─── Return ────────────────────────────────────────────────
 
@@ -801,6 +913,7 @@ export const useAdmin = () => {
     deleteOrgUser,       // Level 2: Org owner/admin removes user from org
     deleteSelf,          // Level 3: User deletes own account (RPC)
     deleteOrganization,  // Org owner/SuperAdmin deletes entire org
+    changeUserOrganization, // ★ v1.5: Admin/SuperAdmin changes user's org
   };
 };
 
