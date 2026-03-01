@@ -867,7 +867,8 @@ const renderFinance = (props) => {
         });
         // If current model is decentralized, remap centralized keys to decentralized
         // If current model is centralized, remap decentralized keys to centralized
-        var remapToCurrentModel = fundingModel === 'decentralized' ? centralToDecentral : decentralToCentral;
+        var currentModel = projectData.fundingModel || 'centralized';
+        var remapToCurrentModel = currentModel === 'decentralized' ? centralToDecentral : decentralToCentral;
 
         const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
             var rawKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
