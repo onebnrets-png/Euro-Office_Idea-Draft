@@ -848,7 +848,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     }}>
       <div style={{
         background: colors.surface.background, borderRadius: radii['2xl'], boxShadow: shadows['2xl'],
-        width: '100%', maxWidth: '1100px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'scaleIn 0.25s ease-out',
+        width: '100%', maxWidth: '1400px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'scaleIn 0.25s ease-out',
       }}>
 
         {/* Header */}
