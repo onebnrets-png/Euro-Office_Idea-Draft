@@ -1,7 +1,8 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v4.0 — 2026-02-21
+// v4.1 — 2026-03-01
+// ★ v4.1: Organization column + edit, Expandable Error Log + export, Audit Log export
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback } from 'react';
