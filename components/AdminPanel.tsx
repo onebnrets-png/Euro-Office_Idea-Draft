@@ -27,6 +27,7 @@ import {
 } from '../services/Instructions.ts';
 import { errorLogService, type ErrorLogEntry, type AuditLogExportEntry } from '../services/errorLogService.ts';
 import { organizationService } from '../services/organizationService.ts';
+import { supabase } from '../services/supabaseClient.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 
 interface AdminPanelProps {
