@@ -1597,9 +1597,15 @@ ALLOCATION RULES:
 3. The COORDINATOR (first partner, code "CO") should be allocated to ALL Project Management tasks and have a presence in most WPs.
 4. Match partner EXPERTISE to task TOPIC.
 5. Hours and PM must be REALISTIC: 1 PM = 143 hours (EU standard).
-6. Direct costs: AT MINIMUM "labourCosts" for every allocation. Labour cost = hours × (pmRate / 143).
+6. Direct costs: AT MINIMUM the PRIMARY LABOUR category for every allocation. Labour cost = hours × (pmRate / 143).
 7. totalDirectCost = sum of all directCosts amounts
 8. totalCost = totalDirectCost
+
+DIRECT COST CATEGORIES FOR THIS PROJECT (funding model: ${fundingModel}):
+${directCostDefsForPrompt.map(function(cat, i) { return (i + 1) + '. categoryKey: "' + cat.key + '" — ' + cat.en; }).join('\n')}
+
+THE PRIMARY LABOUR CATEGORY KEY IS: "${labourCategoryKey}"
+USE ONLY the categoryKey values listed above. Do NOT use keys from other funding models.
 
 RESPONSE FORMAT — JSON array:
 [
@@ -1612,7 +1618,7 @@ RESPONSE FORMAT — JSON array:
         "hours": 286,
         "pm": 2.0,
         "directCosts": [
-          { "id": "dc-1", "categoryKey": "labourCosts", "name": "Staff / Personnel costs", "amount": 11400 }
+          { "id": "dc-1", "categoryKey": "${labourCategoryKey}", "name": "${labourCategoryName}", "amount": 11400 }
         ],
         "totalDirectCost": 11400,
         "totalCost": 11400
