@@ -1,6 +1,13 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.8 — 2026-03-01 — FIX: Composite partners/PM unwrap
+//
+// CHANGES v7.8:
+//   ★ FIX: runComposite Step 1 (PM) — unwrap double-wrapped { projectManagement: {...} } response
+//   ★ FIX: runComposite Step 2 (Partners) — unwrap object-wrapped { partners: [...] } response
+//   ★ Both fixes prevent cascading failure (empty partners → skipped allocations → empty finance)
+//
 // v7.7 — 2026-02-27 — SMART MERGE + DEEP EMPTY FIELD DETECTION
 //
 // CHANGES v7.7:
