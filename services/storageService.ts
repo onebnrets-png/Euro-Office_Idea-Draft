@@ -1,30 +1,39 @@
 // services/storageService.ts
+// ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
+// v5.3 — 2026-03-01
 //
-// v5.2 — 2026-02-20
 // CHANGES:
+//   ★ v5.3: FULL ERROR LOGGING — every console.error/warn now also
+//           calls logErrorQuick() to persist errors in error_log DB table.
+//           — login, register, restoreSession, loadSettings, updateSettings,
+//             getUserProjects, createProject, deleteProject, saveProject,
+//             loadProject, ensureUserHasOrg, ensureApiKeySaved, MFA methods
+//           — ALL errors are now captured for admin Error Log panel export.
 //   ★ v5.2: register() accepts firstName + lastName
 //           → Stores first_name, last_name in user_metadata
 //           → display_name = "FirstName LastName"
 //           → handle_new_user() trigger reads these into profiles
-//   - ★ v5.1: Robust first-login setup after email confirmation
+//   ★ v5.1: Robust first-login setup after email confirmation
 //     → ensureUserHasOrg() creates org via SECURITY DEFINER RPC if missing
 //     → ensureApiKeySaved() saves API key from user_metadata if not yet in DB
 //     → login() and restoreSession() call both + reload settings
 //     → register() stores org_name, api_key, api_provider in user_metadata
 //     → Works with email confirmation ON or OFF
-//   - ★ v5.0: Registration + Email Confirmation fix
-//   - ★ v4.0: register() accepts orgName parameter
-//   - ★ v3.0: Multi-Tenant Organization integration
-//   - v2.2: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
-//   - v2.1: OpenAI key support, register() accepts apiProvider
-//   - v2.0: DB-1/DB-2/DB-3 fixes
+//   ★ v5.0: Registration + Email Confirmation fix
+//   ★ v4.0: register() accepts orgName parameter
+//   ★ v3.0: Multi-Tenant Organization integration
+//   v2.2: isSuperAdmin(), isAdminOrSuperAdmin(), getSuperAdminEmail()
+//   v2.1: OpenAI key support, register() accepts apiProvider
+//   v2.0: DB-1/DB-2/DB-3 fixes
+// ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
 import { createEmptyProjectData } from '../utils.ts';
 import type { AIProviderType } from './aiProvider.ts';
 import { BRAND_ASSETS } from '../constants.tsx';
 import { organizationService } from './organizationService.ts';
+import { logErrorQuick } from './errorLogService.ts';
 
 // ─── ID GENERATOR ────────────────────────────────────────────────
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -60,10 +69,15 @@ async function ensureUserHasOrg(userId: string, userMeta?: Record<string, any>):
         .single();
 
       if (!profile?.active_organization_id) {
-        await supabase
+        const { error: updateErr } = await supabase
           .from('profiles')
           .update({ active_organization_id: membership[0].organization_id })
           .eq('id', userId);
+
+        if (updateErr) {
+          console.warn('ensureUserHasOrg: Failed to set active_organization_id:', updateErr.message);
+          logErrorQuick('storageService.ensureUserHasOrg.setActiveOrg', updateErr, { userId });
+        }
       }
       return;
     }
@@ -78,6 +92,7 @@ async function ensureUserHasOrg(userId: string, userMeta?: Record<string, any>):
 
     if (rpcError) {
       console.error('ensureUserHasOrg: RPC error:', rpcError.message);
+      logErrorQuick('storageService.ensureUserHasOrg.rpc', rpcError, { userId, orgName });
       return;
     }
 
@@ -85,9 +100,11 @@ async function ensureUserHasOrg(userId: string, userMeta?: Record<string, any>):
       console.log(`ensureUserHasOrg: ✅ Org created with ID ${rpcResult.orgId}`);
     } else {
       console.warn('ensureUserHasOrg: RPC returned failure:', rpcResult?.message);
+      logErrorQuick('storageService.ensureUserHasOrg.rpcFailure', { message: rpcResult?.message || 'RPC returned failure' }, { userId, orgName });
     }
   } catch (err) {
     console.error('ensureUserHasOrg: Unexpected error:', err);
+    logErrorQuick('storageService.ensureUserHasOrg', err, { userId });
   }
 }
 
@@ -120,12 +137,20 @@ async function ensureApiKeySaved(userId: string, userMeta?: Record<string, any>)
 
     if (error) {
       console.warn('ensureApiKeySaved: update failed, trying upsert...', error.message);
-      await supabase
+      logErrorQuick('storageService.ensureApiKeySaved.update', error, { userId, keyColumn });
+
+      const { error: upsertErr } = await supabase
         .from('user_settings')
         .upsert(
           { user_id: userId, [keyColumn]: metaApiKey.trim(), ai_provider: metaApiProvider },
           { onConflict: 'user_id' }
         );
+
+      if (upsertErr) {
+        console.error('ensureApiKeySaved: upsert also failed:', upsertErr.message);
+        logErrorQuick('storageService.ensureApiKeySaved.upsert', upsertErr, { userId, keyColumn });
+        return;
+      }
     }
 
     if (cachedSettings) {
@@ -136,6 +161,7 @@ async function ensureApiKeySaved(userId: string, userMeta?: Record<string, any>)
     console.log('ensureApiKeySaved: ✅ API key saved successfully');
   } catch (err) {
     console.error('ensureApiKeySaved: Unexpected error:', err);
+    logErrorQuick('storageService.ensureApiKeySaved', err, { userId });
   }
 }
 
@@ -149,6 +175,7 @@ export const storageService = {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
+      logErrorQuick('storageService.login', error, { email });
       return { success: false, message: error.message };
     }
 
@@ -160,8 +187,8 @@ export const storageService = {
         .single();
 
       if (profileError) {
-        console.warn('login: profiles query failed:', profileError.message,
-          '— falling back to auth.user metadata. Check RLS policies on profiles table.');
+        console.warn('login: profiles query failed:', profileError.message);
+        logErrorQuick('storageService.login.profileFetch', profileError, { email, userId: data.user.id });
       }
 
       cachedUser = {
@@ -222,6 +249,7 @@ export const storageService = {
     });
 
     if (error) {
+      logErrorQuick('storageService.register', error, { email });
       if (error.message.includes('already registered')) {
         return { success: false, message: 'Email already registered' };
       }
@@ -265,18 +293,28 @@ export const storageService = {
 
         if (keyError) {
           console.warn('register: Failed to save API key via upsert, trying update...', keyError.message);
-          await supabase
+          logErrorQuick('storageService.register.apiKeyUpsert', keyError, { email, keyColumn });
+
+          const { error: updateErr } = await supabase
             .from('user_settings')
             .update({ [keyColumn]: apiKey.trim(), ai_provider: apiProvider })
             .eq('user_id', data.user.id);
+
+          if (updateErr) {
+            logErrorQuick('storageService.register.apiKeyUpdate', updateErr, { email, keyColumn });
+          }
         }
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .single();
+
+      if (profileError) {
+        logErrorQuick('storageService.register.profileFetch', profileError, { email, userId: data.user.id });
+      }
 
       cachedUser = {
         id: data.user.id,
@@ -326,6 +364,7 @@ export const storageService = {
     });
 
     if (error) {
+      logErrorQuick('storageService.changePassword', error);
       return { success: false, message: error.message };
     }
     return { success: true };
@@ -336,7 +375,11 @@ export const storageService = {
   // ═══════════════════════════════════════════════════════════════
 
   async logout() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      logErrorQuick('storageService.logout', err);
+    }
     cachedUser = null;
     cachedSettings = null;
     cachedProjectsMeta = null;
@@ -381,46 +424,52 @@ export const storageService = {
   },
 
   async restoreSession() {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user) {
-      const userId = data.session.user.id;
-      const authUser = data.session.user;
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        const userId = data.session.user.id;
+        const authUser = data.session.user;
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      if (profileError) {
-        console.warn('restoreSession: profiles query failed:', profileError.message,
-          '— falling back to auth.user metadata. Check RLS policies on profiles table.');
+        if (profileError) {
+          console.warn('restoreSession: profiles query failed:', profileError.message);
+          logErrorQuick('storageService.restoreSession.profileFetch', profileError, { userId });
+        }
+
+        cachedUser = {
+          id: userId,
+          email: profile?.email || authUser.email || '',
+          displayName: profile?.display_name
+            || authUser.user_metadata?.display_name
+            || authUser.email?.split('@')[0]
+            || 'User',
+          role: profile?.role || 'user'
+        };
+
+        await this.loadSettings();
+
+        // ★ v5.1: Ensure org exists + API key saved on session restore
+        const meta = authUser.user_metadata || {};
+        await ensureUserHasOrg(userId, meta);
+        await ensureApiKeySaved(userId, meta);
+        await organizationService.loadActiveOrg();
+
+        // ★ v5.1: Reload settings after potential API key save
+        await this.loadSettings();
+
+        return cachedUser.email;
       }
-
-      cachedUser = {
-        id: userId,
-        email: profile?.email || authUser.email || '',
-        displayName: profile?.display_name
-          || authUser.user_metadata?.display_name
-          || authUser.email?.split('@')[0]
-          || 'User',
-        role: profile?.role || 'user'
-      };
-
-      await this.loadSettings();
-
-      // ★ v5.1: Ensure org exists + API key saved on session restore
-      const meta = authUser.user_metadata || {};
-      await ensureUserHasOrg(userId, meta);
-      await ensureApiKeySaved(userId, meta);
-      await organizationService.loadActiveOrg();
-
-      // ★ v5.1: Reload settings after potential API key save
-      await this.loadSettings();
-
-      return cachedUser.email;
+      return null;
+    } catch (err) {
+      console.error('restoreSession: Unexpected error:', err);
+      logErrorQuick('storageService.restoreSession', err);
+      return null;
     }
-    return null;
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -442,6 +491,7 @@ export const storageService = {
 
     if (error) {
       console.warn('loadSettings error:', error.message);
+      logErrorQuick('storageService.loadSettings', error, { userId });
       if (!cachedSettings) cachedSettings = {};
       return null;
     }
@@ -467,6 +517,7 @@ export const storageService = {
 
     if (error) {
       console.error('updateSettings error:', error.message);
+      logErrorQuick('storageService.updateSettings', error, { userId, keys: Object.keys(updates) });
       return;
     }
 
@@ -520,6 +571,7 @@ export const storageService = {
   async setCustomModel(model: string) {
     await this.updateSettings({ model: model.trim() || null });
   },
+
   getSecondaryModel(): string | null {
     return cachedSettings?.secondary_model || null;
   },
@@ -575,6 +627,7 @@ export const storageService = {
 
     if (error) {
       console.error('Error loading projects:', error);
+      logErrorQuick('storageService.getUserProjects', error, { userId });
       return [];
     }
 
@@ -594,6 +647,7 @@ export const storageService = {
     const userId = await this.getCurrentUserId();
     if (!userId) {
       console.error('createProject: No user ID');
+      logErrorQuick('storageService.createProject', { message: 'No user ID — not authenticated' });
       return null;
     }
 
@@ -612,6 +666,7 @@ export const storageService = {
 
     if (projError) {
       console.error('Error creating project:', projError);
+      logErrorQuick('storageService.createProject.insert', projError, { userId, newId });
       return null;
     }
 
@@ -624,6 +679,7 @@ export const storageService = {
 
     if (dataError) {
       console.error('Error creating project data:', dataError);
+      logErrorQuick('storageService.createProject.data', dataError, { newId });
     }
 
     const meta = {
@@ -646,6 +702,7 @@ export const storageService = {
 
     if (error) {
       console.error('Error deleting project:', error);
+      logErrorQuick('storageService.deleteProject', error, { projectId });
     }
 
     cachedProjectsMeta = null;
@@ -688,8 +745,11 @@ export const storageService = {
       .eq('language', language)
       .single();
 
-        if (error || !data) {
+    if (error || !data) {
       console.log(`[storageService.loadProject] ⚠️ No data found for lang=${language}, projectId=${targetId}`);
+      if (error) {
+        logErrorQuick('storageService.loadProject', error, { language, projectId: targetId });
+      }
       return createEmptyProjectData();
     }
 
@@ -698,7 +758,7 @@ export const storageService = {
     console.log(`[storageService.loadProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items)' : '⚠️ EMPTY'}`);
 
     return data.data;
-
+  },
 
   async saveProject(projectData: any, language: string = 'en', projectId: string | null = null) {
     const userId = await this.getCurrentUserId();
@@ -716,7 +776,7 @@ export const storageService = {
       }
     }
 
-        const goCheck = projectData?.generalObjectives;
+    const goCheck = projectData?.generalObjectives;
     const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
     console.log(`[storageService.saveProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items, first="' + (goCheck[0]?.title || '').substring(0, 40) + '")' : '⚠️ EMPTY'}`);
 
@@ -733,14 +793,19 @@ export const storageService = {
 
     if (dataError) {
       console.error('Error saving project data:', dataError);
+      logErrorQuick('storageService.saveProject', dataError, { projectId: targetId, language });
     }
 
     const newTitle = projectData.projectIdea?.projectTitle;
     if (newTitle && newTitle.trim() !== '') {
-      await supabase
+      const { error: titleError } = await supabase
         .from('projects')
         .update({ title: newTitle.trim() })
         .eq('id', targetId);
+
+      if (titleError) {
+        logErrorQuick('storageService.saveProject.title', titleError, { projectId: targetId });
+      }
     }
 
     cachedProjectsMeta = null;
@@ -754,6 +819,7 @@ export const storageService = {
     const { data, error } = await supabase.auth.mfa.listFactors();
     if (error) {
       console.warn('getMFAFactors error:', error.message);
+      logErrorQuick('storageService.getMFAFactors', error);
       return { totp: [] };
     }
     return { totp: data?.totp || [] };
@@ -766,6 +832,7 @@ export const storageService = {
     });
     if (error) {
       console.error('enrollMFA error:', error.message);
+      logErrorQuick('storageService.enrollMFA', error);
       return null;
     }
     return {
@@ -778,6 +845,7 @@ export const storageService = {
   async challengeAndVerifyMFA(factorId: string, code: string): Promise<{ success: boolean; message?: string }> {
     const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
     if (challengeError) {
+      logErrorQuick('storageService.challengeMFA', challengeError, { factorId });
       return { success: false, message: challengeError.message };
     }
 
@@ -788,6 +856,7 @@ export const storageService = {
     });
 
     if (verifyError) {
+      logErrorQuick('storageService.verifyMFA', verifyError, { factorId });
       return { success: false, message: verifyError.message };
     }
 
@@ -797,6 +866,7 @@ export const storageService = {
   async unenrollMFA(factorId: string): Promise<{ success: boolean; message?: string }> {
     const { error } = await supabase.auth.mfa.unenroll({ factorId });
     if (error) {
+      logErrorQuick('storageService.unenrollMFA', error, { factorId });
       return { success: false, message: error.message };
     }
     return { success: true };
@@ -806,6 +876,7 @@ export const storageService = {
     const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (error) {
       console.warn('getAAL error:', error.message);
+      logErrorQuick('storageService.getAAL', error);
       return { currentLevel: 'aal1', nextLevel: 'aal1' };
     }
     return {
