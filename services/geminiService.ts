@@ -1,5 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
 // services/geminiService.ts
+// v7.6 — 2026-03-01 — BUDGET ENFORCEMENT POST-PROCESSING
+//
+// CHANGES v7.6:
+//   ★ NEW: generatePartnerAllocations() post-processing budget enforcement
+//     → After AI generates allocations, enforce RESOURCE_COHERENCE_RULES
+//     → Scale down PM WP if over max % (5-15% based on total budget)
+//     → Scale down Dissemination WP if over 20% (target ~15%)
+//     → Log budget check and adjustments
+//
 // v7.5 — 2026-02-24 — TOKEN OPTIMIZATION + ABORT SIGNAL
 //
 // CHANGES v7.5:
