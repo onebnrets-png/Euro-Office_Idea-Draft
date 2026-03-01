@@ -1,8 +1,11 @@
 // services/errorLogService.ts
 // ═══════════════════════════════════════════════════════════════
 // Global error logging service — captures frontend errors to DB
-// v1.1 — 2026-03-01
+// v1.2 — 2026-03-01
+//
 // CHANGELOG:
+//   ★ v1.2: Added logErrorQuick() — fire-and-forget convenience wrapper
+//           for use in catch blocks across all services and hooks.
 //   ★ v1.1: Enhanced export — formatLogsForExport now includes FULL
 //           stack traces, full context JSON (pretty-printed), and
 //           precise timestamps with seconds.
@@ -266,37 +269,12 @@ export const errorLogService = {
     URL.revokeObjectURL(url);
   },
 };
-// ─── Convenience wrapper for use in catch blocks ─────────────
-// Avoids circular import issues — can be called from any service/hook.
-/**
- * Quick-log: call from any catch block to ensure error lands in DB.
- * Usage: logErrorQuick('storageService.login', error, { email })
- */
-export function logErrorQuick(
-  component: string,
-  error: any,
-  context?: Record<string, any>
-): void {
-  const msg = error?.message || String(error) || 'Unknown error';
-  const stack = error?.stack || null;
-  const code = error?.code || error?.status || null;
 
-  // Fire and forget — don't await, don't block caller
-  errorLogService.logError({
-    errorMessage: msg,
-    errorCode: code ? String(code) : undefined,
-    errorStack: stack,
-    component,
-    context: context || {},
-  }).catch(() => {
-    // Last resort — if even DB logging fails, at least console has it
-    console.error(`[logErrorQuick] Failed to log to DB: ${component}: ${msg}`);
-  });
-}
 // ─── Convenience wrapper for use in catch blocks ─────────────
 /**
- * Quick-log: call from any catch block to ensure error lands in DB.
- * Fire-and-forget — does not block the caller.
+ * ★ v1.2: Quick-log — call from any catch block to ensure error
+ * lands in the error_log DB table. Fire-and-forget — does not
+ * block the caller, does not throw.
  *
  * Usage:
  *   import { logErrorQuick } from './errorLogService.ts';
@@ -307,16 +285,16 @@ export function logErrorQuick(
   error: any,
   context?: Record<string, any>
 ): void {
-  const msg = error?.message || String(error) || 'Unknown error';
-  const stack = error?.stack || null;
-  const code = error?.code || error?.status || error?.statusCode || null;
+  var msg = error?.message || String(error) || 'Unknown error';
+  var stack = error?.stack || null;
+  var code = error?.code || error?.status || error?.statusCode || null;
 
   // Fire and forget — don't await, don't block caller
   errorLogService.logError({
     errorMessage: msg,
     errorCode: code ? String(code) : undefined,
     errorStack: stack,
-    component,
+    component: component,
     context: context || {},
   }).catch(function() {
     // Last resort — if even DB logging fails, at least console has it
@@ -324,10 +302,9 @@ export function logErrorQuick(
   });
 }
 
-
 // ─── Global error handler (auto-captures unhandled errors) ───
 // Filters out harmless browser noise (e.g. ResizeObserver)
-const IGNORED_ERRORS = [
+var IGNORED_ERRORS = [
   'ResizeObserver loop',
   'ResizeObserver loop completed',
 ];
