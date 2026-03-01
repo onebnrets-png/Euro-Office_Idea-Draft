@@ -337,19 +337,19 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                         ))}
                     </SubSection>
 
-                    {/* Gantt Chart */}
-                    <div style={{ pageBreakInside: 'avoid', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                    {/* Gantt Chart — print-optimized with fixed dimensions */}
+                    <div style={{ pageBreakBefore: 'always', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                          <h3 className="text-xl font-semibold text-gray-800 mb-2">{t.subSteps.ganttChart}</h3>
-                         <div className="border border-gray-300 rounded overflow-hidden">
-                             <GanttChart activities={activities} language={language} id="gantt-chart-print" forceViewMode="project" />
+                         <div style={{ width: '100%', overflow: 'visible', border: '1px solid #d1d5db', borderRadius: '4px', background: 'white' }}>
+                             <GanttChart activities={activities} language={language} id="gantt-chart-print" forceViewMode="project" containerWidth={960} printMode={true} />
                          </div>
                     </div>
 
-                    {/* PERT Chart */}
-                    <div style={{ pageBreakInside: 'avoid', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                    {/* PERT Chart — print-optimized with fixed dimensions */}
+                    <div style={{ pageBreakBefore: 'always', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                          <h3 className="text-xl font-semibold text-gray-800 mb-2">{t.subSteps.pertChart}</h3>
-                         <div className="border border-gray-300 rounded overflow-hidden">
-                             <PERTChart activities={activities} language={language} id="pert-chart-print" printMode={true} />
+                         <div style={{ width: '100%', overflow: 'visible', border: '1px solid #d1d5db', borderRadius: '4px', background: 'white' }}>
+                             <PERTChart activities={activities} language={language} printMode={true} containerWidth={960} />
                          </div>
                     </div>
 
