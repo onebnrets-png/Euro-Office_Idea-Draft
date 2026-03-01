@@ -606,12 +606,10 @@ const App = () => {
           )}
         </div>
       </div>
-
       {/* ═══ PRINT LAYOUT ═══ */}
-      <div className="hidden print:block">
+      <div id="print-layout-container" style={{ display: 'none' }}>
         <PrintLayout projectData={pm.projectData} language={language} logo={auth.appLogo} />
       </div>
-
       {/* ═══ HIDDEN EXPORT CONTAINERS ═══ */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
         <div id="gantt-chart-export" style={{ width: '2400px', background: 'white', padding: '20px', overflow: 'visible' }}>
