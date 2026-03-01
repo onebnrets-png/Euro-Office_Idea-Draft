@@ -471,6 +471,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       onConfirm: async () => { setConfirmModal(null); const result = await admin.deleteOrgUser(user.id, activeOrgId); if (result.success) { setToast({ message: t.users.deleteSuccess, type: 'success' }); } else { setToast({ message: `${t.users.deleteFailed} ${result.message}`, type: 'error' }); } }
     });
   }, [admin, t]);
+    // ★ v4.1: Change user's organization
+  const handleChangeOrg = useCallback(async (userId: string) => {
+    if (!selectedNewOrgId) return;
+    const orgInfo = allOrgs.find((o) => o.id === selectedNewOrgId);
+    const orgName = orgInfo ? orgInfo.name : '';
+    const result = await admin.changeUserOrganization(userId, selectedNewOrgId, orgName);
+    if (result.success) {
+      setToast({ message: (t.users as any).orgChanged || 'Organization changed.', type: 'success' });
+      setEditingOrgUserId(null);
+      setSelectedNewOrgId('');
+    } else {
+      setToast({ message: ((t.users as any).orgChangeFailed || 'Failed: ') + ' ' + result.message, type: 'error' });
+    }
+  }, [admin, selectedNewOrgId, allOrgs, t]);
 
   const handleSelfDelete = useCallback(async () => {
     if (selfDeleteInput !== 'DELETE') return;
