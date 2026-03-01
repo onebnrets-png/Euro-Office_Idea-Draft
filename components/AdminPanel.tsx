@@ -23,7 +23,7 @@ import {
   TEMPORAL_INTEGRITY_RULE, CHAPTER_LABELS, FIELD_RULE_LABELS, CHAPTERS,
   GLOBAL_RULES, FIELD_RULES, SUMMARY_RULES, TRANSLATION_RULES,
 } from '../services/Instructions.ts';
-import { errorLogService, type ErrorLogEntry } from '../services/errorLogService.ts';
+import { errorLogService, type ErrorLogEntry, type AuditLogExportEntry } from '../services/errorLogService.ts';
 import { organizationService } from '../services/organizationService.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 
@@ -93,7 +93,10 @@ const ADMIN_TEXT = {
       deleteConfirmSuffix: '? All their projects and data will be removed. This cannot be undone.',
       deleteSuccess: 'User deleted successfully.', deleteFailed: 'Failed to delete user:',
       removeFromOrg: 'Remove from Org',
-      removeFromOrgConfirm: 'Remove user from this organization? Their projects in this org will be deleted.',
+            removeFromOrgConfirm: 'Remove user from this organization? Their projects in this org will be deleted.',
+      organization: 'Organization', changeOrg: 'Change Organization',
+      orgChanged: 'Organization changed successfully.', orgChangeFailed: 'Failed to change organization:',
+      selectOrg: 'Select organization...', noOrg: 'No organization',
     },
     instructions: {
       title: 'AI Instructions', subtitle: 'Edit the global AI instructions that apply to all users',
@@ -114,19 +117,24 @@ const ADMIN_TEXT = {
       title: 'Audit Log', subtitle: 'Track all administrative actions',
       admin: 'Admin', action: 'Action', target: 'Target', details: 'Details', date: 'Date',
       noEntries: 'No log entries found.',
+      exportTxt: 'Export TXT', exportJson: 'Export JSON',
       actions: {
         role_change: 'Role Change', instructions_update: 'Instructions Updated',
         instructions_reset: 'Instructions Reset', user_block: 'User Blocked',
         user_delete: 'User Deleted', org_user_remove: 'User Removed from Org',
-        org_delete: 'Organization Deleted',
-      },
+        org_delete: 'Organization Deleted', org_change: 'Organization Changed',
+        },
     },
     errors: {
       title: 'Error Log', subtitle: 'System errors captured from all users',
       date: 'Date', user: 'User', component: 'Component', error: 'Error', code: 'Code',
       noErrors: 'No errors in system!', copyForDev: 'Copy for developer',
       clearAll: 'Clear all', clearConfirm: 'Clear all error logs?',
-      copied: 'Logs copied to clipboard!', cleared: 'Logs cleared.',
+            copied: 'Logs copied to clipboard!', cleared: 'Logs cleared.',
+      exportTxt: 'Export TXT', exportJson: 'Export JSON',
+      stackTrace: 'Stack Trace', context: 'Context', collapse: 'Collapse',
+      expand: 'Click row to expand full detail',
+      filterComponent: 'Filter by component...', filterUser: 'Filter by user...',
     },
     selfDelete: {
       title: 'Delete My Account',
@@ -185,6 +193,9 @@ const ADMIN_TEXT = {
       deleteSuccess: 'Uporabnik uspe\u0161no izbrisan.', deleteFailed: 'Napaka pri brisanju uporabnika:',
       removeFromOrg: 'Odstrani iz org.',
       removeFromOrgConfirm: 'Odstrani uporabnika iz te organizacije? Njegovi projekti v tej org bodo izbrisani.',
+      organization: 'Organizacija', changeOrg: 'Spremeni organizacijo',
+      orgChanged: 'Organizacija uspe\u0161no spremenjena.', orgChangeFailed: 'Napaka pri spremembi organizacije:',
+      selectOrg: 'Izberi organizacijo...', noOrg: 'Brez organizacije',
     },
     instructions: {
       title: 'AI Pravila', subtitle: 'Urejanje globalnih AI pravil, ki veljajo za vse uporabnike',
@@ -205,11 +216,12 @@ const ADMIN_TEXT = {
       title: 'Dnevnik sprememb', subtitle: 'Sledenje vsem administrativnim akcijam',
       admin: 'Admin', action: 'Akcija', target: 'Cilj', details: 'Podrobnosti', date: 'Datum',
       noEntries: 'Ni vnosov v dnevniku.',
+      exportTxt: 'Izvoz TXT', exportJson: 'Izvoz JSON',
       actions: {
         role_change: 'Sprememba vloge', instructions_update: 'Pravila posodobljena',
         instructions_reset: 'Pravila ponastavljena', user_block: 'Uporabnik blokiran',
         user_delete: 'Uporabnik izbrisan', org_user_remove: 'Uporabnik odstranjen iz org',
-        org_delete: 'Organizacija izbrisana',
+        org_delete: 'Organizacija izbrisana', org_change: 'Sprememba organizacije',
       },
     },
     errors: {
@@ -218,6 +230,10 @@ const ADMIN_TEXT = {
       noErrors: 'Ni napak v sistemu!', copyForDev: 'Kopiraj za razvijalca',
       clearAll: 'Po\u010Disti vse', clearConfirm: 'Izbri\u0161i vse error loge?',
       copied: 'Logi kopirani v odlo\u017Ei\u0161\u010De!', cleared: 'Logi izbrisani.',
+      exportTxt: 'Izvoz TXT', exportJson: 'Izvoz JSON',
+      stackTrace: 'Stack Trace', context: 'Kontekst', collapse: 'Zapri',
+      expand: 'Klikni vrstico za celoten prikaz',
+      filterComponent: 'Filtriraj po komponenti...', filterUser: 'Filtriraj po uporabniku...',
     },
     selfDelete: {
       title: 'Izbri\u0161i moj ra\u010Dun',
@@ -360,6 +376,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [kbLoading, setKbLoading] = useState(false);
   const [kbUploading, setKbUploading] = useState(false);
   const [kbDragOver, setKbDragOver] = useState(false);
+  // ★ v4.1: Error log expandable + filters
+  const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [errorFilterComponent, setErrorFilterComponent] = useState('');
+  const [errorFilterUser, setErrorFilterUser] = useState('');
+  // ★ v4.1: Organization change
+  const [allOrgs, setAllOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [editingOrgUserId, setEditingOrgUserId] = useState<string | null>(null);
+  const [selectedNewOrgId, setSelectedNewOrgId] = useState('');
 
   useEffect(() => { if (isOpen) { if (isUserAdmin) { admin.fetchUsers(); admin.fetchGlobalInstructions(); } loadSettingsData(); } }, [isOpen, isUserAdmin]);
   useEffect(() => { if (activeTab === 'audit' && isOpen && isUserAdmin) { admin.fetchAdminLog(); } }, [activeTab, isOpen, isUserAdmin]);
@@ -369,6 +393,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       errorLogService.getErrorLogs(200).then(logs => { setErrorLogs(logs); setErrorLogsLoading(false); });
     }
   }, [activeTab, isOpen, isUserSuperAdmin]);
+    // ★ v4.1: Load all organizations for org-change dropdown
+  useEffect(() => {
+    if (activeTab === 'users' && isOpen && isUserAdmin) {
+      organizationService.getAllOrgs().then((orgs) => {
+        setAllOrgs(orgs.map((o) => ({ id: o.id, name: o.name })));
+      });
+    }
+  }, [activeTab, isOpen, isUserAdmin]);
+
   useEffect(() => {
     if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
       const orgId = storageService.getActiveOrgId();
