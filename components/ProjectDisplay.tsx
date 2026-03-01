@@ -742,8 +742,7 @@ const renderPartners = (props) => {
                             }}
                             className="w-56 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
                         >
-                            >
-                                <option value="">—</option>
+                            <option value="">—</option>
                                 {Object.entries(tp.partnerTypes || {}).map(([key, label]) => (
                                     <option key={key} value={key}>{label as string}</option>
                                 ))}
