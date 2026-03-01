@@ -788,3 +788,91 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     border: 1px solid #CCCCCC !important;
   }
 }
+/* ═══════════════════════════════════════════════════════════════
+   ★ v5.1: PRINT STYLES — explicit @media print rules
+   Tailwind CDN print: variants are unreliable.
+   These native CSS rules ensure PrintLayout shows and UI hides.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Hide the entire app UI */
+  .print\:hidden,
+  [class*="print:hidden"] {
+    display: none !important;
+  }
+
+  /* Show the print layout */
+  .print\:block,
+  [class*="print:block"] {
+    display: block !important;
+  }
+
+  /* Remove any fixed/sticky positioning that breaks print */
+  * {
+    position: static !important;
+    overflow: visible !important;
+  }
+
+  /* Reset background colors for clean print */
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure full width — no sidebar margins */
+  main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Allow text to wrap fully — no truncation */
+  p, span, td, th, li, div {
+    overflow: visible !important;
+    text-overflow: unset !important;
+    white-space: normal !important;
+    max-height: none !important;
+    -webkit-line-clamp: unset !important;
+  }
+
+  /* Preserve pre-wrap for formatted content */
+  .whitespace-pre-wrap {
+    white-space: pre-wrap !important;
+  }
+
+  /* Remove shadows and decorations for cleaner print */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Page break control */
+  section {
+    page-break-inside: avoid;
+  }
+
+  h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure tables print with borders */
+  table, th, td {
+    border-color: #d1d5db !important;
+  }
+
+  /* Hide loading overlays, modals, tooltips */
+  [style*="position: fixed"],
+  [style*="z-index: 60"],
+  [role="dialog"] {
+    display: none !important;
+  }
+}
