@@ -211,7 +211,9 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
                         <SubSection title={t.management.title}>
                             <p className="whitespace-pre-wrap mb-4">{projectManagement.description}</p>
                             <h4 className="font-bold mb-2">{t.management.organigram}</h4>
-                            <Organigram structure={projectManagement.structure} activities={activities} language={language} id="organigram-print" />
+                            <div style={{ width: '100%', overflow: 'visible', background: 'white' }}>
+                                <Organigram structure={projectManagement.structure} activities={activities} language={language} id="organigram-print" printMode={true} containerWidth={960} />
+                            </div>
                         </SubSection>
                     )}
 
