@@ -61,6 +61,10 @@
     --text-body: #1a1a1a;
     --border-light: #cccccc;
   }
+   /* Show print layout container */
+  #print-layout-container {
+    display: block !important;
+  }
 }
 
 
