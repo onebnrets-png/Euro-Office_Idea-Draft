@@ -1316,8 +1316,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <p style={{ color: secondaryInfoText, fontSize: typography.fontSize.xs, margin: 0, opacity: 0.85 }}>{t.whiteLabel.logoNotice}</p>
                 </div>
               )}
-              <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.
-              lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
+                <div style={{ marginTop: '32px', padding: '20px', borderRadius: radii.lg, background: dangerBg, border: `1px solid ${dangerBorder}` }}>
                 <h4 style={{ color: dangerBtnText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>{'\u26A0\uFE0F'} {t.selfDelete.title}</h4>
                 <p style={{ color: isDark ? '#FDA4AF' : '#991B1B', fontSize: typography.fontSize.sm, margin: '0 0 16px', lineHeight: '1.5' }}>{t.selfDelete.warning}</p>
                 {storageService.isSuperAdmin() ? (
@@ -1396,7 +1395,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                 </div>
               </div>
 
-              {/* ★ v4.1: Filters */}
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                 <input type="text" placeholder={(t.errors as any).filterComponent || 'Filter component...'} value={errorFilterComponent} onChange={(e) => setErrorFilterComponent(e.target.value)}
                   style={{ flex: 1, fontSize: '12px', padding: '6px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body }} />
