@@ -43,7 +43,7 @@ import { ICONS, getSteps, BRAND_ASSETS } from './constants.tsx';
 import { TEXT } from './locales.ts';
 import { isStepCompleted } from './utils.ts';
 import { colors as lightColors, darkColors, shadows, radii, spacing, animation, typography } from './design/theme.ts';
-import { initTheme, getThemeMode, onThemeChange } from '../services/themeService.ts';
+import { initTheme, getThemeMode, onThemeChange } from './services/themeService.ts';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
