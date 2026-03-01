@@ -3,6 +3,8 @@
 // Universal AI Provider Abstraction Layer – v5.6 (2026-03-01)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v5.6 – FIX: Added INVALID_JSON to RETRYABLE_ERRORS — AI sometimes returns malformed JSON
+//         which is a transient issue (retry usually succeeds). Affects ALL AI calls globally.
 // v5.5 – NEW: AbortSignal support for generation cancellation
 //         - AIGenerateOptions: added signal?: AbortSignal
 //         - withRetry: checks signal.aborted before each attempt
