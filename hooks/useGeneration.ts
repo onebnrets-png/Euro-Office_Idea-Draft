@@ -61,6 +61,7 @@ import { TEXT } from '../locales.ts';
 import { storageService } from '../services/storageService.ts';
 import { smartTranslateProject } from '../services/translationDiffService.ts';
 import { isValidPartnerType } from '../services/Instructions.ts';
+import { logErrorQuick } from '../services/errorLogService.ts';
 
 interface UseGenerationProps {
   projectData: any;
@@ -336,6 +337,11 @@ export const useGeneration = ({
         return;
       }
 
+      // ★ Log EVERY AI error to DB (except user-initiated cancellations)
+      logErrorQuick('useGeneration.AI.' + context, e, {
+        errorCode: msg.split('|')[0] || 'UNKNOWN',
+        provider: msg.split('|')[1] || 'unknown',
+      });
       const parts = msg.split('|');
       const errorCode = parts[0] || '';
       const provider = parts[1] || '';
@@ -517,6 +523,7 @@ export const useGeneration = ({
       }
 
       console.error(`[AI Error] Unclassified: ${context}:`, e);
+      logErrorQuick('useGeneration.AI.' + context, e, { errorCode, provider });
       setModalConfig({
         isOpen: true,
         title: language === 'si' ? 'Nepričakovana napaka' : 'Unexpected Error',
