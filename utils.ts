@@ -2,8 +2,15 @@
 // ═══════════════════════════════════════════════════════════════
 // Utility functions: deep-setter, validation, project factory,
 // completion checks, scheduling logic, language detection.
-// v5.0 — 2026-02-22 — CHANGES:
-//   - ★ v5.0: Partners & Finance support
+// v5.1 — 2026-03-01 — CHANGES:
+//   ★ v5.1: recalculateProjectSchedule() — POST-PROCESSING TEMPORAL CLAMP
+//     → After dependency propagation, clamp ALL task dates to project envelope
+//     → Clamp ALL milestone dates to project envelope
+//     → Ensure PM WP (last) spans entire project (first task startDate = projectStart, last task endDate = projectEnd)
+//     → Ensure Dissemination WP (second-to-last) spans entire project
+//     → No task endDate may exceed projectEndDate after dependency shifts
+//     → Warning added if any dates were clamped
+//   - v5.0: Partners & Finance support
 //     → createEmptyProjectData() includes partners[] and fundingModel
 //     → safeMerge() handles partners and fundingModel
 //     → isSubStepCompleted() handles 'partners' and 'finance' sub-steps
@@ -152,24 +159,25 @@ export const safeMerge = (importedData: any): any => {
   if (!Array.isArray(merged.projectIdea.policies)) merged.projectIdea.policies = defaultData.projectIdea.policies;
 
   // ★ FIX: projectManagement MUST be an object {description, structure}, never an array
-if (!merged.projectManagement || Array.isArray(merged.projectManagement) || typeof merged.projectManagement !== 'object') {
-  if (Array.isArray(merged.projectManagement)) {
-    console.warn(`[safeMerge] ★ projectManagement was ARRAY (${merged.projectManagement.length} items) — resetting to default object`);
+  if (!merged.projectManagement || Array.isArray(merged.projectManagement) || typeof merged.projectManagement !== 'object') {
+    if (Array.isArray(merged.projectManagement)) {
+      console.warn('[safeMerge] projectManagement was ARRAY (' + merged.projectManagement.length + ' items) — resetting to default object');
+    }
+    merged.projectManagement = defaultData.projectManagement;
+  } else {
+    // Ensure structure sub-object exists
+    if (!merged.projectManagement.structure || typeof merged.projectManagement.structure !== 'object') {
+      merged.projectManagement.structure = defaultData.projectManagement.structure;
+    }
   }
-  merged.projectManagement = defaultData.projectManagement;
-} else {
-  // Ensure structure sub-object exists
-  if (!merged.projectManagement.structure || typeof merged.projectManagement.structure !== 'object') {
-    merged.projectManagement.structure = defaultData.projectManagement.structure;
-  }
-}
-    ['activities', 'generalObjectives', 'specificObjectives', 'outputs', 'outcomes', 'impacts', 'risks', 'kers'].forEach(key => {
+
+  ['activities', 'generalObjectives', 'specificObjectives', 'outputs', 'outcomes', 'impacts', 'risks', 'kers'].forEach(key => {
     if (!Array.isArray(merged[key])) {
       // ★ FIX: AI sometimes returns {objectives: [...]} or {key: [...]} instead of [...]
       if (merged[key] && typeof merged[key] === 'object') {
         for (const v of Object.values(merged[key])) {
           if (Array.isArray(v) && v.length > 0) {
-            console.warn(`[safeMerge] ★ "${key}" was object, extracted nested array (${(v as any[]).length} items)`);
+            console.warn('[safeMerge] "' + key + '" was object, extracted nested array (' + (v as any[]).length + ' items)');
             merged[key] = v;
             break;
           }
@@ -407,6 +415,45 @@ const getDuration = (startStr: string, endStr: string): number => {
   return diffDays;
 };
 
+// ★ v5.1: Helper — calculate project end date from start + months
+const calculateProjectEndDateFromIdea = (startDateStr: string, durationMonths: number): string => {
+  var parts = startDateStr.split('-').map(Number);
+  var startYear = parts[0];
+  var startMonth = parts[1] - 1;
+  var startDay = parts[2];
+
+  var targetMonth = startMonth + durationMonths;
+  var targetYear = startYear + Math.floor(targetMonth / 12);
+  targetMonth = targetMonth % 12;
+
+  var daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  var targetDay = Math.min(startDay, daysInTargetMonth);
+
+  var endDate = new Date(targetYear, targetMonth, targetDay);
+  endDate.setDate(endDate.getDate() - 1);
+
+  var y = endDate.getFullYear();
+  var m = String(endDate.getMonth() + 1).padStart(2, '0');
+  var d = String(endDate.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+};
+
+// ★ v5.1: Helper — detect if a WP is Project Management (last WP)
+const _isProjectManagementWP = (wp: any, wpIndex: number, totalWPs: number): boolean => {
+  if (wpIndex === totalWPs - 1) return true;
+  var title = (wp.title || '').toLowerCase();
+  return title.includes('management') || title.includes('coordination')
+    || title.includes('upravljanje') || title.includes('koordinacija');
+};
+
+// ★ v5.1: Helper — detect if a WP is Dissemination (second-to-last WP)
+const _isDisseminationWP = (wp: any, wpIndex: number, totalWPs: number): boolean => {
+  if (wpIndex === totalWPs - 2) return true;
+  var title = (wp.title || '').toLowerCase();
+  return title.includes('dissemination') || title.includes('communication')
+    || title.includes('diseminacija') || title.includes('komunikacija');
+};
+
 export const recalculateProjectSchedule = (projectData: any): ScheduleResult => {
   const warnings: string[] = [];
 
@@ -442,7 +489,7 @@ export const recalculateProjectSchedule = (projectData: any): ScheduleResult => 
     if (task.dependencies && task.dependencies.length > 0) {
       for (const dep of task.dependencies) {
         if (!taskMap.has(dep.predecessorId)) {
-          warnings.push(`Task "${task.id}" references unknown predecessor "${dep.predecessorId}" – dependency ignored.`);
+          warnings.push('Task "' + task.id + '" references unknown predecessor "' + dep.predecessorId + '" - dependency ignored.');
         }
       }
     }
@@ -515,10 +562,128 @@ export const recalculateProjectSchedule = (projectData: any): ScheduleResult => 
 
   if (!converged) {
     warnings.push(
-      `Schedule did not converge after ${MAX_ITERATIONS} iterations. ` +
-      `This usually indicates circular dependencies between tasks. ` +
-      `Please check task dependencies for loops.`
+      'Schedule did not converge after ' + MAX_ITERATIONS + ' iterations. ' +
+      'This usually indicates circular dependencies between tasks. ' +
+      'Please check task dependencies for loops.'
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ★ v5.1: POST-PROCESSING TEMPORAL CLAMP
+  // After dependency propagation, enforce project envelope on ALL dates.
+  // This prevents any task from exceeding the project end date,
+  // even if dependency shifts pushed it beyond.
+  // ═══════════════════════════════════════════════════════════════
+
+  var projectStartStr = projectData.projectIdea?.startDate;
+  var projectDurationMonths = projectData.projectIdea?.durationMonths || 24;
+
+  if (projectStartStr) {
+    var projectEndStr = calculateProjectEndDateFromIdea(projectStartStr, projectDurationMonths);
+    var projectStart = new Date(projectStartStr + 'T00:00:00Z');
+    var projectEnd = new Date(projectEndStr + 'T00:00:00Z');
+    var clampCount = 0;
+
+    console.log('[recalculateProjectSchedule] v5.1 POST-CLAMP: enforcing envelope ' + projectStartStr + ' -> ' + projectEndStr + ' (' + projectDurationMonths + ' months)');
+
+    // ── Phase 1: Clamp ALL task dates to project envelope ──
+    newActivities.forEach(function(wp: any) {
+      if (!wp.tasks || !Array.isArray(wp.tasks)) return;
+      wp.tasks.forEach(function(task: any) {
+        if (task.startDate) {
+          var taskStart = new Date(task.startDate + 'T00:00:00Z');
+          if (taskStart < projectStart) {
+            task.startDate = projectStartStr;
+            clampCount++;
+          }
+          if (taskStart > projectEnd) {
+            // Task starts after project end — clamp to last month
+            var lastMonthStart = addDays(projectEnd, -30);
+            if (lastMonthStart < projectStart) lastMonthStart = projectStart;
+            task.startDate = formatDate(lastMonthStart);
+            clampCount++;
+          }
+        }
+        if (task.endDate) {
+          var taskEnd = new Date(task.endDate + 'T00:00:00Z');
+          if (taskEnd > projectEnd) {
+            task.endDate = projectEndStr;
+            clampCount++;
+          }
+          if (taskEnd < projectStart) {
+            task.endDate = projectStartStr;
+            clampCount++;
+          }
+        }
+        // Ensure startDate <= endDate after clamping
+        if (task.startDate && task.endDate && task.startDate > task.endDate) {
+          task.startDate = task.endDate;
+          clampCount++;
+        }
+      });
+    });
+
+    // ── Phase 2: Clamp ALL milestone dates to project envelope ──
+    newActivities.forEach(function(wp: any) {
+      if (!wp.milestones || !Array.isArray(wp.milestones)) return;
+      wp.milestones.forEach(function(ms: any) {
+        if (ms.date) {
+          var msDate = new Date(ms.date + 'T00:00:00Z');
+          if (msDate < projectStart) {
+            ms.date = projectStartStr;
+            clampCount++;
+          }
+          if (msDate > projectEnd) {
+            ms.date = projectEndStr;
+            clampCount++;
+          }
+        }
+      });
+    });
+
+    // ── Phase 3: Ensure PM WP and Dissemination WP span entire project ──
+    var totalWPs = newActivities.length;
+    if (totalWPs >= 2) {
+      newActivities.forEach(function(wp: any, wpIdx: number) {
+        var isPM = _isProjectManagementWP(wp, wpIdx, totalWPs);
+        var isDiss = _isDisseminationWP(wp, wpIdx, totalWPs);
+
+        if ((isPM || isDiss) && wp.tasks && wp.tasks.length > 0) {
+          // Sort tasks by startDate to find first and last
+          var sortedTasks = wp.tasks
+            .filter(function(t: any) { return t.startDate && t.endDate; })
+            .sort(function(a: any, b: any) {
+              return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+            });
+
+          if (sortedTasks.length > 0) {
+            var firstTask = sortedTasks[0];
+            var lastTask = sortedTasks[sortedTasks.length - 1];
+
+            // First task must start at project start
+            if (firstTask.startDate !== projectStartStr) {
+              console.log('[recalculateProjectSchedule] v5.1 CLAMP: ' + wp.id + ' first task ' + firstTask.id + ' startDate ' + firstTask.startDate + ' -> ' + projectStartStr);
+              firstTask.startDate = projectStartStr;
+              clampCount++;
+            }
+
+            // Last task must end at project end
+            if (lastTask.endDate !== projectEndStr) {
+              console.log('[recalculateProjectSchedule] v5.1 CLAMP: ' + wp.id + ' last task ' + lastTask.id + ' endDate ' + lastTask.endDate + ' -> ' + projectEndStr);
+              lastTask.endDate = projectEndStr;
+              clampCount++;
+            }
+          }
+        }
+      });
+    }
+
+    if (clampCount > 0) {
+      console.log('[recalculateProjectSchedule] v5.1 POST-CLAMP: applied ' + clampCount + ' date corrections to enforce project envelope.');
+      warnings.push('Applied ' + clampCount + ' date corrections to enforce project timeframe (' + projectStartStr + ' to ' + projectEndStr + ').');
+    }
+  } else {
+    console.log('[recalculateProjectSchedule] v5.1 POST-CLAMP: SKIPPED — no projectIdea.startDate found.');
   }
 
   return {
