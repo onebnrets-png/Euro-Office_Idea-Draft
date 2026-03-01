@@ -342,6 +342,11 @@ export const useGeneration = ({
         errorCode: msg.split('|')[0] || 'UNKNOWN',
         provider: msg.split('|')[1] || 'unknown',
       });
+      // ★ v5.3: Log EVERY AI error to DB (except user-initiated cancellations)
+      logErrorQuick('useGeneration.AI.' + (context || 'unknown'), e, {
+        rawMessage: msg,
+        sessionCallCount: sessionCallCountRef.current,
+      });
       const parts = msg.split('|');
       const errorCode = parts[0] || '';
       const provider = parts[1] || '';
