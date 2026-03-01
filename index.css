@@ -1,6 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════
    EURO-OFFICE Design System — Global Stylesheet
-   v5.0 — 2026-02-17
+   v5.2 — 2026-03-01
+   
+   CHANGELOG:
+     v5.2: FIX Gantt/PERT/Organigram print rendering
+           - Removed global * { height: auto !important } from @media print
+           - Chart elements now preserve their calculated heights in print
+           - Added explicit print sizing for chart containers
+     v5.1: Added explicit @media print rules for PrintLayout visibility
+     v5.0: Initial Design System with light/dark mode
    
    ARCHITECTURE:
      Light mode: Tailwind defaults + minimal overrides
@@ -36,15 +44,22 @@
   .no-print,
   .sidebar,
   nav,
-  header,
   footer,
   button,
   .toolbar,
   .loading-overlay { display: none !important; }
 
-  * {
+  /* ★ v5.2: REMOVED global * { height: auto } — it destroyed Gantt/PERT charts.
+     Instead, target only text-content containers that need overflow visible. */
+  #print-layout-container section,
+  #print-layout-container .mb-8,
+  #print-layout-container .mb-6,
+  #print-layout-container .mb-4,
+  #print-layout-container p,
+  #print-layout-container table,
+  #print-layout-container ul,
+  #print-layout-container ol {
     overflow: visible !important;
-    height: auto !important;
     max-height: none !important;
   }
 
@@ -791,7 +806,8 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     box-shadow: none !important;
     border: 1px solid #CCCCCC !important;
   }
-     /* Charts in print layout — fixed width, no overflow clipping */
+
+  /* ★ v5.2: Charts in print — preserve calculated dimensions */
   #print-layout-container [id*="gantt"],
   #print-layout-container [id*="pert"],
   #print-layout-container [id*="organigram"] {
@@ -801,8 +817,19 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     page-break-inside: avoid;
   }
 
-  /* SVG elements inside charts — scale to container */
-  #print-layout-container svg {
+  /* ★ v5.2: Chart internals MUST keep their calculated heights
+     Do NOT apply height: auto to chart children */
+  #print-layout-container [id*="gantt"] div,
+  #print-layout-container [id*="pert"] div,
+  #print-layout-container [id*="organigram"] div {
+    /* Preserve overflow visible but DO NOT reset height */
+    overflow: visible !important;
+  }
+
+  /* ★ v5.2: SVG inside charts — preserve dimensions */
+  #print-layout-container [id*="gantt"] svg,
+  #print-layout-container [id*="pert"] svg,
+  #print-layout-container [id*="organigram"] svg {
     max-width: 960px !important;
     overflow: visible !important;
   }
@@ -813,8 +840,9 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     width: 960px !important;
   }
 }
+
 /* ═══════════════════════════════════════════════════════════════
-   ★ v5.1: PRINT STYLES — explicit @media print rules
+   ★ v5.1 / v5.2: PRINT STYLES — explicit @media print rules
    Tailwind CDN print: variants are unreliable.
    These native CSS rules ensure PrintLayout shows and UI hides.
    ═══════════════════════════════════════════════════════════════ */
