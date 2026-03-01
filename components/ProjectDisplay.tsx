@@ -1,5 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.6 — 2026-03-01 — FIX: Indirect cost calculation for decentralized model
 // v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs + batch viz trigger
 // v7.3 — 2026-02-23 — Language-aware WP/Task prefixes + partners.map bugfix
 //   - FIX: WP prefix: EN=WP, SI=DS (was hardcoded WP)
@@ -836,14 +837,37 @@ const renderFinance = (props) => {
         return '€' + n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     };
 
-    const calcIndirectForAllocation = (alloc: any): number => {
+        const calcIndirectForAllocation = (alloc: any): number => {
         if (!indirectSettings.percentage || indirectSettings.percentage <= 0) return 0;
         const applicableCategories = indirectSettings.appliesToCategories || [];
         if (applicableCategories.length === 0) return 0;
 
+        // ★ v7.6 FIX: Map centralized keys to decentralized equivalents and vice versa
+        // so indirect costs calculate correctly regardless of which model generated the data
+        var centralToDecentral = {
+            'labourCosts': 'salariesReimbursements',
+            'subContractorCosts': 'externalServiceCosts',
+            'travelCosts': 'vat',
+            'depreciationEquipment': 'depreciationBasicAssets',
+            'investmentCosts': 'tangibleAssetInvestment',
+            'materials': 'intangibleAssetInvestment',
+            'otherProjectCosts': 'infoCommunication',
+        };
+        var decentralToCentral = {};
+        Object.keys(centralToDecentral).forEach(function(k) {
+            decentralToCentral[centralToDecentral[k]] = k;
+        });
+
+        var applicableSet = new Set(applicableCategories);
+
         const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            const catKey = dc.categoryKey || '';
-            if (applicableCategories.includes(catKey)) {
+            var catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            if (applicableSet.has(catKey)) {
+                return sum + (dc.amount || 0);
+            }
+            // ★ v7.6: Cross-model fallback — if key doesn't match, try mapped equivalent
+            var mapped = centralToDecentral[catKey] || decentralToCentral[catKey] || '';
+            if (mapped && applicableSet.has(mapped)) {
                 return sum + (dc.amount || 0);
             }
             return sum;
@@ -851,6 +875,7 @@ const renderFinance = (props) => {
 
         return Math.round(applicableDirectSum * (indirectSettings.percentage / 100));
     };
+
 
     const allAllocations: any[] = [];
     activities.forEach((wp: any) => {
