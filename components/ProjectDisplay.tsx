@@ -732,9 +732,16 @@ const renderPartners = (props) => {
                         <div>
                             <label className="block text-sm font-semibold text-slate-600 mb-1.5">{tp.partnerType || 'Partner Type'}</label>
                             <select
-                                value={partner.partnerType || ''}
-                                onChange={(e) => onUpdateData(['partners', index, 'partnerType'], e.target.value || undefined)}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                            value={fundingModel}
+                            onChange={(e) => {
+                                var newModel = e.target.value;
+                                onUpdateData(['fundingModel'], newModel);
+                                // ★ v7.6: Clear appliesToCategories when switching funding model
+                                // because category keys are different between models
+                                onUpdateData(['indirectCostSettings', 'appliesToCategories'], []);
+                            }}
+                            className="w-56 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white text-base"
+                        >
                             >
                                 <option value="">—</option>
                                 {Object.entries(tp.partnerTypes || {}).map(([key, label]) => (
