@@ -1,7 +1,16 @@
 // services/errorLogService.ts
 // ═══════════════════════════════════════════════════════════════
 // Global error logging service — captures frontend errors to DB
-// v1.0 — 2026-02-19
+// v1.1 — 2026-03-01
+// CHANGELOG:
+//   ★ v1.1: Enhanced export — formatLogsForExport now includes FULL
+//           stack traces, full context JSON (pretty-printed), and
+//           precise timestamps with seconds.
+//           New: exportLogsAsJSON() for structured export.
+//           New: downloadLogsAsFile() for direct .txt/.json download.
+//           New: formatAuditLogsForExport() for Audit Log export.
+//           New: downloadAuditLogsAsFile() for direct audit download.
+//   v1.0: Initial implementation
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.ts';
@@ -16,6 +25,15 @@ export interface ErrorLogEntry {
   component: string | null;
   context: Record<string, any>;
   created_at: string;
+}
+
+export interface AuditLogExportEntry {
+  id: string;
+  adminEmail: string;
+  action: string;
+  targetEmail: string | null;
+  details: Record<string, any>;
+  createdAt: string;
 }
 
 export const errorLogService = {
@@ -86,42 +104,166 @@ export const errorLogService = {
   },
 
   /**
-   * Export logs as formatted text (for sharing with developer).
-   * Jasno berljiv format: datum, uporabnik, komponenta, koda, opis.
+   * ★ v1.1: Export logs as formatted text — FULL detail for developer.
+   * Includes: precise timestamp, user, component, code, FULL message,
+   * FULL stack trace (no truncation), pretty-printed context JSON.
    */
   formatLogsForExport(logs: ErrorLogEntry[]): string {
-    const header = [
-      `EURO-OFFICE ERROR LOG EXPORT`,
-      `Generated: ${new Date().toISOString()}`,
-      `Total entries: ${logs.length}`,
-      `${'═'.repeat(80)}`,
-      '',
-    ].join('\n');
+    var header = 'EURO-OFFICE ERROR LOG EXPORT\n'
+      + 'Generated: ' + new Date().toISOString() + '\n'
+      + 'Total entries: ' + logs.length + '\n'
+      + '='.repeat(100) + '\n\n';
 
-    const entries = logs.map((log, i) => {
-      const date = new Date(log.created_at).toLocaleString('sl-SI', {
+    var entries = logs.map(function(log, i) {
+      var date = new Date(log.created_at).toLocaleString('sl-SI', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit', second: '2-digit',
       });
-      const lines = [
-        `─── ERROR #${i + 1} ───`,
-        `Datum:       ${date}`,
-        `Uporabnik:   ${log.user_email || 'Neznan'}`,
-        `Komponenta:  ${log.component || '—'}`,
-        `Koda napake: ${log.error_code || '—'}`,
-        `Opis:        ${log.error_message}`,
+      var lines = [
+        '─── ERROR #' + (i + 1) + ' (' + log.id + ') ───',
+        'Datum:        ' + date,
+        'ISO:          ' + log.created_at,
+        'Uporabnik:    ' + (log.user_email || 'Neznan'),
+        'User ID:      ' + (log.user_id || '—'),
+        'Komponenta:   ' + (log.component || '—'),
+        'Koda napake:  ' + (log.error_code || '—'),
+        'Opis napake:  ' + log.error_message,
       ];
       if (log.error_stack) {
-        lines.push(`Stack:       ${log.error_stack.substring(0, 500)}`);
+        lines.push('');
+        lines.push('Stack Trace:');
+        lines.push(log.error_stack);
       }
       if (log.context && Object.keys(log.context).length > 0) {
-        lines.push(`Kontekst:    ${JSON.stringify(log.context)}`);
+        lines.push('');
+        lines.push('Context (JSON):');
+        lines.push(JSON.stringify(log.context, null, 2));
       }
+      lines.push('');
+      lines.push('─'.repeat(100));
       lines.push('');
       return lines.join('\n');
     }).join('\n');
 
     return header + entries;
+  },
+
+  /**
+   * ★ v1.1: Export logs as structured JSON (for programmatic analysis).
+   */
+  exportLogsAsJSON(logs: ErrorLogEntry[]): string {
+    var exportObj = {
+      exportType: 'EURO-OFFICE_ERROR_LOG',
+      generated: new Date().toISOString(),
+      totalEntries: logs.length,
+      entries: logs.map(function(log) {
+        return {
+          id: log.id,
+          timestamp: log.created_at,
+          userEmail: log.user_email,
+          userId: log.user_id,
+          component: log.component,
+          errorCode: log.error_code,
+          errorMessage: log.error_message,
+          stackTrace: log.error_stack,
+          context: log.context,
+        };
+      }),
+    };
+    return JSON.stringify(exportObj, null, 2);
+  },
+
+  /**
+   * ★ v1.1: Download logs as a file (triggers browser download).
+   * @param logs - Error log entries
+   * @param format - 'txt' or 'json'
+   */
+  downloadLogsAsFile(logs: ErrorLogEntry[], format: 'txt' | 'json'): void {
+    var content = format === 'json'
+      ? this.exportLogsAsJSON(logs)
+      : this.formatLogsForExport(logs);
+
+    var mimeType = format === 'json' ? 'application/json' : 'text/plain';
+    var dateStr = new Date().toISOString().slice(0, 10);
+    var fileName = 'euro-office-error-log-' + dateStr + '.' + format;
+
+    var blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  /**
+   * ★ v1.1: Format audit log entries for text export.
+   */
+  formatAuditLogsForExport(logs: AuditLogExportEntry[]): string {
+    var header = 'EURO-OFFICE AUDIT LOG EXPORT\n'
+      + 'Generated: ' + new Date().toISOString() + '\n'
+      + 'Total entries: ' + logs.length + '\n'
+      + '='.repeat(100) + '\n\n';
+
+    var entries = logs.map(function(log, i) {
+      var date = new Date(log.createdAt).toLocaleString('sl-SI', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      var lines = [
+        '─── AUDIT #' + (i + 1) + ' (' + log.id + ') ───',
+        'Datum:        ' + date,
+        'ISO:          ' + log.createdAt,
+        'Admin:        ' + log.adminEmail,
+        'Akcija:       ' + log.action,
+        'Cilj:         ' + (log.targetEmail || '—'),
+      ];
+      if (log.details && Object.keys(log.details).length > 0) {
+        lines.push('');
+        lines.push('Podrobnosti (JSON):');
+        lines.push(JSON.stringify(log.details, null, 2));
+      }
+      lines.push('');
+      lines.push('─'.repeat(100));
+      lines.push('');
+      return lines.join('\n');
+    }).join('\n');
+
+    return header + entries;
+  },
+
+  /**
+   * ★ v1.1: Download audit logs as a file.
+   */
+  downloadAuditLogsAsFile(logs: AuditLogExportEntry[], format: 'txt' | 'json'): void {
+    var content = '';
+    if (format === 'json') {
+      var exportObj = {
+        exportType: 'EURO-OFFICE_AUDIT_LOG',
+        generated: new Date().toISOString(),
+        totalEntries: logs.length,
+        entries: logs,
+      };
+      content = JSON.stringify(exportObj, null, 2);
+    } else {
+      content = this.formatAuditLogsForExport(logs);
+    }
+
+    var mimeType = format === 'json' ? 'application/json' : 'text/plain';
+    var dateStr = new Date().toISOString().slice(0, 10);
+    var fileName = 'euro-office-audit-log-' + dateStr + '.' + format;
+
+    var blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 };
 
@@ -133,25 +275,25 @@ const IGNORED_ERRORS = [
 ];
 
 function shouldIgnore(message: string): boolean {
-  return IGNORED_ERRORS.some(pattern => message.includes(pattern));
+  return IGNORED_ERRORS.some(function(pattern) { return message.includes(pattern); });
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
-    const msg = event.message || 'Unhandled error';
-    if (shouldIgnore(msg)) return; // ← skip harmless noise
+  window.addEventListener('error', function(event) {
+    var msg = event.message || 'Unhandled error';
+    if (shouldIgnore(msg)) return;
 
     errorLogService.logError({
       errorMessage: msg,
-      errorStack: event.error?.stack || `${event.filename}:${event.lineno}:${event.colno}`,
+      errorStack: event.error?.stack || (event.filename + ':' + event.lineno + ':' + event.colno),
       component: 'window.onerror',
       context: { filename: event.filename, lineno: event.lineno, colno: event.colno },
     });
   });
 
-  window.addEventListener('unhandledrejection', (event) => {
-    const msg = event.reason?.message || String(event.reason) || 'Unhandled promise rejection';
-    if (shouldIgnore(msg)) return; // ← skip harmless noise
+  window.addEventListener('unhandledrejection', function(event) {
+    var msg = event.reason?.message || String(event.reason) || 'Unhandled promise rejection';
+    if (shouldIgnore(msg)) return;
 
     errorLogService.logError({
       errorMessage: msg,
