@@ -1,6 +1,6 @@
 // services/aiProvider.ts
 // ═══════════════════════════════════════════════════════════════
-// Universal AI Provider Abstraction Layer – v5.5 (2026-02-24)
+// Universal AI Provider Abstraction Layer – v5.6 (2026-03-01)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
 // v5.5 – NEW: AbortSignal support for generation cancellation
