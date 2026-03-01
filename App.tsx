@@ -49,7 +49,7 @@ import { useAuth } from './hooks/useAuth.ts';
 import { useProjectManager } from './hooks/useProjectManager.ts';
 import { useTranslation } from './hooks/useTranslation.ts';
 import { useGeneration } from './hooks/useGeneration.ts';
-
+ 
 type ColorScheme = typeof lightColors | typeof darkColors;
 
 /* ═══ SMALL UI COMPONENTS ═══ */
