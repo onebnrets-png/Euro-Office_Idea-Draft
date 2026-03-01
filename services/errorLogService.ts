@@ -293,6 +293,37 @@ export function logErrorQuick(
     console.error(`[logErrorQuick] Failed to log to DB: ${component}: ${msg}`);
   });
 }
+// ─── Convenience wrapper for use in catch blocks ─────────────
+/**
+ * Quick-log: call from any catch block to ensure error lands in DB.
+ * Fire-and-forget — does not block the caller.
+ *
+ * Usage:
+ *   import { logErrorQuick } from './errorLogService.ts';
+ *   logErrorQuick('storageService.login', error, { email });
+ */
+export function logErrorQuick(
+  component: string,
+  error: any,
+  context?: Record<string, any>
+): void {
+  const msg = error?.message || String(error) || 'Unknown error';
+  const stack = error?.stack || null;
+  const code = error?.code || error?.status || error?.statusCode || null;
+
+  // Fire and forget — don't await, don't block caller
+  errorLogService.logError({
+    errorMessage: msg,
+    errorCode: code ? String(code) : undefined,
+    errorStack: stack,
+    component,
+    context: context || {},
+  }).catch(function() {
+    // Last resort — if even DB logging fails, at least console has it
+    console.error('[logErrorQuick] Failed to log to DB: ' + component + ': ' + msg);
+  });
+}
+
 
 // ─── Global error handler (auto-captures unhandled errors) ───
 // Filters out harmless browser noise (e.g. ResizeObserver)
