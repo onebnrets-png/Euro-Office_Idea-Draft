@@ -1740,9 +1740,114 @@ CRITICAL:
     return { wpId: taskAlloc.wpId, taskId: taskAlloc.taskId, allocations };
   });
 
-  console.log(`[generatePartnerAllocations] Generated allocations for ${processedAllocations.length} tasks`);
+    // ═══════════════════════════════════════════════════════════════
+  // ★ v7.6: POST-PROCESSING BUDGET ENFORCEMENT
+  // Enforce RESOURCE_COHERENCE_RULES after AI generation.
+  // AI often ignores percentage limits — we enforce them here.
+  // ═══════════════════════════════════════════════════════════════
+
+  // Step 1: Identify PM WP (last) and Dissemination WP (second-to-last)
+  var wpIds = activities.map(function(wp) { return wp.id; });
+  var pmWpId = wpIds.length > 0 ? wpIds[wpIds.length - 1] : null;
+  var dissWpId = wpIds.length > 1 ? wpIds[wpIds.length - 2] : null;
+
+  // Step 2: Calculate total budget and per-WP budgets
+  var wpBudgets = {};
+  var grandTotal = 0;
+  processedAllocations.forEach(function(taskAlloc) {
+    var wpId = taskAlloc.wpId;
+    if (!wpBudgets[wpId]) wpBudgets[wpId] = 0;
+    (taskAlloc.allocations || []).forEach(function(alloc) {
+      var cost = alloc.totalCost || alloc.totalDirectCost || 0;
+      wpBudgets[wpId] += cost;
+      grandTotal += cost;
+    });
+  });
+
+  if (grandTotal > 0 && pmWpId && dissWpId) {
+    var pmBudget = wpBudgets[pmWpId] || 0;
+    var dissBudget = wpBudgets[dissWpId] || 0;
+    var pmPercent = (pmBudget / grandTotal) * 100;
+    var dissPercent = (dissBudget / grandTotal) * 100;
+
+    // Step 3: Determine PM WP max percentage based on total budget
+    var pmMaxPercent = 15;
+    if (grandTotal > 10000000) pmMaxPercent = 5;
+    else if (grandTotal > 5000000) pmMaxPercent = 7;
+    else if (grandTotal > 3000000) pmMaxPercent = 7;
+    else if (grandTotal > 1000000) pmMaxPercent = 10;
+    else if (grandTotal > 500000) pmMaxPercent = 10;
+
+    var dissTargetPercent = 15;
+    var budgetAdjusted = false;
+
+    console.log('[generatePartnerAllocations] v7.6 BUDGET CHECK: grandTotal=' + Math.round(grandTotal) + ' EUR, PM=' + pmPercent.toFixed(1) + '% (max ' + pmMaxPercent + '%), Diss=' + dissPercent.toFixed(1) + '% (target ~' + dissTargetPercent + '%)');
+
+    // Step 4: Scale down PM WP if over limit
+    if (pmPercent > pmMaxPercent) {
+      var pmTargetBudget = grandTotal * (pmMaxPercent / 100);
+      var pmScale = pmTargetBudget / pmBudget;
+      console.log('[generatePartnerAllocations] v7.6 SCALE PM: ' + pmPercent.toFixed(1) + '% -> ' + pmMaxPercent + '% (scale factor: ' + pmScale.toFixed(3) + ')');
+
+      processedAllocations.forEach(function(taskAlloc) {
+        if (taskAlloc.wpId === pmWpId) {
+          (taskAlloc.allocations || []).forEach(function(alloc) {
+            alloc.hours = Math.max(1, Math.round(alloc.hours * pmScale));
+            alloc.pm = parseFloat((alloc.hours / 143).toFixed(2));
+            alloc.directCosts = (alloc.directCosts || []).map(function(dc) {
+              return { id: dc.id, categoryKey: dc.categoryKey, name: dc.name, amount: Math.round(dc.amount * pmScale) };
+            });
+            alloc.totalDirectCost = alloc.directCosts.reduce(function(s, dc) { return s + (dc.amount || 0); }, 0);
+            alloc.totalCost = alloc.totalDirectCost;
+          });
+        }
+      });
+      budgetAdjusted = true;
+    }
+
+    // Step 5: Scale down Dissemination WP if significantly over target (>20%)
+    if (dissPercent > 20) {
+      var dissTargetBudget = grandTotal * (dissTargetPercent / 100);
+      var dissScale = dissTargetBudget / dissBudget;
+      console.log('[generatePartnerAllocations] v7.6 SCALE DISS: ' + dissPercent.toFixed(1) + '% -> ~' + dissTargetPercent + '% (scale factor: ' + dissScale.toFixed(3) + ')');
+
+      processedAllocations.forEach(function(taskAlloc) {
+        if (taskAlloc.wpId === dissWpId) {
+          (taskAlloc.allocations || []).forEach(function(alloc) {
+            alloc.hours = Math.max(1, Math.round(alloc.hours * dissScale));
+            alloc.pm = parseFloat((alloc.hours / 143).toFixed(2));
+            alloc.directCosts = (alloc.directCosts || []).map(function(dc) {
+              return { id: dc.id, categoryKey: dc.categoryKey, name: dc.name, amount: Math.round(dc.amount * dissScale) };
+            });
+            alloc.totalDirectCost = alloc.directCosts.reduce(function(s, dc) { return s + (dc.amount || 0); }, 0);
+            alloc.totalCost = alloc.totalDirectCost;
+          });
+        }
+      });
+      budgetAdjusted = true;
+    }
+
+    if (budgetAdjusted) {
+      // Recalculate final totals for logging
+      var newGrandTotal = 0;
+      var newPmBudget = 0;
+      var newDissBudget = 0;
+      processedAllocations.forEach(function(taskAlloc) {
+        (taskAlloc.allocations || []).forEach(function(alloc) {
+          var cost = alloc.totalCost || 0;
+          newGrandTotal += cost;
+          if (taskAlloc.wpId === pmWpId) newPmBudget += cost;
+          if (taskAlloc.wpId === dissWpId) newDissBudget += cost;
+        });
+      });
+      console.log('[generatePartnerAllocations] v7.6 AFTER ADJUSTMENT: grandTotal=' + Math.round(newGrandTotal) + ' EUR, PM=' + (newGrandTotal > 0 ? (newPmBudget / newGrandTotal * 100).toFixed(1) : '0') + '%, Diss=' + (newGrandTotal > 0 ? (newDissBudget / newGrandTotal * 100).toFixed(1) : '0') + '%');
+    }
+  }
+
+  console.log('[generatePartnerAllocations] Generated allocations for ' + processedAllocations.length + ' tasks');
 
   return processedAllocations;
+
 };
 
 // ═══════════════════════════════════════════════════════════════
