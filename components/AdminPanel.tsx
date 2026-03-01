@@ -274,6 +274,13 @@ const formatDate = (dateStr: string | null, short = false): string => {
   } catch { return dateStr; }
 };
 
+const formatDateFull = (dateStr: string | null): string => {
+  if (!dateStr) return '\u2014';
+  try {
+    var d = new Date(dateStr);
+    return d.toLocaleString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return dateStr; }
+};
 const UserAvatar: React.FC<{ name: string; email: string; size?: number }> = ({ name, email, size = 36 }) => {
   const initials = (name || email || '?').split(/[\s@]+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('');
   let hash = 0;
@@ -772,6 +779,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                       <tr style={{ borderBottom: `2px solid ${colors.border.light}` }}>
                         <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.users.email}</th>
                         <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.users.displayName}</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{(t.users as any).organization || 'Organization'}</th>
                         <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.users.role}</th>
                         <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.users.registered}</th>
                         <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.users.lastLogin}</th>
@@ -790,6 +798,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                             </div>
                           </td>
                           <td style={{ padding: '10px 12px', color: colors.text.body }}>{user.displayName}</td>
+                                                    {/* ★ v4.1: Organization column */}
+                          <td style={{ padding: '10px 12px', fontSize: typography.fontSize.sm }}>
+                            {editingOrgUserId === user.id ? (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                <select value={selectedNewOrgId} onChange={(e) => setSelectedNewOrgId(e.target.value)}
+                                  style={{ fontSize: '11px', padding: '3px 6px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, maxWidth: '150px' }}>
+                                  <option value="">{(t.users as any).selectOrg || 'Select...'}</option>
+                                  {allOrgs.map((org) => (<option key={org.id} value={org.id}>{org.name}</option>))}
+                                </select>
+                                <button onClick={() => handleChangeOrg(user.id)} disabled={!selectedNewOrgId}
+                                  style={{ fontSize: '11px', padding: '2px 7px', borderRadius: radii.sm, border: 'none', cursor: selectedNewOrgId ? 'pointer' : 'default', background: selectedNewOrgId ? '#0ea5e9' : colors.border.light, color: '#fff' }}>{'\u2713'}</button>
+                                <button onClick={() => { setEditingOrgUserId(null); setSelectedNewOrgId(''); }}
+                                  style={{ fontSize: '11px', padding: '2px 7px', borderRadius: radii.sm, border: 'none', cursor: 'pointer', background: colors.border.light, color: colors.text.muted }}>{'\u2715'}</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ color: user.orgName ? colors.text.body : colors.text.muted, fontSize: typography.fontSize.xs }}>{user.orgName || ((t.users as any).noOrg || '\u2014')}</span>
+                                {isUserAdmin && (
+                                  <button onClick={() => { setEditingOrgUserId(user.id); setSelectedNewOrgId(''); }}
+                                    title={(t.users as any).changeOrg || 'Change'} style={{ fontSize: '10px', padding: '1px 5px', borderRadius: radii.sm, border: '1px solid ' + colors.border.light, background: 'transparent', color: colors.text.muted, cursor: 'pointer' }}>{'\u270E'}</button>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td style={{ padding: '10px 12px' }}>
                             {user.role === 'superadmin' ? (
                               <span style={{ padding: '2px 10px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold }}>{'\uD83D\uDC51'} Super Admin</span>
@@ -1008,7 +1040,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           {activeTab === 'audit' && isUserAdmin && (
             <div>
               <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>{t.log.title}</h3>
-              <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '0 0 16px' }}>{t.log.subtitle}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' as const, gap: '8px' }}>
+                <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{t.log.subtitle}</p>
+                {admin.adminLog.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => { var exportData: AuditLogExportEntry[] = admin.adminLog.map(function(e) { return { id: e.id, adminEmail: e.adminEmail || '', action: e.action, targetEmail: e.targetEmail || null, details: e.details, createdAt: e.createdAt }; }); errorLogService.downloadAuditLogsAsFile(exportData, 'txt'); }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}>{'\u2193 ' + ((t.log as any).exportTxt || 'Export TXT')}</button>
+                    <button onClick={() => { var exportData: AuditLogExportEntry[] = admin.adminLog.map(function(e) { return { id: e.id, adminEmail: e.adminEmail || '', action: e.action, targetEmail: e.targetEmail || null, details: e.details, createdAt: e.createdAt }; }); errorLogService.downloadAuditLogsAsFile(exportData, 'json'); }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}>{'\u2193 ' + ((t.log as any).exportJson || 'Export JSON')}</button>
+                  </div>
+                )}
+              </div>
               {admin.isLoadingLog ? <SkeletonTable rows={5} cols={5} /> : admin.adminLog.length === 0 ? (
                 <p style={{ color: colors.text.muted, textAlign: 'center', padding: '40px' }}>{t.log.noEntries}</p>
               ) : (
@@ -1043,47 +1085,109 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           {/* ═══ ERROR LOG TAB ═══ */}
           {activeTab === 'errors' && isUserSuperAdmin && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap' as const, gap: '10px' }}>
                 <div>
                   <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: 0 }}>{'\uD83D\uDC1B'} {t.errors.title}</h3>
                   <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: '4px 0 0' }}>{t.errors.subtitle} {'\u2014'} {errorLogs.length} {language === 'si' ? 'vnosov' : 'entries'}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => { const text = errorLogService.formatLogsForExport(errorLogs); navigator.clipboard.writeText(text); setToast({ message: t.errors.copied, type: 'success' }); }} style={{ background: colors.primary[600], color: '#fff', border: 'none', borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>{'\uD83D\uDCCB'} {t.errors.copyForDev}</button>
-                  <button onClick={async () => { if (!confirm(t.errors.clearConfirm)) return; const result = await errorLogService.clearAllLogs(); if (result.success) { setErrorLogs([]); setToast({ message: t.errors.cleared, type: 'success' }); } }} style={{ background: dangerBtnBg, border: `1px solid ${dangerBtnBorder}`, borderRadius: radii.lg, padding: '8px 16px', cursor: 'pointer', color: dangerBtnText, fontSize: typography.fontSize.sm }}>{'\uD83D\uDDD1\uFE0F'} {t.errors.clearAll}</button>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const }}>
+                  <button onClick={() => { errorLogService.downloadLogsAsFile(errorLogs, 'txt'); }} style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}>{'\u2193 ' + ((t.errors as any).exportTxt || 'Export TXT')}</button>
+                  <button onClick={() => { errorLogService.downloadLogsAsFile(errorLogs, 'json'); }} style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}>{'\u2193 ' + ((t.errors as any).exportJson || 'Export JSON')}</button>
+                  <button onClick={() => { var text = errorLogService.formatLogsForExport(errorLogs); navigator.clipboard.writeText(text); setToast({ message: t.errors.copied, type: 'success' }); }} style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}>{'\uD83D\uDCCB ' + t.errors.copyForDev}</button>
+                  <button onClick={async () => { if (!confirm(t.errors.clearConfirm)) return; var result = await errorLogService.clearAllLogs(); if (result.success) { setErrorLogs([]); setToast({ message: t.errors.cleared, type: 'success' }); } }} style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid #ef4444', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}>{'\uD83D\uDDD1\uFE0F ' + t.errors.clearAll}</button>
                 </div>
               </div>
-              {errorLogsLoading ? <SkeletonTable rows={5} cols={5} /> : errorLogs.length === 0 ? (
+
+              {/* ★ v4.1: Filters */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input type="text" placeholder={(t.errors as any).filterComponent || 'Filter component...'} value={errorFilterComponent} onChange={(e) => setErrorFilterComponent(e.target.value)}
+                  style={{ flex: 1, fontSize: '12px', padding: '6px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body }} />
+                <input type="text" placeholder={(t.errors as any).filterUser || 'Filter user...'} value={errorFilterUser} onChange={(e) => setErrorFilterUser(e.target.value)}
+                  style={{ flex: 1, fontSize: '12px', padding: '6px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body }} />
+              </div>
+
+              <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, margin: '0 0 8px' }}>{(t.errors as any).expand || 'Click row to expand full detail'}</p>
+
+              {errorLogsLoading ? <SkeletonTable rows={5} cols={5} colors={colors} /> : errorLogs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted }}>{'\u2705'} {t.errors.noErrors}</div>
-              ) : (
-                <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
-                    <thead>
-                      <tr style={{ borderBottom: `2px solid ${colors.border.light}`, position: 'sticky', top: 0, background: colors.surface.card, zIndex: 1 }}>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.date}</th>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.user}</th>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.component}</th>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.error}</th>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.code}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {errorLogs.map((log) => (
-                        <tr key={log.id} style={{ borderBottom: `1px solid ${colors.border.light}`, background: rowDefaultBg }} onMouseEnter={(e) => { e.currentTarget.style.background = rowHoverBg; }} onMouseLeave={(e) => { e.currentTarget.style.background = rowDefaultBg; }}>
-                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: colors.text.muted }}>{new Date(log.created_at).toLocaleString('sl-SI', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                          <td style={{ padding: '10px 12px', color: colors.text.body }}>{log.user_email || '\u2014'}</td>
-                          <td style={{ padding: '10px 12px' }}><span style={{ background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, padding: '2px 8px', borderRadius: radii.full, fontSize: typography.fontSize.xs }}>{log.component || '\u2014'}</span></td>
-                          <td style={{ padding: '10px 12px', color: colors.text.body, maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.error_message}</td>
-                          <td style={{ padding: '10px 12px', color: colors.text.muted, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}>{log.error_code || '\u2014'}</td>
+              ) : (() => {
+                var filtered = errorLogs.filter(function(log) {
+                  var matchComp = !errorFilterComponent || (log.component || '').toLowerCase().indexOf(errorFilterComponent.toLowerCase()) >= 0;
+                  var matchUser = !errorFilterUser || (log.user_email || '').toLowerCase().indexOf(errorFilterUser.toLowerCase()) >= 0;
+                  return matchComp && matchUser;
+                });
+                return (
+                  <div style={{ overflowX: 'auto', maxHeight: '600px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid ' + colors.border.light, position: 'sticky' as const, top: 0, background: colors.surface.card, zIndex: 1 }}>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.date}</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.user}</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.component}</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.error}</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{t.errors.code}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {filtered.map(function(log) {
+                          var isExpanded = expandedErrorId === log.id;
+                          return (
+                            <React.Fragment key={log.id}>
+                              <tr onClick={() => setExpandedErrorId(isExpanded ? null : log.id)}
+                                style={{ borderBottom: '1px solid ' + colors.border.light, background: isExpanded ? (isDark ? '#1C2940' : '#EFF6FF') : rowDefaultBg, cursor: 'pointer' }}
+                                onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.background = rowHoverBg; }}
+                                onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.background = rowDefaultBg; }}>
+                                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: colors.text.muted }}>{formatDateFull(log.created_at)}</td>
+                                <td style={{ padding: '10px 12px', color: colors.text.body }}>{log.user_email || '\u2014'}</td>
+                                <td style={{ padding: '10px 12px' }}><span style={{ background: primaryBadgeBg, border: '1px solid ' + primaryBadgeBorder, color: primaryBadgeText, padding: '2px 8px', borderRadius: radii.full, fontSize: typography.fontSize.xs }}>{log.component || '\u2014'}</span></td>
+                                <td style={{ padding: '10px 12px', color: colors.text.body, maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExpanded ? 'normal' : 'nowrap' }}>{log.error_message}</td>
+                                <td style={{ padding: '10px 12px', color: colors.text.muted, fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs }}>{log.error_code || '\u2014'}</td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={5} style={{ padding: '0 12px 16px 12px', background: isDark ? '#1C2940' : '#EFF6FF' }}>
+                                    <div style={{ padding: '12px', borderRadius: radii.lg, border: '1px solid ' + colors.border.light, background: colors.surface.card, fontSize: typography.fontSize.xs }}>
+                                      {/* Full error message */}
+                                      <div style={{ marginBottom: '10px' }}>
+                                        <strong style={{ color: colors.text.heading }}>{t.errors.error}:</strong>
+                                        <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#F8FAFC', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: colors.text.body, fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + colors.border.light, maxHeight: '150px', overflow: 'auto' }}>{log.error_message}</pre>
+                                      </div>
+                                      {/* Stack trace */}
+                                      {log.error_stack && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                          <strong style={{ color: colors.text.heading }}>{(t.errors as any).stackTrace || 'Stack Trace'}:</strong>
+                                          <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#FEF2F2', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: isDark ? '#FCA5A5' : '#991B1B', fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + (isDark ? 'rgba(239,68,68,0.2)' : '#FECACA'), maxHeight: '300px', overflow: 'auto' }}>{log.error_stack}</pre>
+                                        </div>
+                                      )}
+                                      {/* Context JSON */}
+                                      {log.context && Object.keys(log.context).length > 0 && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                          <strong style={{ color: colors.text.heading }}>{(t.errors as any).context || 'Context'}:</strong>
+                                          <pre style={{ margin: '4px 0', padding: '8px', background: isDark ? '#0A0E1A' : '#F0FDF4', borderRadius: radii.md, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: colors.text.body, fontFamily: typography.fontFamily.mono, fontSize: '11px', border: '1px solid ' + (isDark ? 'rgba(34,197,94,0.2)' : '#BBF7D0'), maxHeight: '200px', overflow: 'auto' }}>{JSON.stringify(log.context, null, 2)}</pre>
+                                        </div>
+                                      )}
+                                      {/* Meta info */}
+                                      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' as const, color: colors.text.muted, fontSize: '11px' }}>
+                                        <span><strong>ID:</strong> {log.id}</span>
+                                        <span><strong>User ID:</strong> {log.user_id || '\u2014'}</span>
+                                        <span><strong>ISO:</strong> {log.created_at}</span>
+                                      </div>
+                                      <button onClick={(e) => { e.stopPropagation(); setExpandedErrorId(null); }}
+                                        style={{ marginTop: '8px', fontSize: '11px', padding: '4px 12px', borderRadius: radii.md, border: '1px solid ' + colors.border.light, background: 'transparent', color: colors.text.muted, cursor: 'pointer' }}>{(t.errors as any).collapse || 'Collapse'}</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           )}
-
           {/* ═══ KNOWLEDGE BASE TAB ═══ */}
           {activeTab === 'knowledge' && isUserAdmin && (
             <div>
