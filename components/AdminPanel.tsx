@@ -27,6 +27,7 @@ import {
 } from '../services/Instructions.ts';
 import { errorLogService, type ErrorLogEntry, type AuditLogExportEntry } from '../services/errorLogService.ts';
 import { organizationService } from '../services/organizationService.ts';
+import { supabase } from '../services/supabase.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 
 interface AdminPanelProps {
@@ -514,18 +515,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   };
 
   // ★ v4.2: Load member counts for all orgs
-  const loadOrgMemberCounts = async () => {
+    const loadOrgMemberCounts = async () => {
     const counts: Record<string, number> = {};
     for (const org of allOrgs) {
-      try {
-        const result = await organizationService.getOrgMembers(org.id);
-        counts[org.id] = result.success ? (result.data?.length || 0) : 0;
-      } catch {
-        counts[org.id] = 0;
+      counts[org.id] = 0;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('organization_id');
+      if (!error && data) {
+        for (const row of data) {
+          if (counts[row.organization_id] !== undefined) {
+            counts[row.organization_id]++;
+          }
+        }
       }
+    } catch (err) {
+      console.error('Failed to load org member counts:', err);
     }
     setOrgMemberCounts(counts);
   };
+
 
   // ★ v4.2: Delete empty organization
   const handleDeleteOrg = useCallback((orgId: string, orgName: string, memberCount: number) => {
