@@ -1566,9 +1566,34 @@ export const generatePartnerAllocations = async (
     pmRate: p.pmRate || 0,
   }));
 
-  const langDirective = getLanguageDirective(language);
+    const langDirective = getLanguageDirective(language);
   const consortiumRules = getConsortiumAllocationRules();
   const resourceRules = getResourceCoherenceRules();
+
+  // ★ v7.7: Use correct direct cost categories based on funding model
+  var CENTRALIZED_DC = [
+    { key: 'labourCosts', en: 'Staff/Personnel costs', si: 'Stroški dela' },
+    { key: 'subContractorCosts', en: 'Sub-contractor costs', si: 'Stroški podizvajalcev' },
+    { key: 'travelCosts', en: 'Travel costs', si: 'Potni stroški' },
+    { key: 'materials', en: 'Materials / Consumables', si: 'Material / Potrošni material' },
+    { key: 'depreciationEquipment', en: 'Depreciation of equipment', si: 'Amortizacija opreme' },
+    { key: 'otherProjectCosts', en: 'Other project costs', si: 'Drugi projektni stroški' },
+    { key: 'investmentCosts', en: 'Investment costs', si: 'Investicijski stroški' },
+  ];
+  var DECENTRALIZED_DC = [
+    { key: 'salariesReimbursements', en: 'Salaries and work-related reimbursements', si: 'Stroški plač in povračila stroškov v zvezi z delom' },
+    { key: 'externalServiceCosts', en: 'External service provider costs', si: 'Stroški zunanjih izvajalcev storitev' },
+    { key: 'vat', en: 'VAT', si: 'DDV' },
+    { key: 'intangibleAssetInvestment', en: 'Investments in intangible assets', si: 'Investicije v neopredmetena sredstva' },
+    { key: 'depreciationBasicAssets', en: 'Depreciation of basic assets', si: 'Amortizacija osnovnih sredstev' },
+    { key: 'infoCommunication', en: 'Information & communication costs', si: 'Stroški informiranja in komuniciranja' },
+    { key: 'tangibleAssetInvestment', en: 'Investments in tangible assets', si: 'Investicije v opredmetena osnovna sredstva' },
+  ];
+  var directCostDefsForPrompt = fundingModel === 'decentralized' ? DECENTRALIZED_DC : CENTRALIZED_DC;
+  var labourCategoryKey = fundingModel === 'decentralized' ? 'salariesReimbursements' : 'labourCosts';
+  var labourCategoryName = fundingModel === 'decentralized'
+    ? (language === 'si' ? 'Stroški plač in povračila stroškov v zvezi z delom' : 'Salaries and work-related reimbursements')
+    : (language === 'si' ? 'Stroški dela' : 'Staff / Personnel costs');
 
   // ★ v7.5: No KB for allocations (pure numerical/structural task)
 
