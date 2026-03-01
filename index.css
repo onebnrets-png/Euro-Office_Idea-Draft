@@ -791,6 +791,41 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     box-shadow: none !important;
     border: 1px solid #CCCCCC !important;
   }
+   /* Force Gantt and PERT charts to full print width */
+  #print-layout-container .chart-container-white,
+  #print-layout-container [id*="gantt"],
+  #print-layout-container [id*="pert"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  #print-layout-container svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Gantt chart — landscape-friendly sizing */
+  #gantt-chart-print {
+    width: 100% !important;
+    min-height: 400px !important;
+    overflow: visible !important;
+    page-break-inside: avoid;
+  }
+
+  #pert-chart-print {
+    width: 100% !important;
+    min-height: 300px !important;
+    overflow: visible !important;
+    page-break-inside: avoid;
+  }
+
+  #organigram-print {
+    width: 100% !important;
+    min-height: 200px !important;
+    overflow: visible !important;
+    page-break-inside: avoid;
+  }
 }
 /* ═══════════════════════════════════════════════════════════════
    ★ v5.1: PRINT STYLES — explicit @media print rules
@@ -811,10 +846,31 @@ html.dark .step-content .chart-container-white > div > .bg-white {
     display: block !important;
   }
 
-  /* Remove any fixed/sticky positioning that breaks print */
-  * {
+  /* Remove fixed/sticky positioning that breaks print — but NOT inside charts */
+  body > div > div[style*="position: fixed"],
+  [style*="position: sticky"],
+  header[style*="position: sticky"] {
     position: static !important;
+  }
+
+  /* Allow overflow visible on main containers but preserve chart internals */
+  #print-layout-container {
     overflow: visible !important;
+  }
+
+  #print-layout-container > div {
+    overflow: visible !important;
+  }
+
+  #print-layout-container p,
+  #print-layout-container span,
+  #print-layout-container td,
+  #print-layout-container th,
+  #print-layout-container li {
+    overflow: visible !important;
+    text-overflow: unset !important;
+    max-height: none !important;
+    -webkit-line-clamp: unset !important;
   }
 
   /* Reset background colors for clean print */
@@ -829,15 +885,6 @@ html.dark .step-content .chart-container-white > div > .bg-white {
   main {
     margin-left: 0 !important;
     margin-right: 0 !important;
-  }
-
-  /* Allow text to wrap fully — no truncation */
-  p, span, td, th, li, div {
-    overflow: visible !important;
-    text-overflow: unset !important;
-    white-space: normal !important;
-    max-height: none !important;
-    -webkit-line-clamp: unset !important;
   }
 
   /* Preserve pre-wrap for formatted content */
