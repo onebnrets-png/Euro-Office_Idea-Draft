@@ -842,8 +842,10 @@ const renderFinance = (props) => {
         const applicableCategories = indirectSettings.appliesToCategories || [];
         if (applicableCategories.length === 0) return 0;
 
-        // ★ v7.6 FIX: Map centralized keys to decentralized equivalents and vice versa
-        // so indirect costs calculate correctly regardless of which model generated the data
+        // ★ v7.6 FIX: categoryIndex fallback + normalize categoryKey to current funding model
+        var applicableSet = new Set(applicableCategories);
+
+        // ★ v7.6: Build remap table — map old-model keys stored in data to current-model keys
         var centralToDecentral = {
             'labourCosts': 'salariesReimbursements',
             'subContractorCosts': 'externalServiceCosts',
@@ -857,17 +859,15 @@ const renderFinance = (props) => {
         Object.keys(centralToDecentral).forEach(function(k) {
             decentralToCentral[centralToDecentral[k]] = k;
         });
-
-        var applicableSet = new Set(applicableCategories);
+        // If current model is decentralized, remap centralized keys to decentralized
+        // If current model is centralized, remap decentralized keys to centralized
+        var remapToCurrentModel = fundingModel === 'decentralized' ? centralToDecentral : decentralToCentral;
 
         const applicableDirectSum = (alloc.directCosts || []).reduce((sum: number, dc: any) => {
-            var catKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            var rawKey = dc.categoryKey || directCostDefs[dc.categoryIndex]?.key || '';
+            // Normalize: if the key belongs to the OTHER model, remap it to current model
+            var catKey = remapToCurrentModel[rawKey] || rawKey;
             if (applicableSet.has(catKey)) {
-                return sum + (dc.amount || 0);
-            }
-            // ★ v7.6: Cross-model fallback — if key doesn't match, try mapped equivalent
-            var mapped = centralToDecentral[catKey] || decentralToCentral[catKey] || '';
-            if (mapped && applicableSet.has(mapped)) {
                 return sum + (dc.amount || 0);
             }
             return sum;
@@ -875,6 +875,7 @@ const renderFinance = (props) => {
 
         return Math.round(applicableDirectSum * (indirectSettings.percentage / 100));
     };
+
 
 
     const allAllocations: any[] = [];
