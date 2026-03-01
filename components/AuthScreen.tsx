@@ -1,6 +1,9 @@
 // components/AuthScreen.tsx
 // Supabase Auth - Email/Password login & registration + MFA verification
-// v5.0 — 2026-02-20
+// v5.1 — 2026-03-01
+//   ★ v5.1: Fuzzy-match org name deduplication on registration
+//           — shows dropdown with existing org suggestions
+//           — user can click to join existing org or create new
 //   ★ v5.0: First Name + Last Name fields on registration (required)
 //           → display_name = firstName + " " + lastName
 //   ★ v4.0: Organization Name field on registration
@@ -17,6 +20,7 @@ import type { AIProviderType } from '../services/aiProvider.ts';
 import { lightColors, darkColors, spacing, radii, shadows, typography } from '../design/theme.ts';
 import { getThemeMode, onThemeChange } from '../services/themeService.ts';
 import { BRAND_ASSETS } from '../constants.tsx';
+import { organizationService } from '../services/organizationService.ts';
 
 // --- Prop Interfaces ---
 interface MFAVerifyScreenProps {
@@ -184,6 +188,13 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
     const [confirmPassword, setConfirmPassword] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [apiProvider, setApiProvider] = useState<AIProviderType>('gemini');
+
+    // ★ v5.1: Fuzzy org match
+    const [orgSuggestions, setOrgSuggestions] = useState<Array<{ id: string; name: string }>>([]);
+    const [selectedExistingOrg, setSelectedExistingOrg] = useState<{ id: string; name: string } | null>(null);
+    const [orgSearching, setOrgSearching] = useState(false);
+    const orgDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
@@ -195,6 +206,42 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
     const pwStrength = checkPasswordStrength(password);
 
     const currentProviderConfig = PROVIDER_OPTIONS.find(p => p.id === apiProvider) || PROVIDER_OPTIONS[0];
+
+    // ★ v5.1: Debounce org name lookup for dedup suggestions
+    const handleOrgNameChange = (value: string) => {
+      setOrgName(value);
+      setSelectedExistingOrg(null);
+
+      if (orgDebounceRef.current) clearTimeout(orgDebounceRef.current);
+
+      if (value.trim().length < 3) {
+        setOrgSuggestions([]);
+        return;
+      }
+
+      orgDebounceRef.current = setTimeout(async () => {
+        setOrgSearching(true);
+        try {
+          const results = await organizationService.findSimilarOrgs(value.trim());
+          setOrgSuggestions(results);
+        } catch {
+          setOrgSuggestions([]);
+        }
+        setOrgSearching(false);
+      }, 400);
+    };
+
+    const handleSelectExistingOrg = (org: { id: string; name: string }) => {
+      setSelectedExistingOrg(org);
+      setOrgName(org.name);
+      setOrgSuggestions([]);
+    };
+
+    const handleClearSelection = () => {
+      setSelectedExistingOrg(null);
+      setOrgName('');
+      setOrgSuggestions([]);
+    };
 
     if (needsMFAVerify && mfaFactorId) {
         return (
@@ -237,7 +284,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
         if (password !== confirmPassword) { setError(t.errorMatch); return; }
 
         const trimmedOrgName = orgName.trim();
-        if (!trimmedOrgName) {
+        if (!trimmedOrgName && !selectedExistingOrg) {
             setError(language === 'si'
                 ? 'Ime organizacije je obvezno.'
                 : 'Organization name is required.');
@@ -253,7 +300,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
             password,
             apiKey,
             apiProvider,
-            trimmedOrgName,
+            selectedExistingOrg ? selectedExistingOrg.name : trimmedOrgName,
             trimFirst,
             trimLast
         );
@@ -274,6 +321,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
                     setOrgName('');
                     setFirstName('');
                     setLastName('');
+                    setSelectedExistingOrg(null);
+                    setOrgSuggestions([]);
                 }, 100);
                 return;
             }
@@ -392,25 +441,133 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
                         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} placeholder="user@example.com" autoComplete="email" />
                     </div>
 
-                    {/* ★ v4.0: Organization Name field */}
+                    {/* ★ v5.1: Organization Name field with fuzzy-match dedup */}
                     {!isLogin && (
-                        <div>
+                        <div style={{ position: 'relative' }}>
                             <label style={labelStyle}>
                                 {tOrg?.orgName || (language === 'si' ? 'Ime organizacije' : 'Organization Name')}
                                 <span style={{ color: colors.error[500], marginLeft: '2px' }}>*</span>
                             </label>
-                            <input
-                                type="text"
-                                required
-                                value={orgName}
-                                onChange={(e) => setOrgName(e.target.value)}
-                                style={inputStyle}
-                                placeholder={language === 'si' ? 'npr. Moje podjetje d.o.o.' : 'e.g. My Company Ltd.'}
-                            />
+
+                            {selectedExistingOrg ? (
+                                /* ── Selected existing org badge ── */
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', gap: spacing.sm,
+                                  padding: spacing.sm, border: `2px solid ${colors.success[500]}`,
+                                  borderRadius: radii.md, background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5',
+                                }}>
+                                  <span style={{ fontSize: '18px' }}>✅</span>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: typography.fontWeight.semibold as any, color: colors.text.heading, fontSize: typography.fontSize.sm }}>
+                                      {selectedExistingOrg.name}
+                                    </div>
+                                    <div style={{ fontSize: typography.fontSize.xs, color: colors.success[600] }}>
+                                      {language === 'si'
+                                        ? 'Pridružili se boste tej obstoječi organizaciji.'
+                                        : 'You will join this existing organization.'}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleClearSelection}
+                                    style={{
+                                      background: 'none', border: 'none', cursor: 'pointer',
+                                      color: colors.text.muted, fontSize: typography.fontSize.lg,
+                                      padding: '2px 6px', borderRadius: radii.sm,
+                                    }}
+                                    title={language === 'si' ? 'Počisti' : 'Clear'}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                            ) : (
+                                /* ── Text input with suggestions ── */
+                                <>
+                                  <div style={{ position: 'relative' }}>
+                                    <input
+                                      type="text"
+                                      required
+                                      value={orgName}
+                                      onChange={(e) => handleOrgNameChange(e.target.value)}
+                                      style={inputStyle}
+                                      placeholder={language === 'si' ? 'npr. Moje podjetje d.o.o.' : 'e.g. My Company Ltd.'}
+                                      autoComplete="organization"
+                                    />
+                                    {orgSearching && (
+                                      <span style={{
+                                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                                        fontSize: typography.fontSize.xs, color: colors.text.muted,
+                                      }}>
+                                        ⏳
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* ── Suggestions dropdown ── */}
+                                  {orgSuggestions.length > 0 && (
+                                    <div style={{
+                                      position: 'absolute', left: 0, right: 0, top: '100%',
+                                      zIndex: 50, marginTop: '2px',
+                                      background: colors.surface.card,
+                                      border: `1px solid ${colors.primary[400]}`,
+                                      borderRadius: radii.md,
+                                      boxShadow: shadows.lg,
+                                      maxHeight: 200, overflowY: 'auto',
+                                    }}>
+                                      <div style={{
+                                        padding: `${spacing.xs} ${spacing.sm}`,
+                                        fontSize: typography.fontSize.xs,
+                                        color: colors.primary[isDark ? 300 : 600],
+                                        fontWeight: typography.fontWeight.semibold as any,
+                                        borderBottom: `1px solid ${colors.border.light}`,
+                                        background: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF',
+                                      }}>
+                                        {language === 'si' ? '💡 Ali ste mislili:' : '💡 Did you mean:'}
+                                      </div>
+                                      {orgSuggestions.map((org) => (
+                                        <button
+                                          key={org.id}
+                                          type="button"
+                                          onClick={() => handleSelectExistingOrg(org)}
+                                          style={{
+                                            display: 'block', width: '100%', textAlign: 'left',
+                                            padding: `${spacing.sm} ${spacing.md}`,
+                                            background: 'transparent',
+                                            border: 'none', borderBottom: `1px solid ${colors.border.light}`,
+                                            cursor: 'pointer', color: colors.text.heading,
+                                            fontSize: typography.fontSize.sm,
+                                            fontWeight: typography.fontWeight.medium as any,
+                                          }}
+                                          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = isDark ? 'rgba(99,102,241,0.15)' : '#F0F9FF'; }}
+                                          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                                        >
+                                          🏢 {org.name}
+                                        </button>
+                                      ))}
+                                      <div style={{
+                                        padding: `${spacing.xs} ${spacing.sm}`,
+                                        fontSize: typography.fontSize.xs,
+                                        color: colors.text.muted,
+                                        textAlign: 'center',
+                                      }}>
+                                        {language === 'si'
+                                          ? 'Če nobena ne ustreza, nadaljujte z vpisom novega imena.'
+                                          : 'If none match, continue typing to create a new organization.'}
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                            )}
+
                             <p style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, marginTop: '4px' }}>
-                                {language === 'si'
-                                    ? 'Vaša organizacija bo ustvarjena avtomatsko. Vi boste njen lastnik in administrator.'
-                                    : 'Your organization will be created automatically. You will be its owner and administrator.'}
+                                {selectedExistingOrg
+                                  ? (language === 'si'
+                                      ? 'Ob registraciji boste dodani kot član izbrane organizacije.'
+                                      : 'Upon registration, you will be added as a member of the selected organization.')
+                                  : (language === 'si'
+                                      ? 'Vaša organizacija bo ustvarjena avtomatsko. Vi boste njen lastnik in administrator.'
+                                      : 'Your organization will be created automatically. You will be its owner and administrator.')
+                                }
                             </p>
                         </div>
                     )}
@@ -507,7 +664,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess, language, setLa
                 <div style={{ marginTop: spacing.xl, textAlign: 'center', fontSize: typography.fontSize.sm, borderTop: `1px solid ${colors.border.light}`, paddingTop: spacing.lg }}>
                     <p style={{ color: colors.text.body }}>
                         {isLogin ? t.switchMsg : t.switchMsgLogin}
-                        <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setFirstName(''); setLastName(''); setOrgName(''); setPassword(''); setConfirmPassword(''); setApiKey(''); setApiProvider('gemini'); setSuccessMessage(''); }} style={{ marginLeft: spacing.sm, color: colors.primary[isDark ? 300 : 600], background: 'none', border: 'none', cursor: 'pointer', fontWeight: typography.fontWeight.semibold as any, textDecoration: 'underline' }}>
+                        <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setFirstName(''); setLastName(''); setOrgName(''); setPassword(''); setConfirmPassword(''); setApiKey(''); setApiProvider('gemini'); setSuccessMessage(''); setOrgSuggestions([]); setSelectedExistingOrg(null); }} style={{ marginLeft: spacing.sm, color: colors.primary[isDark ? 300 : 600], background: 'none', border: 'none', cursor: 'pointer', fontWeight: typography.fontWeight.semibold as any, textDecoration: 'underline' }}>
                             {isLogin ? t.switchAction : t.switchActionLogin}
                         </button>
                     </p>
