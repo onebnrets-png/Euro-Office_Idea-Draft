@@ -650,6 +650,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   }, [activeTab, isOpen, isUserSuperAdmin]);
 
   // ★ v4.4: Update editor text when selection changes
+  // Pattern: same as Instructions — show default content, user edits it, save only if changed
   useEffect(() => {
     if (!guideSelectedStep || !guideSelectedField || !guideSelectedProp) {
       setGuideEditorText('');
@@ -658,10 +659,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     }
     var overrideKey = buildGuideOverrideKey(guideSelectedStep, guideSelectedField, guideSelectedLang, guideSelectedProp);
     var overrideValue = guideOverrides[overrideKey];
-    if (overrideValue !== undefined && overrideValue !== null) {
+    if (overrideValue !== undefined && overrideValue !== null && overrideValue.trim() !== '') {
+      // Custom override exists — show it
       setGuideEditorText(overrideValue);
     } else {
-      setGuideEditorText('');
+      // No override — show default content (editable, like Instructions tab)
+      var defaultGuide = getFieldGuide(guideSelectedStep, guideSelectedField, guideSelectedLang);
+      if (defaultGuide && defaultGuide[guideSelectedProp]) {
+        setGuideEditorText(defaultGuide[guideSelectedProp]);
+      } else {
+        setGuideEditorText('');
+      }
     }
     setGuideEditorChanged(false);
   }, [guideSelectedStep, guideSelectedField, guideSelectedLang, guideSelectedProp, guideOverrides]);
