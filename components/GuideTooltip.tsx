@@ -1,5 +1,6 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
+// v1.5 — 2026-03-02 — FIX: Dynamic panel height — adapts to content + viewport
 // v1.4 — 2026-03-02 — FIX: "Rendered more hooks" crash — moved early returns AFTER all hooks
 // v1.3 — 2026-03-02 — FIX: position:fixed + viewport clamping (scroll container fix)
 // v1.2 — 2026-03-02 — FIX: Use React Portal to render panel in document.body
@@ -83,7 +84,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var activeTab = stateTab[0];
   var setActiveTab = stateTab[1];
 
-  var statePanelPos = useState({ top: 0, left: 0 });
+  var statePanelPos = useState({ top: 0, left: 0, availableHeight: 500 });
   var panelPos = statePanelPos[0];
   var setPanelPos = statePanelPos[1];
 
@@ -100,11 +101,19 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     return guide && guide[key] && guide[key].trim() !== '';
   }) : false;
 
-  // ★ v1.4: Calculate panel position — useCallback BEFORE any return
+  // ★ v1.5: Panel dimensions
+  var panelWidth = size === 'sm' ? 340 : 440;
+  var PANEL_MARGIN = 16;
+  var TAB_BAR_HEIGHT = 80;
+  var CLOSE_HINT_HEIGHT = 32;
+  var CONTENT_PADDING = 28;
+
+  // ★ v1.5: Calculate panel position with dynamic available height
   var updatePanelPosition = useCallback(function() {
     if (!buttonRef.current) return;
     var rect = buttonRef.current.getBoundingClientRect();
-    var panelWidth = size === 'sm' ? 320 : 400;
+    var viewH = window.innerHeight;
+    var viewW = window.innerWidth;
 
     var top = 0;
     var left = 0;
@@ -112,29 +121,40 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     if (position === 'right') {
       top = rect.top - 8;
       left = rect.right + 8;
-      if (left + panelWidth > window.innerWidth - 16) {
+      if (left + panelWidth > viewW - PANEL_MARGIN) {
         left = rect.left - panelWidth - 8;
       }
     } else if (position === 'left') {
       top = rect.top - 8;
       left = rect.left - panelWidth - 8;
-      if (left < 16) {
+      if (left < PANEL_MARGIN) {
         left = rect.right + 8;
       }
     } else {
       top = rect.bottom + 8;
       left = rect.left + (rect.width / 2) - (panelWidth / 2);
-      if (left < 16) left = 16;
-      if (left + panelWidth > window.innerWidth - 16) left = window.innerWidth - 16 - panelWidth;
+      if (left < PANEL_MARGIN) left = PANEL_MARGIN;
+      if (left + panelWidth > viewW - PANEL_MARGIN) left = viewW - PANEL_MARGIN - panelWidth;
     }
 
-    if (top < 8) top = 8;
-    if (top + 360 > window.innerHeight - 8) top = window.innerHeight - 8 - 360;
+    // ★ v1.5: Clamp top and calculate how much vertical space is available
+    if (top < PANEL_MARGIN) top = PANEL_MARGIN;
 
-    setPanelPos({ top: top, left: left });
-  }, [position, size]);
+    var maxPanelHeight = viewH - top - PANEL_MARGIN;
+    // Ensure minimum usable height
+    if (maxPanelHeight < 200) {
+      top = viewH - 200 - PANEL_MARGIN;
+      if (top < PANEL_MARGIN) top = PANEL_MARGIN;
+      maxPanelHeight = viewH - top - PANEL_MARGIN;
+    }
 
-  // ★ v1.4: Click outside handler — useEffect BEFORE any return
+    // ★ v1.5: Cap at 70% of viewport height for readability
+    var cappedHeight = Math.min(maxPanelHeight, Math.floor(viewH * 0.7));
+
+    setPanelPos({ top: top, left: left, availableHeight: cappedHeight });
+  }, [position, size, panelWidth]);
+
+  // ★ v1.4: Click outside handler
   useEffect(function() {
     if (!isOpen) return;
     var handleClickOutside = function(e: MouseEvent) {
@@ -151,7 +171,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     };
   }, [isOpen]);
 
-  // ★ v1.4: Escape key handler — useEffect BEFORE any return
+  // ★ v1.4: Escape key handler
   useEffect(function() {
     if (!isOpen) return;
     var handleEsc = function(e: KeyboardEvent) {
@@ -163,7 +183,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     };
   }, [isOpen]);
 
-  // ★ v1.4: Scroll/resize handler — useEffect BEFORE any return
+  // ★ v1.4: Scroll/resize handler
   useEffect(function() {
     if (!isOpen) return;
     updatePanelPosition();
@@ -192,9 +212,9 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     return guide && guide[key] && guide[key].trim() !== '';
   });
 
-  // Panel dimensions
-  var panelWidth = size === 'sm' ? 320 : 400;
-  var maxHeight = 360;
+  // ★ v1.5: Dynamic content max height — uses available viewport space
+  var contentMaxHeight = panelPos.availableHeight - TAB_BAR_HEIGHT - CLOSE_HINT_HEIGHT - CONTENT_PADDING;
+  if (contentMaxHeight < 120) contentMaxHeight = 120;
 
   var handleToggle = function() {
     if (!isOpen) {
@@ -213,13 +233,15 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
         top: panelPos.top + 'px',
         left: panelPos.left + 'px',
         width: panelWidth + 'px',
-        maxHeight: maxHeight + 'px',
+        maxHeight: panelPos.availableHeight + 'px',
         zIndex: 99999,
         background: isDarkMode ? c.surface.card : '#FFFFFF',
         border: '1px solid ' + c.border.light,
         borderRadius: radii.xl,
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column' as const,
         animation: 'guideTooltipFadeIn ' + animation.duration.normal + ' ' + animation.easing.out,
       },
     },
@@ -232,6 +254,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
           padding: '8px 8px 0 8px',
           borderBottom: '1px solid ' + c.border.light,
           background: isDarkMode ? ((c as any).surface.cardAlt || c.surface.card) : '#F8FAFC',
+          flexShrink: 0,
         },
       },
         visibleTabs.map(function(tabKey, idx) {
@@ -270,15 +293,16 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
         })
       ),
 
-      // Tab content
+      // ★ v1.5: Tab content — flex-grow + dynamic maxHeight based on viewport
       React.createElement('div', {
         style: {
           padding: '14px 16px',
-          maxHeight: (maxHeight - 60) + 'px',
+          maxHeight: contentMaxHeight + 'px',
           overflowY: 'auto' as const,
           fontSize: typography.fontSize.sm,
           lineHeight: typography.lineHeight.relaxed,
           color: c.text.body,
+          flex: '1 1 auto',
         },
       }, guide[visibleTabs[activeTab]] || ''),
 
@@ -291,6 +315,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
           color: c.text.muted,
           textAlign: 'right' as const,
           background: isDarkMode ? ((c as any).surface.cardAlt || c.surface.card) : '#F8FAFC',
+          flexShrink: 0,
         },
       }, 'ESC ' + (lang === 'si' ? 'za zapiranje' : 'to close'))
     ),
