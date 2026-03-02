@@ -1,5 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.8 — 2026-03-02 — GuideTooltip integration COMPLETE — all sections covered
 // v7.7 — 2026-03-02 — GuideTooltip integration on SectionHeader + FieldHeader
 // v7.6 — 2026-03-01 — FIX: Indirect cost calculation for decentralized model
 // v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs + batch viz trigger
@@ -374,7 +375,7 @@ const renderProjectIdea = (props) => {
         <>
             <div className={`mb-8 p-6 border border-slate-200 rounded-xl bg-gradient-to-br from-white to-slate-50 shadow-sm transition-all duration-300 ${!canEditTitle ? 'filter blur-sm opacity-60 pointer-events-none' : ''}`}>
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-slate-800">{t.projectTitle}</h3>
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">{t.projectTitle}<GuideTooltip stepKey="projectIdea" fieldKey="projectTitle" language={language} size="sm" /></h3>
                     <GenerateButton onClick={() => onGenerateSection('projectTitleAcronym')} isLoading={isLoading === `${t.generating} projectTitleAcronym...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -472,7 +473,7 @@ const renderGenericResults = (props, sectionKey) => {
 
     return (
         <div id={sectionKey} className="mt-8">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep={sectionKey} guideField="objective" language={language}>
+             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep="expectedResults" guideField={sectionKey} language={language}>
                 <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
              </SectionHeader>
              {safeArray(items).map((item, index) => (
@@ -497,7 +498,7 @@ const renderObjectives = (props, sectionKey) => {
     
     return (
         <div className="mt-2">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep="expectedResults" guideField={sectionKey} language={language}>
+             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep={sectionKey} guideField="objective" language={language}>
                 <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
              </SectionHeader>
              {safeArray(items).map((item, index) => (
