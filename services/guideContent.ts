@@ -548,3 +548,158 @@ export function getAllFieldKeys(stepKey: string): string[] {
   if (!step) return [];
   return Object.keys(step.fields);
 }
+// ═══════════════════════════════════════════════════════════════
+// GUIDE OVERRIDES — SuperAdmin customizable guide content
+// v1.2 — 2026-03-02
+// Pattern: same as Instructions custom_instructions in global_settings
+// ═══════════════════════════════════════════════════════════════
+
+import { supabase } from './supabaseClient.ts';
+
+// ─── CACHE ─────────────────────────────────────────────────────
+var _overridesCache: Record<string, string> | null = null;
+var _overridesCacheTime: number = 0;
+var CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function _isCacheValid(): boolean {
+  return _overridesCache !== null && (Date.now() - _overridesCacheTime) < CACHE_TTL;
+}
+
+export function invalidateGuideOverridesCache(): void {
+  _overridesCache = null;
+  _overridesCacheTime = 0;
+}
+
+// ─── FETCH OVERRIDES FROM SUPABASE ─────────────────────────────
+
+export async function fetchGuideOverrides(): Promise<Record<string, string>> {
+  if (_isCacheValid() && _overridesCache) {
+    return _overridesCache;
+  }
+
+  try {
+    var result = await supabase
+      .from('global_settings')
+      .select('guide_overrides')
+      .eq('id', 'global')
+      .single();
+
+    if (result.error) {
+      console.warn('fetchGuideOverrides error:', result.error.message);
+      return {};
+    }
+
+    var overrides = result.data?.guide_overrides || {};
+    _overridesCache = overrides;
+    _overridesCacheTime = Date.now();
+    return overrides;
+  } catch (err) {
+    console.warn('fetchGuideOverrides exception:', err);
+    return {};
+  }
+}
+
+// ─── SAVE OVERRIDES (SuperAdmin only — RLS enforced) ────────────
+
+export async function saveGuideOverrides(
+  overrides: Record<string, string>,
+  userId: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    var result = await supabase
+      .from('global_settings')
+      .update({
+        guide_overrides: overrides,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      })
+      .eq('id', 'global');
+
+    if (result.error) {
+      return { success: false, message: result.error.message };
+    }
+
+    // Invalidate cache so all users get fresh data
+    invalidateGuideOverridesCache();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Failed to save guide overrides' };
+  }
+}
+
+// ─── RESET ALL OVERRIDES (SuperAdmin only) ──────────────────────
+
+export async function resetAllGuideOverrides(
+  userId: string
+): Promise<{ success: boolean; message?: string }> {
+  return saveGuideOverrides({}, userId);
+}
+
+// ─── GET FIELD GUIDE WITH OVERRIDES (async) ─────────────────────
+// Key format: "stepKey.fieldKey.language.propertyKey"
+// Example:   "problemAnalysis.coreProblem.en.whatIsThis"
+
+export async function getFieldGuideWithOverrides(
+  stepKey: string,
+  fieldKey: string,
+  language: string
+): Promise<GuideEntry | null> {
+  // Get default content (synchronous, existing function)
+  var defaultGuide = getFieldGuide(stepKey, fieldKey, language);
+  if (!defaultGuide) return null;
+
+  // Fetch overrides (cached)
+  var overrides = await fetchGuideOverrides();
+  if (!overrides || Object.keys(overrides).length === 0) {
+    return defaultGuide;
+  }
+
+  // Merge: override replaces default only if override is non-empty
+  var GUIDE_FIELDS = ['whatIsThis', 'whyImportant', 'whatToWrite', 'tips', 'euContext', 'example'];
+  var merged: any = {};
+
+  for (var i = 0; i < GUIDE_FIELDS.length; i++) {
+    var prop = GUIDE_FIELDS[i];
+    var overrideKey = stepKey + '.' + fieldKey + '.' + language + '.' + prop;
+    var overrideValue = overrides[overrideKey];
+
+    if (overrideValue !== undefined && overrideValue !== null && overrideValue.trim() !== '') {
+      merged[prop] = overrideValue;
+    } else {
+      merged[prop] = defaultGuide[prop] || '';
+    }
+  }
+
+  return merged as GuideEntry;
+}
+
+// ─── HELPER: Build override key ─────────────────────────────────
+
+export function buildGuideOverrideKey(
+  stepKey: string,
+  fieldKey: string,
+  language: string,
+  property: string
+): string {
+  return stepKey + '.' + fieldKey + '.' + language + '.' + property;
+}
+
+// ─── HELPER: Get all step/field combinations ────────────────────
+
+export function getAllGuideKeys(): Array<{ stepKey: string; fieldKey: string; stepTitle: string }> {
+  var lang = 'en'; // use EN for key enumeration
+  var guide = lang === 'en' ? GUIDE_EN : GUIDE_SI;
+  var result: Array<{ stepKey: string; fieldKey: string; stepTitle: string }> = [];
+
+  var stepKeys = Object.keys(guide);
+  for (var s = 0; s < stepKeys.length; s++) {
+    var sk = stepKeys[s];
+    var step = guide[sk];
+    var fieldKeys = Object.keys(step.fields);
+    for (var f = 0; f < fieldKeys.length; f++) {
+      result.push({ stepKey: sk, fieldKey: fieldKeys[f], stepTitle: step.stepTitle });
+    }
+  }
+
+  return result;
+}
