@@ -231,6 +231,7 @@ const ADMIN_TEXT = {
     tabs: {
       users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', ai: 'AI Ponudnik',
       profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
+     },
     users: {
       title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
       email: 'E-po\u0161ta', displayName: 'Ime', role: 'Vloga', registered: 'Registriran',
