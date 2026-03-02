@@ -1,5 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.7 — 2026-03-02 — GuideTooltip integration on SectionHeader + FieldHeader
 // v7.6 — 2026-03-01 — FIX: Indirect cost calculation for decentralized model
 // v7.5 — 2026-02-25 — InlineChart added to renderRisks + renderKERs + batch viz trigger
 // v7.3 — 2026-02-23 — Language-aware WP/Task prefixes + partners.map bugfix
@@ -20,6 +21,7 @@ import PERTChart from './PERTChart.tsx';
 import Organigram from './Organigram.tsx';
 import { recalculateProjectSchedule } from '../utils.ts';
 import InlineChart from './InlineChart.tsx';
+import GuideTooltip from './GuideTooltip.tsx';
 import { stepColors } from '../design/theme.ts';
 import StepNavigationBar from './StepNavigationBar.tsx';
 import {
@@ -49,14 +51,15 @@ const FieldHeader = ({ title, description, id = '', accentColor = '' }) => (
     </div>
 );
 
-const SectionHeader = ({ title, onAdd, addText, children, accentColor = '' }: { title: string; onAdd?: () => void; addText?: string; children?: React.ReactNode; accentColor?: string }) => (
+const SectionHeader = ({ title, onAdd, addText, children, accentColor = '', guideStep = '', guideField = '', language = 'en' }: { title: string; onAdd?: () => void; addText?: string; children?: React.ReactNode; accentColor?: string; guideStep?: string; guideField?: string; language?: string }) => (
     <div
-        className={`flex justify-between items-end mb-4 pt-6 pb-2 animate-fadeIn ${!accentColor ? 'border-b border-slate-200' : ''}`}
-        style={accentColor ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+        className={'flex justify-between items-end mb-4 pt-6 pb-2 animate-fadeIn ' + (!accentColor ? 'border-b border-slate-200' : '')}
+        style={accentColor ? { borderBottom: '2px solid ' + accentColor } : undefined}
     >
         <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
             {accentColor && <span style={{ width: 4, height: 22, borderRadius: 3, background: accentColor, flexShrink: 0 }} />}
             {title}
+            {guideStep && guideField && <GuideTooltip stepKey={guideStep} fieldKey={guideField} language={language} size="sm" />}
         </h3>
         <div className="flex gap-2 items-center">
             {children}
@@ -198,7 +201,7 @@ const ReadinessLevelSelector = ({ readinessLevels, onUpdateData, onGenerateField
         <div id="readiness-levels" className="mt-8">
             <div className="flex justify-between items-end mb-4 border-b border-slate-200 pb-2">
                 <div>
-                    <h3 className="text-lg font-bold text-slate-700">{t.readinessLevels}</h3>
+                    <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">{t.readinessLevels}<GuideTooltip stepKey="projectIdea" fieldKey="readinessLevels" language={language} size="sm" /></h3>
                     <p className="text-sm text-slate-500 mt-1">{t.readinessLevelsDesc}</p>
                 </div>
                 <GenerateButton 
@@ -315,7 +318,7 @@ const renderProblemAnalysis = (props) => {
     return (
         <>
             <div id="core-problem">
-                <SectionHeader title={t.coreProblem}>
+                <SectionHeader title={t.coreProblem} guideStep="problemAnalysis" guideField="coreProblem" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('coreProblem')} isLoading={isLoading === `${t.generating} coreProblem...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.coreProblemDesc}</p>
@@ -327,7 +330,7 @@ const renderProblemAnalysis = (props) => {
             </div>
 
             <div id="causes" className="mt-8">
-                <SectionHeader title={t.causes} onAdd={() => onAddItem([...path, 'causes'], { id: null, title: '', description: '' })} addText={t.add}>
+                <SectionHeader title={t.causes} onAdd={() => onAddItem([...path, 'causes'], { id: null, title: '', description: '' })} addText={t.add} guideStep="problemAnalysis" guideField="causes" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('causes')} isLoading={isLoading === `${t.generating} causes...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 {(causes || []).map((cause, index) => (
@@ -341,7 +344,7 @@ const renderProblemAnalysis = (props) => {
             </div>
 
             <div id="consequences" className="mt-8">
-                <SectionHeader title={t.consequences} onAdd={() => onAddItem([...path, 'consequences'], { id: null, title: '', description: '' })} addText={t.add}>
+                <SectionHeader title={t.consequences} onAdd={() => onAddItem([...path, 'consequences'], { id: null, title: '', description: '' })} addText={t.add} guideStep="problemAnalysis" guideField="consequences" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('consequences')} isLoading={isLoading === `${t.generating} consequences...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 {(consequences || []).map((consequence, index) => (
@@ -410,7 +413,7 @@ const renderProjectIdea = (props) => {
             </div>
 
             <div id="main-aim">
-                <SectionHeader title={t.mainAim}>
+                <SectionHeader title={t.mainAim} guideStep="projectIdea" guideField="mainAim" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('mainAim')} isLoading={isLoading === `${t.generating} mainAim...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.mainAimDesc}</p>
@@ -420,7 +423,7 @@ const renderProjectIdea = (props) => {
             </div>
 
             <div id="state-of-the-art" className="mt-6">
-                <SectionHeader title={t.stateOfTheArt}>
+                <SectionHeader title={t.stateOfTheArt} guideStep="projectIdea" guideField="stateOfTheArt" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('stateOfTheArt')} isLoading={isLoading === `${t.generating} stateOfTheArt...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.stateOfTheArtDesc}</p>
@@ -431,7 +434,7 @@ const renderProjectIdea = (props) => {
             </div>
 
             <div id="proposed-solution" className="mt-6">
-                <SectionHeader title={t.proposedSolution}>
+                <SectionHeader title={t.proposedSolution} guideStep="projectIdea" guideField="proposedSolution" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('proposedSolution')} isLoading={isLoading === `${t.generating} proposedSolution...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.proposedSolutionDesc}</p>
@@ -444,7 +447,7 @@ const renderProjectIdea = (props) => {
             <ReadinessLevelSelector readinessLevels={readinessLevels} onUpdateData={onUpdateData} onGenerateField={onGenerateField} onGenerateSection={onGenerateSection} isLoading={isLoading} language={language} missingApiKey={missingApiKey} />
 
             <div id="eu-policies" className="mt-8">
-                 <SectionHeader title={t.euPolicies} onAdd={() => onAddItem([...path, 'policies'], { id: null, name: '', description: '' })} addText={t.add}>
+                 <SectionHeader title={t.euPolicies} onAdd={() => onAddItem([...path, 'policies'], { id: null, name: '', description: '' })} addText={t.add} guideStep="projectIdea" guideField="euPolicies" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('policies')} isLoading={isLoading === `${t.generating} policies...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                  </SectionHeader>
                  {(policies || []).map((policy, index) => (
@@ -469,7 +472,7 @@ const renderGenericResults = (props, sectionKey) => {
 
     return (
         <div id={sectionKey} className="mt-8">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add}>
+             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep={sectionKey} guideField="objective" language={language}>
                 <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
              </SectionHeader>
              {safeArray(items).map((item, index) => (
@@ -494,7 +497,7 @@ const renderObjectives = (props, sectionKey) => {
     
     return (
         <div className="mt-2">
-             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add}>
+             <SectionHeader title={title} onAdd={() => onAddItem([sectionKey], { id: null, title: '', description: '', indicator: '' })} addText={t.add} guideStep="expectedResults" guideField={sectionKey} language={language}>
                 <GenerateButton onClick={() => onGenerateSection(sectionKey)} isLoading={isLoading === `${t.generating} ${sectionKey}...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
              </SectionHeader>
              {safeArray(items).map((item, index) => (
@@ -518,7 +521,7 @@ const renderProjectManagement = (props) => {
 
     return (
         <div id="implementation" className="mb-10 pb-8">
-            <SectionHeader title={t.management.title}>
+            <SectionHeader title={t.management.title} guideStep="activities" guideField="implementation" language={language}>
                 <GenerateButton onClick={() => onGenerateSection('projectManagement')} isLoading={isLoading === `${t.generating} projectManagement...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             <p className="text-sm text-slate-500 mb-6 -mt-2">{t.management.desc}</p>
@@ -527,7 +530,7 @@ const renderProjectManagement = (props) => {
             </div>
             <div id="organigram">
                 <div className="mb-3 border-b border-slate-200 pb-2">
-                    <h4 className="text-lg font-bold text-slate-700">{t.management.organigram}</h4>
+                    <h4 className="text-lg font-bold text-slate-700 flex items-center gap-2">{t.management.organigram}<GuideTooltip stepKey="activities" fieldKey="organigram" language={language} size="sm" /></h4>
                 </div>
                 <div className="chart-container-white overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <Organigram structure={projectManagement?.structure} activities={projectData.activities} language={language} id="organigram-interactive" />
@@ -547,7 +550,7 @@ const renderRisks = (props) => {
     
     return (
         <div id="risk-mitigation" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${safeArray(risks).length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.riskMitigation} onAdd={() => onAddItem(path, { id: `RISK${safeArray(risks).length + 1}`, category: 'technical', title: '', description: '', likelihood: 'low', impact: 'low', mitigation: '' })} addText={t.add} guideStep="activities" guideField="riskMitigation" language={language}>
                 <GenerateButton onClick={() => onGenerateSection('risks')} isLoading={isLoading === `${t.generating} risks...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             {safeArray(risks).map((risk, index) => {
@@ -615,7 +618,7 @@ const renderKERs = (props) => {
 
     return (
         <div id="kers" className="mt-12 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${safeArray(kers).length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add}>
+            <SectionHeader title={t.subSteps.kers} onAdd={() => onAddItem(path, { id: `KER${safeArray(kers).length + 1}`, title: '', description: '', exploitationStrategy: '' })} addText={t.add} guideStep="expectedResults" guideField="kers" language={language}>
                 <GenerateButton onClick={() => onGenerateSection('kers')} isLoading={isLoading === `${t.generating} kers...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
             </SectionHeader>
             {(kers || []).map((ker, index) => (
@@ -650,7 +653,7 @@ const renderPartners = (props) => {
 
     return (
         <div id="partners" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={tp.title || 'Partnership (Consortium)'}>
+            <SectionHeader title={tp.title || 'Partnership (Consortium)'} guideStep="activities" guideField="partners" language={language}>
                 <GenerateButton
                     onClick={() => onGenerateSection('partners')}
                     isLoading={isLoading === `${t.generating} partners...`}
@@ -926,7 +929,7 @@ const renderFinance = (props) => {
 
     return (
         <div id="finance" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-            <SectionHeader title={tf.title || 'Finance (Budget)'} />
+            <SectionHeader title={tf.title || 'Finance (Budget)'} guideStep="activities" guideField="finance" language={language} />
             <p className="text-sm text-slate-500 mb-6 -mt-2">{tf.titleDesc || ''}</p>
 
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
@@ -1230,7 +1233,7 @@ const renderActivities = (props) => {
 
             <div id="workplan">
                 <SectionHeader title={t.subSteps.workplan} 
-                    onAdd={() => onAddItem(path, { id: `${wpPrefix}${activities.length + 1}`, title: '', tasks: [], milestones: [], deliverables: [] })} addText={t.add}>
+                    onAdd={() => onAddItem(path, { id: `${wpPrefix}${activities.length + 1}`, title: '', tasks: [], milestones: [], deliverables: [] })} addText={t.add} guideStep="activities" guideField="workplan" language={language}>
                     <GenerateButton onClick={() => onGenerateSection('activities')} isLoading={isLoading === `${t.generating} activities...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </SectionHeader>
                 
@@ -1523,14 +1526,14 @@ const renderActivities = (props) => {
             </div>
 
             <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.ganttChart}</h3>
+                <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">{t.subSteps.ganttChart}<GuideTooltip stepKey="activities" fieldKey="ganttChart" language={language} size="sm" /></h3>
                 <div className="chart-container-white bg-white rounded-xl">
                     <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
                 </div>
             </div>
 
             <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
-                <h3 className="text-xl font-bold text-slate-700 mb-4">{t.subSteps.pertChart}</h3>
+                <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">{t.subSteps.pertChart}<GuideTooltip stepKey="activities" fieldKey="pertChart" language={language} size="sm" /></h3>
                 <div className="chart-container-white bg-white rounded-xl">
                     <PERTChart activities={activities} language={language} />
                 </div>
