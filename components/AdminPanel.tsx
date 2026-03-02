@@ -3,6 +3,7 @@
 // Unified Admin / Settings Panel
 // v4.3 — 2026-03-02
 // ★ v4.3: NEW "Statistics" tab — usage overview, projects per user, project details
+// ★ v4.3: Drag & drop tab reordering — saved per user in user_settings.admin_tab_order
 // ★ v4.2: NEW "Organizations" tab for SuperAdmin
 //          delete empty orgs, merge duplicate orgs
 // ★ v4.1: Organization column + edit, Expandable Error Log + export, Audit Log export
@@ -501,6 +502,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [allOrgs, setAllOrgs] = useState<Array<{ id: string; name: string; created_at?: string }>>([]);
   const [editingOrgUserId, setEditingOrgUserId] = useState<string | null>(null);
   const [selectedNewOrgId, setSelectedNewOrgId] = useState('');
+  // ★ v4.3: Drag & drop tab reordering
+  const [tabOrder, setTabOrder] = useState<TabId[] | null>(null);
+  const [draggedTab, setDraggedTab] = useState<TabId | null>(null);
+  const [dragOverTab, setDragOverTab] = useState<TabId | null>(null);
   // ★ v4.3: Statistics tab state
   const [statsProjects, setStatsProjects] = useState<any[]>([]);
   const [statsUserProjects, setStatsUserProjects] = useState<Record<string, number>>({});
@@ -535,7 +540,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       loadOrgMemberCounts();
     }
   }, [activeTab, isOpen, isUserSuperAdmin, allOrgs]);
-  
+  // ★ v4.3: Load saved tab order
+  useEffect(() => {
+    if (isOpen) {
+      var saved = storageService.getAdminTabOrder();
+      if (saved && saved.length > 0) {
+        // Filter: only keep tabs that are in availableTabs, preserve saved order
+        var validOrder = saved.filter(function(t) { return availableTabs.indexOf(t as TabId) >= 0; }) as TabId[];
+        // Add any new tabs that aren't in saved order (at the end)
+        availableTabs.forEach(function(t) { if (validOrder.indexOf(t) < 0) validOrder.push(t); });
+        setTabOrder(validOrder);
+      } else {
+        setTabOrder(null);
+      }
+    }
+  }, [isOpen, isUserAdmin, isUserSuperAdmin]);
   // ★ v4.3: Load statistics when statistics tab is active
   useEffect(() => {
     if (activeTab === 'statistics' && isOpen && isUserAdmin) {
@@ -937,7 +956,48 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     e.preventDefault(); setKbDragOver(false);
     if (e.dataTransfer.files.length > 0) { handleKBUpload(e.dataTransfer.files); }
   }, [handleKBUpload]);
+  // ★ v4.3: Drag & drop tab handlers
+  const handleTabDragStart = useCallback(function(tab: TabId) {
+    setDraggedTab(tab);
+  }, []);
 
+  const handleTabDragOver = useCallback(function(e: React.DragEvent, tab: TabId) {
+    e.preventDefault();
+    if (draggedTab && draggedTab !== tab) {
+      setDragOverTab(tab);
+    }
+  }, [draggedTab]);
+
+  const handleTabDrop = useCallback(function(tab: TabId) {
+    if (!draggedTab || draggedTab === tab) {
+      setDraggedTab(null);
+      setDragOverTab(null);
+      return;
+    }
+    var currentOrder = tabOrder || availableTabs.slice();
+    var fromIndex = currentOrder.indexOf(draggedTab);
+    var toIndex = currentOrder.indexOf(tab);
+    if (fromIndex < 0 || toIndex < 0) {
+      setDraggedTab(null);
+      setDragOverTab(null);
+      return;
+    }
+    var newOrder = currentOrder.slice();
+    newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, draggedTab);
+    setTabOrder(newOrder);
+    setDraggedTab(null);
+    setDragOverTab(null);
+    // Save to DB
+    storageService.setAdminTabOrder(newOrder).catch(function(err) {
+      console.error('[TabOrder] Failed to save:', err);
+    });
+  }, [draggedTab, tabOrder, availableTabs]);
+
+  const handleTabDragEnd = useCallback(function() {
+    setDraggedTab(null);
+    setDragOverTab(null);
+  }, []);
   const handleSave = () => { if (activeTab === 'ai') handleAISave(); else if (activeTab === 'profile') handlePasswordChange(); else if (activeTab === 'instructions') handleSaveGlobalInstructions(); };
 
   if (!isOpen) return null;
@@ -1012,20 +1072,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           </button>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border.light}`, background: colors.surface.card, flexShrink: 0, padding: '0 24px', overflowX: 'auto' }}>
-          {availableTabs.map((tab) => (
-            <button key={tab} onClick={() => { setActiveTab(tab); setMessage(''); }}
-              style={{
-                padding: '12px 20px', fontSize: typography.fontSize.sm,
-                fontWeight: activeTab === tab ? typography.fontWeight.semibold : typography.fontWeight.medium,
-                color: activeTab === tab ? tabActiveColor : colors.text.muted,
-                background: 'transparent', border: 'none', borderBottom: activeTab === tab ? `2px solid ${tabActiveBorder}` : '2px solid transparent',
-                cursor: 'pointer', transition: `all ${animation.duration.fast}`, whiteSpace: 'nowrap',
-              }}>
-              {TAB_ICONS[tab]} {t.tabs[tab]}
-            </button>
-          ))}
+        {/* Tabs — ★ v4.3: Drag & drop reorderable */}
+        <div style={{ display: 'flex', borderBottom: '1px solid ' + colors.border.light, background: colors.surface.card, flexShrink: 0, padding: '0 24px', overflowX: 'auto' }}>
+          {(tabOrder || availableTabs).map(function(tab) {
+            var isDragging = draggedTab === tab;
+            var isDragOver = dragOverTab === tab;
+            return (
+              <button key={tab}
+                draggable={true}
+                onDragStart={function() { handleTabDragStart(tab); }}
+                onDragOver={function(e) { handleTabDragOver(e, tab); }}
+                onDrop={function() { handleTabDrop(tab); }}
+                onDragEnd={handleTabDragEnd}
+                onClick={function() { setActiveTab(tab); setMessage(''); }}
+                style={{
+                  padding: '12px 20px', fontSize: typography.fontSize.sm,
+                  fontWeight: activeTab === tab ? typography.fontWeight.semibold : typography.fontWeight.medium,
+                  color: activeTab === tab ? tabActiveColor : colors.text.muted,
+                  background: isDragOver ? (isDark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)') : 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === tab ? '2px solid ' + tabActiveBorder : '2px solid transparent',
+                  borderLeft: isDragOver ? '2px solid ' + colors.primary[400] : '2px solid transparent',
+                  cursor: isDragging ? 'grabbing' : 'grab',
+                  transition: 'all ' + animation.duration.fast,
+                  whiteSpace: 'nowrap' as const,
+                  opacity: isDragging ? 0.5 : 1,
+                  userSelect: 'none' as const,
+                }}>
+                {TAB_ICONS[tab]} {t.tabs[tab]}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}
