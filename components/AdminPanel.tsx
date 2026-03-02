@@ -219,9 +219,7 @@ const ADMIN_TEXT = {
       uploadedAt: 'Uploaded', uploadedBy: 'By', actions: 'Actions',
       info: 'Documents uploaded here serve as a knowledge base. The AI will ALWAYS use them as context when generating project content \u2014 just like the rules in Instructions.',
     },
-    whiteLabel: {
-      logoTitle: 'Custom Logo',
-      guideEditor: {
+    guideEditor: {
       title: 'Guide Content Editor',
       subtitle: 'Customize the contextual guide tooltips that appear next to each section (SuperAdmin only)',
       selectStep: 'Select step & field',
