@@ -1,7 +1,8 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
-// v5.3 — 2026-03-01
+// v5.3 — 2026-03-02
+// ★ v5.3: getAdminTabOrder() + setAdminTabOrder() for drag & drop tab reordering
 //
 // CHANGES:
 //   ★ v5.3: FULL ERROR LOGGING — every console.error/warn now also
@@ -872,16 +873,21 @@ export const storageService = {
     return { success: true };
   },
 
-  async getAAL(): Promise<{ currentLevel: string; nextLevel: string }> {
+    async getAAL(): Promise<{ currentLevel: string; nextLevel: string }> {
     const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (error) {
-      console.warn('getAAL error:', error.message);
-      logErrorQuick('storageService.getAAL', error);
-      return { currentLevel: 'aal1', nextLevel: 'aal1' };
-    }
-    return {
-      currentLevel: data.currentLevel || 'aal1',
-      nextLevel: data.nextLevel || 'aal1'
-    };
-  }
+    if (error) { console.warn('getAAL error:', error.message); return { currentLevel: 'aal1', nextLevel: 'aal1' }; }
+    return { currentLevel: data.currentLevel || 'aal1', nextLevel: data.nextLevel || 'aal1' };
+  },
+
+  // ★ v5.3: Admin tab order — drag & drop reordering
+  getAdminTabOrder(): string[] | null {
+    var order = cachedSettings?.admin_tab_order;
+    if (Array.isArray(order) && order.length > 0) return order;
+    return null;
+  },
+
+  async setAdminTabOrder(order: string[]) {
+    await this.updateSettings({ admin_tab_order: order });
+  },
 };
+
