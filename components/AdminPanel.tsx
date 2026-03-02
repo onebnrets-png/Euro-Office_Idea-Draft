@@ -533,6 +533,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       loadOrgMemberCounts();
     }
   }, [activeTab, isOpen, isUserSuperAdmin, allOrgs]);
+  
+  // ★ v4.3: Load statistics when statistics tab is active
+  useEffect(() => {
+    if (activeTab === 'statistics' && isOpen && isUserAdmin) {
+      loadStatistics();
+    }
+  }, [activeTab, isOpen, isUserAdmin]);
 
   useEffect(() => {
     if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
@@ -555,6 +562,74 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 4000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(timer); } }, [message]);
+    // ★ v4.3: Load statistics data
+  const loadStatistics = async () => {
+    setStatsLoading(true);
+    try {
+      // Load all projects with owner info
+      var projectsResult = await supabase
+        .from('projects')
+        .select('id, owner_id, title, created_at, updated_at');
+      var projects = (projectsResult.data || []);
+
+      // Load project_data for WP/partner counts
+      var projectDataResult = await supabase
+        .from('project_data')
+        .select('project_id, language, data');
+      var projectDataMap = {};
+      (projectDataResult.data || []).forEach(function(pd) {
+        if (!projectDataMap[pd.project_id]) projectDataMap[pd.project_id] = {};
+        projectDataMap[pd.project_id][pd.language] = pd.data;
+      });
+
+      // Enrich projects with data info
+      var enriched = projects.map(function(proj) {
+        var pData = projectDataMap[proj.id] || {};
+        var data = pData['en'] || pData['si'] || {};
+        var wpCount = Array.isArray(data.activities) ? data.activities.length : 0;
+        var partnerCount = Array.isArray(data.partners) ? data.partners.length : 0;
+        var languages = Object.keys(pData);
+        // Find owner email from admin.users
+        var ownerUser = admin.users.find(function(u) { return u.id === proj.owner_id; });
+        return {
+          id: proj.id,
+          title: proj.title || '(Untitled)',
+          ownerId: proj.owner_id,
+          ownerEmail: ownerUser ? ownerUser.email : proj.owner_id.substring(0, 8) + '...',
+          language: languages.join(', ') || '—',
+          createdAt: proj.created_at,
+          updatedAt: proj.updated_at,
+          wpCount: wpCount,
+          partnerCount: partnerCount,
+        };
+      });
+
+      setStatsProjects(enriched);
+
+      // Count projects per user
+      var userProjectCounts = {};
+      projects.forEach(function(p) {
+        if (!userProjectCounts[p.owner_id]) userProjectCounts[p.owner_id] = 0;
+        userProjectCounts[p.owner_id]++;
+      });
+      setStatsUserProjects(userProjectCounts);
+
+      // Load user settings (AI provider)
+      var settingsResult = await supabase
+        .from('user_settings')
+        .select('user_id, ai_provider');
+      var settingsMap = {};
+      (settingsResult.data || []).forEach(function(s) {
+        settingsMap[s.user_id] = { ai_provider: s.ai_provider || 'gemini' };
+      });
+      setStatsUserSettings(settingsMap);
+
+    } catch (err) {
+      console.error('[Statistics] Failed to load:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   // ★ v4.2: Load all orgs helper
   const loadAllOrgs = async () => {
