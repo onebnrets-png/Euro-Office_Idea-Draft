@@ -1,6 +1,7 @@
 // services/guideContent.ts
 // ═══════════════════════════════════════════════════════════════
 // Contextual Guide Content — step-by-step explanations for users
+// v1.2 — 2026-03-02 — Guide overrides: SuperAdmin can customize guide content via global_settings
 // v1.1 — 2026-03-02 — Full content for ALL 6 steps EN+SI (replaced placeholders)
 // v1.0 — 2026-03-02
 // ★ v1.0: Initial version — Problem Analysis + Project Idea
