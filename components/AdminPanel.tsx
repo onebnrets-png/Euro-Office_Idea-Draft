@@ -1,6 +1,7 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// ★ v4.5: Guide Editor textarea shows default content (editable), same pattern as Instructions
 // v4.4 — 2026-03-02
 // ★ v4.4: NEW "Guide Editor" tab — SuperAdmin can customize contextual guide content
 // v4.3 — 2026-03-02
