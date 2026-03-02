@@ -1,12 +1,13 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.1 — 2026-03-02 — FIX: z-index raised to 9999 to appear above form fields
-// Contextual Guide Tooltip — info button (ⓘ) that opens a floating
-// panel with tabbed content from guideContent.ts
-// Supports: dark mode, bilingual (EN/SI), animated, click-outside-close
+// v1.2 — 2026-03-02 — FIX: Use React Portal to render panel in document.body
+//   so it always appears ABOVE all form fields regardless of stacking context
+// v1.1 — 2026-03-02 — FIX: z-index raised (insufficient — stacking context issue)
+// v1.0 — 2026-03-02 — Initial version
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { getFieldGuide } from '../services/guideContent.ts';
 import { colors, darkColors, typography, radii, shadows, zIndex, animation, spacing } from '../design/theme.ts';
 
@@ -80,6 +81,11 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var activeTab = stateTab[0];
   var setActiveTab = stateTab[1];
 
+  // ★ v1.2: Track panel position for portal rendering
+  var statePanelPos = useState({ top: 0, left: 0 });
+  var panelPos = statePanelPos[0];
+  var setPanelPos = statePanelPos[1];
+
   // Get guide content
   var guide: GuideEntry | null = null;
   try {
@@ -96,6 +102,41 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     return guide && guide[key] && guide[key].trim() !== '';
   });
   if (!hasContent) return null;
+
+  // ★ v1.2: Calculate panel position from button bounding rect
+  var updatePanelPosition = useCallback(function() {
+    if (!buttonRef.current) return;
+    var rect = buttonRef.current.getBoundingClientRect();
+    var panelWidth = size === 'sm' ? 320 : 400;
+
+    var top = 0;
+    var left = 0;
+
+    if (position === 'right') {
+      top = rect.top - 8 + window.scrollY;
+      left = rect.right + 8;
+      // If panel goes off right edge, flip to left
+      if (left + panelWidth > window.innerWidth - 16) {
+        left = rect.left - panelWidth - 8;
+      }
+    } else if (position === 'left') {
+      top = rect.top - 8 + window.scrollY;
+      left = rect.left - panelWidth - 8;
+      // If panel goes off left edge, flip to right
+      if (left < 16) {
+        left = rect.right + 8;
+      }
+    } else {
+      // bottom
+      top = rect.bottom + 8 + window.scrollY;
+      left = rect.left + (rect.width / 2) - (panelWidth / 2);
+      // Clamp to viewport
+      if (left < 16) left = 16;
+      if (left + panelWidth > window.innerWidth - 16) left = window.innerWidth - 16 - panelWidth;
+    }
+
+    setPanelPos({ top: top, left: left });
+  }, [position, size]);
 
   // Click outside handler
   useEffect(function() {
@@ -126,6 +167,21 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     };
   }, [isOpen]);
 
+  // ★ v1.2: Recalculate position on scroll/resize while open
+  useEffect(function() {
+    if (!isOpen) return;
+    updatePanelPosition();
+    var handleScrollOrResize = function() {
+      updatePanelPosition();
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return function() {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen, updatePanelPosition]);
+
   // Theme colors
   var c = isDarkMode ? darkColors : colors;
   var lang = (language === 'si' ? 'si' : 'en') as 'en' | 'si';
@@ -140,176 +196,155 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var panelWidth = size === 'sm' ? 320 : 400;
   var maxHeight = 360;
 
-  // Position styles
-  var getPanelPosition = function(): React.CSSProperties {
-    var base: React.CSSProperties = {
-      position: 'absolute',
-      zIndex: 9999,
-      width: panelWidth + 'px',
-      maxHeight: maxHeight + 'px',
-    };
-    if (position === 'right') {
-      base.left = '100%';
-      base.marginLeft = '8px';
-      base.top = '-8px';
-    } else if (position === 'left') {
-      base.right = '100%';
-      base.marginRight = '8px';
-      base.top = '-8px';
-    } else {
-      base.left = '50%';
-      base.transform = 'translateX(-50%)';
-      base.top = '100%';
-      base.marginTop = '8px';
-    }
-    return base;
-  };
-
   var handleToggle = function() {
+    if (!isOpen) {
+      updatePanelPosition();
+    }
     setIsOpen(!isOpen);
     setActiveTab(0);
   };
 
+  // ★ v1.2: Portal panel — rendered into document.body
+  var portalPanel = isOpen ? ReactDOM.createPortal(
+    React.createElement('div', {
+      ref: panelRef,
+      style: {
+        position: 'absolute',
+        top: panelPos.top + 'px',
+        left: panelPos.left + 'px',
+        width: panelWidth + 'px',
+        maxHeight: maxHeight + 'px',
+        zIndex: 99999,
+        background: isDarkMode ? c.surface.card : '#FFFFFF',
+        border: '1px solid ' + c.border.light,
+        borderRadius: radii.xl,
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+        overflow: 'hidden',
+        animation: 'guideTooltipFadeIn ' + animation.duration.normal + ' ' + animation.easing.out,
+      },
+    },
+      // Tab bar
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          flexWrap: 'wrap' as const,
+          gap: '2px',
+          padding: '8px 8px 0 8px',
+          borderBottom: '1px solid ' + c.border.light,
+          background: isDarkMode ? ((c as any).surface.cardAlt || c.surface.card) : '#F8FAFC',
+        },
+      },
+        visibleTabs.map(function(tabKey, idx) {
+          var isActive = activeTab === idx;
+          return React.createElement('button', {
+            key: tabKey,
+            onClick: function() { setActiveTab(idx); },
+            style: {
+              padding: '6px 10px',
+              fontSize: '11px',
+              fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.normal,
+              color: isActive ? c.primary[700] : c.text.muted,
+              background: isActive ? '#FFFFFF' : 'transparent',
+              border: isActive ? '1px solid ' + c.border.light : '1px solid transparent',
+              borderBottom: isActive ? '1px solid #FFFFFF' : '1px solid transparent',
+              borderRadius: radii.md + ' ' + radii.md + ' 0 0',
+              cursor: 'pointer',
+              transition: 'all ' + animation.duration.fast,
+              marginBottom: '-1px',
+              whiteSpace: 'nowrap' as const,
+              lineHeight: '1.3',
+            },
+            onMouseEnter: function(e) {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.color = c.primary[600];
+                (e.currentTarget as HTMLElement).style.background = c.primary[50];
+              }
+            },
+            onMouseLeave: function(e) {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.color = c.text.muted;
+                (e.currentTarget as HTMLElement).style.background = 'transparent';
+              }
+            },
+          }, TAB_ICONS[tabKey] + ' ' + labels[tabKey]);
+        })
+      ),
+
+      // Tab content
+      React.createElement('div', {
+        style: {
+          padding: '14px 16px',
+          maxHeight: (maxHeight - 60) + 'px',
+          overflowY: 'auto' as const,
+          fontSize: typography.fontSize.sm,
+          lineHeight: typography.lineHeight.relaxed,
+          color: c.text.body,
+        },
+      }, guide[visibleTabs[activeTab]] || ''),
+
+      // Close hint
+      React.createElement('div', {
+        style: {
+          padding: '6px 16px 8px',
+          borderTop: '1px solid ' + c.border.light,
+          fontSize: '10px',
+          color: c.text.muted,
+          textAlign: 'right' as const,
+          background: isDarkMode ? ((c as any).surface.cardAlt || c.surface.card) : '#F8FAFC',
+        },
+      }, 'ESC ' + (lang === 'si' ? 'za zapiranje' : 'to close'))
+    ),
+    document.body
+  ) : null;
+
   // ─── RENDER ────────────────────────────────────────────────
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px', zIndex: isOpen ? 9999 : 'auto' }}>
-      {/* Info button */}
-      <button
-        ref={buttonRef}
-        onClick={handleToggle}
-        aria-label="Guide"
-        style={{
-          width: size === 'sm' ? '20px' : '22px',
-          height: size === 'sm' ? '20px' : '22px',
-          borderRadius: radii.full,
-          border: '1.5px solid ' + (isOpen ? c.primary[500] : c.border.medium),
-          background: isOpen ? c.primary[50] : 'transparent',
-          color: isOpen ? c.primary[600] : c.text.muted,
-          fontSize: size === 'sm' ? '11px' : '12px',
-          fontWeight: typography.fontWeight.bold,
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default,
-          flexShrink: 0,
-          lineHeight: 1,
-          padding: 0,
-        }}
-        onMouseEnter={function(e) {
-          if (!isOpen) {
-            e.currentTarget.style.borderColor = c.primary[400];
-            e.currentTarget.style.color = c.primary[500];
-            e.currentTarget.style.background = c.primary[50];
-          }
-        }}
-        onMouseLeave={function(e) {
-          if (!isOpen) {
-            e.currentTarget.style.borderColor = c.border.medium;
-            e.currentTarget.style.color = c.text.muted;
-            e.currentTarget.style.background = 'transparent';
-          }
-        }}
-      >
-        i
-      </button>
+  return React.createElement('span', {
+    style: { position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px' },
+  },
+    // Info button
+    React.createElement('button', {
+      ref: buttonRef,
+      onClick: handleToggle,
+      'aria-label': 'Guide',
+      style: {
+        width: size === 'sm' ? '20px' : '22px',
+        height: size === 'sm' ? '20px' : '22px',
+        borderRadius: radii.full,
+        border: '1.5px solid ' + (isOpen ? c.primary[500] : c.border.medium),
+        background: isOpen ? c.primary[50] : 'transparent',
+        color: isOpen ? c.primary[600] : c.text.muted,
+        fontSize: size === 'sm' ? '11px' : '12px',
+        fontWeight: typography.fontWeight.bold,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default,
+        flexShrink: 0,
+        lineHeight: 1,
+        padding: 0,
+      },
+      onMouseEnter: function(e) {
+        if (!isOpen) {
+          (e.currentTarget as HTMLElement).style.borderColor = c.primary[400];
+          (e.currentTarget as HTMLElement).style.color = c.primary[500];
+          (e.currentTarget as HTMLElement).style.background = c.primary[50];
+        }
+      },
+      onMouseLeave: function(e) {
+        if (!isOpen) {
+          (e.currentTarget as HTMLElement).style.borderColor = c.border.medium;
+          (e.currentTarget as HTMLElement).style.color = c.text.muted;
+          (e.currentTarget as HTMLElement).style.background = 'transparent';
+        }
+      },
+    }, 'i'),
 
-      {/* Floating panel */}
-      {isOpen && (
-        <div
-          ref={panelRef}
-          style={Object.assign({}, getPanelPosition(), {
-            background: isDarkMode ? c.surface.card : '#FFFFFF',
-            border: '1px solid ' + c.border.light,
-            borderRadius: radii.xl,
-            boxShadow: shadows.xl,
-            overflow: 'hidden',
-            animation: 'guideTooltipFadeIn ' + animation.duration.normal + ' ' + animation.easing.out,
-          })}
-        >
-          {/* Tab bar */}
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '2px',
-            padding: '8px 8px 0 8px',
-            borderBottom: '1px solid ' + c.border.light,
-            background: isDarkMode ? (c as any).surface.cardAlt || c.surface.card : '#F8FAFC',
-          }}>
-            {visibleTabs.map(function(tabKey, idx) {
-              var isActive = activeTab === idx;
-              return (
-                <button
-                  key={tabKey}
-                  onClick={function() { setActiveTab(idx); }}
-                  style={{
-                    padding: '6px 10px',
-                    fontSize: '11px',
-                    fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.normal,
-                    color: isActive ? c.primary[700] : c.text.muted,
-                    background: isActive ? '#FFFFFF' : 'transparent',
-                    border: isActive ? '1px solid ' + c.border.light : '1px solid transparent',
-                    borderBottom: isActive ? '1px solid #FFFFFF' : '1px solid transparent',
-                    borderRadius: radii.md + ' ' + radii.md + ' 0 0',
-                    cursor: 'pointer',
-                    transition: 'all ' + animation.duration.fast,
-                    marginBottom: '-1px',
-                    whiteSpace: 'nowrap' as const,
-                    lineHeight: '1.3',
-                  }}
-                  onMouseEnter={function(e) {
-                    if (!isActive) {
-                      e.currentTarget.style.color = c.primary[600];
-                      e.currentTarget.style.background = c.primary[50];
-                    }
-                  }}
-                  onMouseLeave={function(e) {
-                    if (!isActive) {
-                      e.currentTarget.style.color = c.text.muted;
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  {TAB_ICONS[tabKey] + ' ' + labels[tabKey]}
-                </button>
-              );
-            })}
-          </div>
+    // Portal panel (rendered in document.body)
+    portalPanel,
 
-          {/* Tab content */}
-          <div style={{
-            padding: '14px 16px',
-            maxHeight: (maxHeight - 60) + 'px',
-            overflowY: 'auto' as const,
-            fontSize: typography.fontSize.sm,
-            lineHeight: typography.lineHeight.relaxed,
-            color: c.text.body,
-          }}>
-            {guide[visibleTabs[activeTab]] || ''}
-          </div>
-
-          {/* Close hint */}
-          <div style={{
-            padding: '6px 16px 8px',
-            borderTop: '1px solid ' + c.border.light,
-            fontSize: '10px',
-            color: c.text.muted,
-            textAlign: 'right' as const,
-            background: isDarkMode ? (c as any).surface.cardAlt || c.surface.card : '#F8FAFC',
-          }}>
-            ESC {lang === 'si' ? 'za zapiranje' : 'to close'}
-          </div>
-        </div>
-      )}
-
-      {/* Animation keyframes — injected once */}
-      <style>{'\
-        @keyframes guideTooltipFadeIn {\
-          from { opacity: 0; transform: translateY(4px); }\
-          to { opacity: 1; transform: translateY(0); }\
-        }\
-      '}</style>
-    </span>
+    // Animation keyframes
+    React.createElement('style', null, '\n@keyframes guideTooltipFadeIn {\n  from { opacity: 0; transform: translateY(4px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n')
   );
 };
 
