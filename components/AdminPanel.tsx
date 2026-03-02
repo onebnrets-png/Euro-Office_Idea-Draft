@@ -267,7 +267,7 @@ const ADMIN_TEXT = {
     subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
       users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', guideEditor: 'Urejevalnik vodnika', ai: 'AI Ponudnik',
-      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',,
+      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
      },
     users: {
       title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
