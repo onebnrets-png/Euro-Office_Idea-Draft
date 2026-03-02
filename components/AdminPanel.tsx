@@ -1,6 +1,8 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// v4.4 — 2026-03-02
+// ★ v4.4: NEW "Guide Editor" tab — SuperAdmin can customize contextual guide content
 // v4.3 — 2026-03-02
 // ★ v4.3: NEW "Statistics" tab — usage overview, projects per user, project details
 // ★ v4.3: Drag & drop tab reordering — saved per user in user_settings.admin_tab_order
@@ -31,6 +33,7 @@ import { errorLogService, type ErrorLogEntry, type AuditLogExportEntry } from '.
 import { organizationService } from '../services/organizationService.ts';
 import { supabase } from '../services/supabaseClient.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
+import { getAllGuideKeys, getFieldGuide, fetchGuideOverrides, saveGuideOverrides, invalidateGuideOverridesCache, buildGuideOverrideKey } from '../services/guideContent.ts';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -39,7 +42,7 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-type TabId = 'users' | 'organizations' | 'statistics' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
+type TabId = 'users' | 'organizations' | 'statistics' | 'instructions' | 'guideEditor' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
 
 const QRCodeImage = ({ value, size = 200, colors: c }: { value: string; size?: number; colors?: typeof lightColors }) => {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
@@ -78,7 +81,7 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', ai: 'AI Provider',
+      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', guideEditor: 'Guide Editor', ai: 'AI Provider',
       profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base',
     },
     users: {
@@ -218,6 +221,39 @@ const ADMIN_TEXT = {
     },
     whiteLabel: {
       logoTitle: 'Custom Logo',
+      guideEditor: {
+      title: 'Guide Content Editor',
+      subtitle: 'Customize the contextual guide tooltips that appear next to each section (SuperAdmin only)',
+      selectStep: 'Select step & field',
+      language: 'Language',
+      fieldLabel: 'Field',
+      property: 'Property',
+      currentValue: 'Current value (custom override)',
+      defaultValue: 'Default value (read-only)',
+      save: 'Save Changes',
+      reset: 'Reset to Default',
+      resetField: 'Reset This Field',
+      resetAll: 'Reset All Guide Content',
+      resetFieldConfirm: 'Reset this guide field to its default content? Your custom text will be removed.',
+      resetAllConfirm: 'Reset ALL guide content to defaults? All custom overrides will be permanently removed.',
+      saved: 'Guide content saved successfully.',
+      saveFailed: 'Failed to save guide content:',
+      resetDone: 'Guide content reset to default.',
+      resetFailed: 'Failed to reset guide content:',
+      noChanges: 'No changes to save.',
+      overrideActive: 'Custom override active',
+      usingDefault: 'Using default content',
+      properties: {
+        whatIsThis: 'What is this?',
+        whyImportant: 'Why important?',
+        whatToWrite: 'What to write',
+        tips: 'Tips',
+        euContext: 'EU Context',
+        example: 'Example',
+      },
+    },
+    whiteLabel: {
+      logoTitle: 'Custom Logo',
       logoNotice: 'Logo customization is available only in the White-Label version. Contact us for more information.',
     },
     close: 'Close',
@@ -230,8 +266,8 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Nastavi AI ponudnika, profil in varnost',
     subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
-      users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', ai: 'AI Ponudnik',
-      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
+      users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', guideEditor: 'Urejevalnik vodnika', ai: 'AI Ponudnik',
+      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',,
      },
     users: {
       title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
@@ -368,6 +404,37 @@ const ADMIN_TEXT = {
       uploadedAt: 'Nalo\u017Eeno', uploadedBy: 'Avtor', actions: 'Akcije',
       info: 'Dokumenti nalo\u017Eeni tukaj slu\u017Eijo kot baza znanja. AI jih bo VEDNO uporabil kot kontekst pri generiranju projektnih vsebin \u2014 enako kot pravila v Navodilih.',
     },
+    guideEditor: {
+      title: 'Urejevalnik vsebine vodnika',
+      subtitle: 'Prilagodite kontekstualne nasvete, ki se prika\u017Eejo ob vsaki sekciji (samo SuperAdmin)',
+      selectStep: 'Izberi korak in polje',
+      language: 'Jezik',
+      fieldLabel: 'Polje',
+      property: 'Lastnost',
+      currentValue: 'Trenutna vrednost (prilagojeno)',
+      defaultValue: 'Privzeta vrednost (samo za branje)',
+      save: 'Shrani spremembe',
+      reset: 'Ponastavi na privzeto',
+      resetField: 'Ponastavi to polje',
+      resetAll: 'Ponastavi vso vsebino vodnika',
+      resetFieldConfirm: 'Ponastavi to polje vodnika na privzeto vsebino? Va\u0161e prilagojeno besedilo bo odstranjeno.',
+      resetAllConfirm: 'Ponastavi VSO vsebino vodnika na privzeto? Vse prilagoditve bodo trajno odstranjene.',
+      saved: 'Vsebina vodnika uspe\u0161no shranjena.',
+      saveFailed: 'Napaka pri shranjevanju vsebine vodnika:',
+      resetDone: 'Vsebina vodnika ponastavljena na privzeto.',
+      resetFailed: 'Napaka pri ponastavitvi vsebine vodnika:',
+      noChanges: 'Ni sprememb za shranjevanje.',
+      overrideActive: 'Prilagojena vsebina aktivna',
+      usingDefault: 'Uporablja privzeto vsebino',
+      properties: {
+        whatIsThis: 'Kaj je to?',
+        whyImportant: 'Zakaj pomembno?',
+        whatToWrite: 'Kaj napisati',
+        tips: 'Nasveti',
+        euContext: 'EU kontekst',
+        example: 'Primer',
+      },
+    },
     whiteLabel: {
       logoTitle: 'Logotip',
       logoNotice: 'Prilagoditev logotipa je na voljo samo v White-Label verziji. Kontaktirajte nas za ve\u010D informacij.',
@@ -445,7 +512,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
   const adminTabs: TabId[] = isUserSuperAdmin
-    ? ['users', 'organizations', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
+    ? ['users', 'organizations', 'statistics', 'instructions', 'guideEditor', 'ai', 'profile', 'audit', 'errors', 'knowledge']
     : ['users', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
   const regularTabs: TabId[] = ['ai', 'profile'];
   const availableTabs = isUserAdmin ? adminTabs : regularTabs;
@@ -511,6 +578,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [statsUserProjects, setStatsUserProjects] = useState<Record<string, number>>({});
   const [statsUserSettings, setStatsUserSettings] = useState<Record<string, { ai_provider: string }>>({});
   const [statsLoading, setStatsLoading] = useState(false);
+  // ★ v4.4: Guide Editor state (SuperAdmin only)
+  const [guideOverrides, setGuideOverrides] = useState<Record<string, string>>({});
+  const [guideEditorLoading, setGuideEditorLoading] = useState(false);
+  const [guideEditorSaving, setGuideEditorSaving] = useState(false);
+  const [guideSelectedStep, setGuideSelectedStep] = useState('');
+  const [guideSelectedField, setGuideSelectedField] = useState('');
+  const [guideSelectedLang, setGuideSelectedLang] = useState<'en' | 'si'>('en');
+  const [guideSelectedProp, setGuideSelectedProp] = useState('whatIsThis');
+  const [guideEditorText, setGuideEditorText] = useState('');
+  const [guideEditorChanged, setGuideEditorChanged] = useState(false);
   // ★ v4.2: Organizations tab state
   const [orgMemberCounts, setOrgMemberCounts] = useState<Record<string, number>>({});
   const [orgsLoading, setOrgsLoading] = useState(false);
@@ -555,6 +632,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       }
     }
   }, [isOpen, isUserAdmin, isUserSuperAdmin]);
+  // ★ v4.4: Load guide overrides when Guide Editor tab is active
+  useEffect(() => {
+    if (activeTab === 'guideEditor' && isOpen && isUserSuperAdmin) {
+      setGuideEditorLoading(true);
+      fetchGuideOverrides().then(function(overrides) {
+        setGuideOverrides(overrides || {});
+        setGuideEditorLoading(false);
+        // Auto-select first step/field
+        var allKeys = getAllGuideKeys();
+        if (allKeys.length > 0 && !guideSelectedStep) {
+          setGuideSelectedStep(allKeys[0].stepKey);
+          setGuideSelectedField(allKeys[0].fieldKey);
+        }
+      }).catch(function() {
+        setGuideEditorLoading(false);
+      });
+    }
+  }, [activeTab, isOpen, isUserSuperAdmin]);
+
+  // ★ v4.4: Update editor text when selection changes
+  useEffect(() => {
+    if (!guideSelectedStep || !guideSelectedField || !guideSelectedProp) {
+      setGuideEditorText('');
+      setGuideEditorChanged(false);
+      return;
+    }
+    var overrideKey = buildGuideOverrideKey(guideSelectedStep, guideSelectedField, guideSelectedLang, guideSelectedProp);
+    var overrideValue = guideOverrides[overrideKey];
+    if (overrideValue !== undefined && overrideValue !== null) {
+      setGuideEditorText(overrideValue);
+    } else {
+      setGuideEditorText('');
+    }
+    setGuideEditorChanged(false);
+  }, [guideSelectedStep, guideSelectedField, guideSelectedLang, guideSelectedProp, guideOverrides]);
+
   // ★ v4.3: Load statistics when statistics tab is active
   useEffect(() => {
     if (activeTab === 'statistics' && isOpen && isUserAdmin) {
@@ -1006,7 +1119,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', statistics: '\uD83D\uDCCA', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
+  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', statistics: '\uD83D\uDCCA', instructions: '\uD83D\uDCCB', guideEditor: '\uD83D\uDCD6', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
 
@@ -1857,6 +1970,337 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               })()}
             </div>
           )}
+
+           {/* ═══ GUIDE EDITOR TAB ═══ ★ v4.4 — SuperAdmin only */}
+          {activeTab === 'guideEditor' && isUserSuperAdmin && (() => {
+            var tGuide = (t as any).guideEditor || {};
+            var GUIDE_PROPS = ['whatIsThis', 'whyImportant', 'whatToWrite', 'tips', 'euContext', 'example'];
+            var propLabels = tGuide.properties || { whatIsThis: 'What is this?', whyImportant: 'Why important?', whatToWrite: 'What to write', tips: 'Tips', euContext: 'EU Context', example: 'Example' };
+            var allKeys = getAllGuideKeys();
+
+            // Group by stepKey for left nav
+            var stepGroups: Record<string, Array<{ fieldKey: string; stepTitle: string }>> = {};
+            allKeys.forEach(function(item) {
+              if (!stepGroups[item.stepKey]) stepGroups[item.stepKey] = [];
+              stepGroups[item.stepKey].push({ fieldKey: item.fieldKey, stepTitle: item.stepTitle });
+            });
+            var stepKeysList = Object.keys(stepGroups);
+
+            // Get default content for comparison
+            var defaultContent = '';
+            try {
+              var defaultGuide = getFieldGuide(guideSelectedStep, guideSelectedField, guideSelectedLang);
+              if (defaultGuide && defaultGuide[guideSelectedProp]) {
+                defaultContent = defaultGuide[guideSelectedProp];
+              }
+            } catch (e) { /* ignore */ }
+
+            var currentOverrideKey = buildGuideOverrideKey(guideSelectedStep, guideSelectedField, guideSelectedLang, guideSelectedProp);
+            var hasOverride = guideOverrides[currentOverrideKey] !== undefined && guideOverrides[currentOverrideKey] !== null && guideOverrides[currentOverrideKey] !== '';
+
+            // Count total overrides
+            var totalOverrides = Object.keys(guideOverrides).filter(function(k) { return guideOverrides[k] && guideOverrides[k].trim() !== ''; }).length;
+
+            var handleGuideSave = async function() {
+              setGuideEditorSaving(true);
+              try {
+                var newOverrides = Object.assign({}, guideOverrides);
+                if (guideEditorText.trim() === '') {
+                  delete newOverrides[currentOverrideKey];
+                } else {
+                  newOverrides[currentOverrideKey] = guideEditorText;
+                }
+                var userId = await storageService.getCurrentUserId();
+                var result = await saveGuideOverrides(newOverrides, userId || '');
+                if (result.success) {
+                  setGuideOverrides(newOverrides);
+                  setGuideEditorChanged(false);
+                  setToast({ message: tGuide.saved || 'Saved.', type: 'success' });
+                  // Audit log
+                  try {
+                    await supabase.from('admin_log').insert({
+                      admin_id: userId,
+                      action: 'guide_content_update',
+                      target_user_id: null,
+                      details: { key: currentOverrideKey, action: guideEditorText.trim() === '' ? 'removed' : 'updated' },
+                    });
+                  } catch (e) { /* ignore */ }
+                } else {
+                  setToast({ message: (tGuide.saveFailed || 'Failed: ') + ' ' + (result.message || ''), type: 'error' });
+                }
+              } catch (err: any) {
+                setToast({ message: (tGuide.saveFailed || 'Failed: ') + ' ' + (err.message || ''), type: 'error' });
+              } finally {
+                setGuideEditorSaving(false);
+              }
+            };
+
+            var handleGuideResetField = function() {
+              setConfirmModal({
+                isOpen: true,
+                title: tGuide.resetField || 'Reset Field',
+                message: tGuide.resetFieldConfirm || 'Reset this field to default?',
+                onConfirm: async function() {
+                  setConfirmModal(null);
+                  var newOverrides = Object.assign({}, guideOverrides);
+                  // Remove all properties for this step/field/language
+                  GUIDE_PROPS.forEach(function(prop) {
+                    var key = buildGuideOverrideKey(guideSelectedStep, guideSelectedField, guideSelectedLang, prop);
+                    delete newOverrides[key];
+                  });
+                  var userId = await storageService.getCurrentUserId();
+                  var result = await saveGuideOverrides(newOverrides, userId || '');
+                  if (result.success) {
+                    setGuideOverrides(newOverrides);
+                    setGuideEditorText('');
+                    setGuideEditorChanged(false);
+                    setToast({ message: tGuide.resetDone || 'Reset.', type: 'success' });
+                  }
+                },
+              });
+            };
+
+            var handleGuideResetAll = function() {
+              setConfirmModal({
+                isOpen: true,
+                title: tGuide.resetAll || 'Reset All',
+                message: tGuide.resetAllConfirm || 'Reset ALL guide content?',
+                onConfirm: async function() {
+                  setConfirmModal(null);
+                  setGuideEditorSaving(true);
+                  var userId = await storageService.getCurrentUserId();
+                  var result = await saveGuideOverrides({}, userId || '');
+                  if (result.success) {
+                    setGuideOverrides({});
+                    setGuideEditorText('');
+                    setGuideEditorChanged(false);
+                    setToast({ message: tGuide.resetDone || 'Reset.', type: 'success' });
+                    try {
+                      await supabase.from('admin_log').insert({
+                        admin_id: userId,
+                        action: 'guide_content_reset',
+                        target_user_id: null,
+                        details: { action: 'reset_all' },
+                      });
+                    } catch (e) { /* ignore */ }
+                  } else {
+                    setToast({ message: (tGuide.resetFailed || 'Failed: ') + ' ' + (result.message || ''), type: 'error' });
+                  }
+                  setGuideEditorSaving(false);
+                },
+              });
+            };
+
+            // Pretty field name
+            var prettyFieldName = function(fieldKey: string): string {
+              return fieldKey.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); });
+            };
+
+            var prettyStepName = function(stepKey: string): string {
+              var names: Record<string, string> = {
+                problemAnalysis: language === 'si' ? 'Analiza problema' : 'Problem Analysis',
+                projectIdea: language === 'si' ? 'Projektna ideja' : 'Project Idea',
+                generalObjectives: language === 'si' ? 'Splo\u0161ni cilji' : 'General Objectives',
+                specificObjectives: language === 'si' ? 'Specifi\u010Dni cilji' : 'Specific Objectives',
+                activities: language === 'si' ? 'Aktivnosti' : 'Activities',
+                expectedResults: language === 'si' ? 'Pri\u010Dakovani rezultati' : 'Expected Results',
+              };
+              return names[stepKey] || stepKey;
+            };
+
+            return (
+              <div>
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: '12px' }}>
+                    <div>
+                      <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
+                        {'\uD83D\uDCD6'} {tGuide.title || 'Guide Content Editor'}
+                      </h3>
+                      <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{tGuide.subtitle || ''}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                      {totalOverrides > 0 && (
+                        <span style={{ padding: '4px 12px', borderRadius: radii.full, background: warningBadgeBg, border: '1px solid ' + warningBadgeBorder, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                          {totalOverrides} {language === 'si' ? 'prilagoditev' : 'override(s)'}
+                        </span>
+                      )}
+                      <button onClick={handleGuideResetAll} disabled={totalOverrides === 0 || guideEditorSaving}
+                        style={{ fontSize: '11px', padding: '5px 12px', borderRadius: radii.md, border: '1px solid ' + dangerBtnBorder, background: dangerBtnBg, color: dangerBtnText, cursor: totalOverrides === 0 ? 'not-allowed' : 'pointer', opacity: totalOverrides === 0 ? 0.5 : 1 }}>
+                        {'\uD83D\uDDD1\uFE0F'} {tGuide.resetAll || 'Reset All'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {guideEditorLoading ? <SkeletonTable rows={4} cols={3} /> : (
+                  <div style={{ display: 'flex', gap: '20px', minHeight: '500px' }}>
+                    {/* LEFT: Step/Field navigation */}
+                    <div style={{ width: '220px', flexShrink: 0, borderRight: '1px solid ' + colors.border.light, paddingRight: '12px', maxHeight: '600px', overflowY: 'auto' as const }}>
+                      {stepKeysList.map(function(stepKey) {
+                        var fields = stepGroups[stepKey];
+                        var isStepSelected = guideSelectedStep === stepKey;
+                        return (
+                          <div key={stepKey} style={{ marginBottom: '8px' }}>
+                            <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: colors.text.heading, padding: '6px 8px', textTransform: 'uppercase' as const, letterSpacing: '0.5px', borderBottom: '1px solid ' + colors.border.light, marginBottom: '2px' }}>
+                              {prettyStepName(stepKey)}
+                            </div>
+                            {fields.map(function(f) {
+                              var isFieldSelected = isStepSelected && guideSelectedField === f.fieldKey;
+                              // Check if any override exists for this field
+                              var fieldHasOverride = GUIDE_PROPS.some(function(prop) {
+                                var k1 = buildGuideOverrideKey(stepKey, f.fieldKey, 'en', prop);
+                                var k2 = buildGuideOverrideKey(stepKey, f.fieldKey, 'si', prop);
+                                return (guideOverrides[k1] && guideOverrides[k1].trim() !== '') || (guideOverrides[k2] && guideOverrides[k2].trim() !== '');
+                              });
+                              return (
+                                <button key={f.fieldKey} onClick={function() { setGuideSelectedStep(stepKey); setGuideSelectedField(f.fieldKey); }}
+                                  style={{
+                                    display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px 6px 16px', marginBottom: '1px',
+                                    borderRadius: radii.md, border: 'none', cursor: 'pointer',
+                                    background: isFieldSelected ? primaryBadgeBg : 'transparent',
+                                    color: isFieldSelected ? primaryBadgeText : colors.text.body,
+                                    fontSize: typography.fontSize.xs,
+                                    fontWeight: isFieldSelected ? typography.fontWeight.semibold : typography.fontWeight.normal,
+                                  }}>
+                                  {fieldHasOverride ? '\u270F\uFE0F ' : ''}{prettyFieldName(f.fieldKey)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* RIGHT: Editor */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {!guideSelectedStep || !guideSelectedField ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.text.muted }}>
+                          {'\u2190'} {tGuide.selectStep || 'Select a step and field from the left panel'}
+                        </div>
+                      ) : (
+                        <div>
+                          {/* Header: selected path */}
+                          <div style={{ marginBottom: '16px', padding: '12px 16px', borderRadius: radii.lg, background: primaryBadgeBg, border: '1px solid ' + primaryBadgeBorder }}>
+                            <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: primaryBadgeText }}>
+                              {prettyStepName(guideSelectedStep)} {'\u203A'} {prettyFieldName(guideSelectedField)}
+                            </div>
+                            <div style={{ fontSize: typography.fontSize.xs, color: primaryBadgeText, opacity: 0.8, fontFamily: typography.fontFamily.mono, marginTop: '2px' }}>
+                              {guideSelectedStep}.{guideSelectedField}
+                            </div>
+                          </div>
+
+                          {/* Controls row: Language + Property selectors */}
+                          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: colors.text.heading, marginBottom: '4px' }}>
+                                {tGuide.language || 'Language'}
+                              </label>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                {(['en', 'si'] as const).map(function(lang) {
+                                  var isActive = guideSelectedLang === lang;
+                                  return (
+                                    <button key={lang} onClick={function() { setGuideSelectedLang(lang); }}
+                                      style={{
+                                        padding: '6px 14px', borderRadius: radii.md, cursor: 'pointer',
+                                        border: isActive ? '2px solid ' + colors.primary[500] : '1px solid ' + colors.border.medium,
+                                        background: isActive ? primaryBadgeBg : colors.surface.card,
+                                        color: isActive ? primaryBadgeText : colors.text.body,
+                                        fontSize: typography.fontSize.sm, fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.medium,
+                                      }}>
+                                      {lang === 'en' ? '\uD83C\uDDEC\uD83C\uDDE7 EN' : '\uD83C\uDDF8\uD83C\uDDEE SI'}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: '200px' }}>
+                              <label style={{ display: 'block', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: colors.text.heading, marginBottom: '4px' }}>
+                                {tGuide.property || 'Property'}
+                              </label>
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' as const }}>
+                                {GUIDE_PROPS.map(function(prop) {
+                                  var isActive = guideSelectedProp === prop;
+                                  var propKey = buildGuideOverrideKey(guideSelectedStep, guideSelectedField, guideSelectedLang, prop);
+                                  var propHasOverride = guideOverrides[propKey] && guideOverrides[propKey].trim() !== '';
+                                  return (
+                                    <button key={prop} onClick={function() { setGuideSelectedProp(prop); }}
+                                      style={{
+                                        padding: '4px 10px', borderRadius: radii.md, cursor: 'pointer',
+                                        border: isActive ? '2px solid ' + colors.primary[500] : '1px solid ' + colors.border.light,
+                                        background: isActive ? primaryBadgeBg : (propHasOverride ? warningBadgeBg : 'transparent'),
+                                        color: isActive ? primaryBadgeText : (propHasOverride ? warningBadgeText : colors.text.body),
+                                        fontSize: typography.fontSize.xs,
+                                        fontWeight: isActive ? typography.fontWeight.semibold : typography.fontWeight.normal,
+                                      }}>
+                                      {propHasOverride ? '\u270F\uFE0F ' : ''}{propLabels[prop] || prop}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Status indicator */}
+                          <div style={{ marginBottom: '8px', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: hasOverride ? warningBadgeText : successText }}>
+                            {hasOverride ? ('\u270F\uFE0F ' + (tGuide.overrideActive || 'Custom override active')) : ('\u2705 ' + (tGuide.usingDefault || 'Using default content'))}
+                          </div>
+
+                          {/* Editor textarea */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: colors.text.heading, marginBottom: '4px' }}>
+                              {tGuide.currentValue || 'Custom override'} {guideEditorChanged ? ' \u2022' : ''}
+                            </label>
+                            <textarea
+                              value={guideEditorText}
+                              onChange={function(e) { setGuideEditorText(e.target.value); setGuideEditorChanged(true); }}
+                              placeholder={defaultContent ? (language === 'si' ? 'Pu\u0161\u010Dite prazno za privzeto vsebino...' : 'Leave empty to use default content...') : ''}
+                              style={{
+                                width: '100%', minHeight: '180px', padding: '12px', border: '1px solid ' + (guideEditorChanged ? colors.primary[400] : colors.border.light),
+                                borderRadius: radii.lg, fontSize: typography.fontSize.sm, color: colors.text.body, background: colors.surface.card,
+                                fontFamily: typography.fontFamily.body, lineHeight: '1.6', resize: 'vertical' as const, outline: 'none',
+                              }}
+                            />
+                          </div>
+
+                          {/* Default content reference (collapsed) */}
+                          {defaultContent && (
+                            <CollapsibleSection title={(tGuide.defaultValue || 'Default value') + ' (' + (language === 'si' ? 'samo za branje' : 'read-only') + ')'} colors={colors}>
+                              <div style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, lineHeight: '1.6', whiteSpace: 'pre-wrap' as const, maxHeight: '300px', overflowY: 'auto' as const, fontFamily: typography.fontFamily.body }}>
+                                {defaultContent}
+                              </div>
+                            </CollapsibleSection>
+                          )}
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' as const }}>
+                            <button onClick={handleGuideSave} disabled={!guideEditorChanged || guideEditorSaving}
+                              style={{
+                                padding: '8px 20px', borderRadius: radii.lg, border: 'none',
+                                background: guideEditorChanged ? colors.primary[600] : colors.border.light,
+                                color: '#fff', cursor: guideEditorChanged ? 'pointer' : 'not-allowed',
+                                fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold,
+                                opacity: guideEditorChanged ? 1 : 0.5,
+                              }}>
+                              {guideEditorSaving ? '...' : (tGuide.save || 'Save')}
+                            </button>
+                            <button onClick={handleGuideResetField}
+                              style={{
+                                padding: '8px 20px', borderRadius: radii.lg,
+                                border: '1px solid ' + colors.border.light,
+                                background: colors.surface.card, color: colors.text.body, cursor: 'pointer',
+                                fontSize: typography.fontSize.sm,
+                              }}>
+                              {tGuide.resetField || 'Reset Field'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ═══ KNOWLEDGE BASE TAB ═══ */}
           {activeTab === 'knowledge' && isUserAdmin && (
