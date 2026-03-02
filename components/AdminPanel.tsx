@@ -1,8 +1,9 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v4.2 — 2026-03-01
-// ★ v4.2: NEW "Organizations" tab for SuperAdmin — list all orgs,
+// v4.3 — 2026-03-02
+// ★ v4.3: NEW "Statistics" tab — usage overview, projects per user, project details
+// ★ v4.2: NEW "Organizations" tab for SuperAdmin
 //          delete empty orgs, merge duplicate orgs
 // ★ v4.1: Organization column + edit, Expandable Error Log + export, Audit Log export
 // ═══════════════════════════════════════════════════════════════
@@ -1306,6 +1307,163 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               )}
             </div>
           )}
+                    {/* ═══ STATISTICS TAB ═══ ★ v4.3 */}
+          {activeTab === 'statistics' && isUserAdmin && (() => {
+            var tStats = (t as any).statistics || {};
+            var totalProjects = statsProjects.length;
+            var now = new Date();
+            var thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            var activeUsers = admin.users.filter(function(u) {
+              return u.lastSignIn && new Date(u.lastSignIn) > thirtyDaysAgo;
+            }).length;
+            var avgProjects = admin.users.length > 0 ? (totalProjects / admin.users.length).toFixed(1) : '0';
+            var recentErrors = errorLogs.filter(function(e) {
+              return new Date(e.created_at) > thirtyDaysAgo;
+            }).length;
+
+            return (
+              <div>
+                <div style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
+                    {'\uD83D\uDCCA'} {tStats.title || 'Usage Statistics'}
+                  </h3>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{tStats.subtitle || ''}</p>
+                </div>
+
+                {statsLoading ? <SkeletonTable rows={3} cols={4} /> : (
+                  <>
+                    {/* Summary cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                      <div style={{ padding: '16px', borderRadius: radii.lg, background: primaryBadgeBg, border: '1px solid ' + primaryBadgeBorder, textAlign: 'center' }}>
+                        <div style={{ fontSize: typography.fontSize.xs, color: primaryBadgeText, fontWeight: typography.fontWeight.semibold, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '4px' }}>{tStats.totalProjects || 'Total Projects'}</div>
+                        <div style={{ fontSize: '28px', fontWeight: typography.fontWeight.bold, color: primaryBadgeText }}>{totalProjects}</div>
+                      </div>
+                      <div style={{ padding: '16px', borderRadius: radii.lg, background: successBg, border: '1px solid ' + successBorder, textAlign: 'center' }}>
+                        <div style={{ fontSize: typography.fontSize.xs, color: successText, fontWeight: typography.fontWeight.semibold, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '4px' }}>{tStats.activeUsers30 || 'Active Users (30d)'}</div>
+                        <div style={{ fontSize: '28px', fontWeight: typography.fontWeight.bold, color: successText }}>{activeUsers}</div>
+                      </div>
+                      <div style={{ padding: '16px', borderRadius: radii.lg, background: secondaryInfoBg, border: '1px solid ' + secondaryInfoBorder, textAlign: 'center' }}>
+                        <div style={{ fontSize: typography.fontSize.xs, color: secondaryInfoText, fontWeight: typography.fontWeight.semibold, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '4px' }}>{tStats.avgProjectsPerUser || 'Avg Projects / User'}</div>
+                        <div style={{ fontSize: '28px', fontWeight: typography.fontWeight.bold, color: secondaryInfoText }}>{avgProjects}</div>
+                      </div>
+                      <div style={{ padding: '16px', borderRadius: radii.lg, background: errorBg, border: '1px solid ' + errorBorder, textAlign: 'center' }}>
+                        <div style={{ fontSize: typography.fontSize.xs, color: errorText, fontWeight: typography.fontWeight.semibold, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '4px' }}>{tStats.totalErrors30 || 'Errors (30d)'}</div>
+                        <div style={{ fontSize: '28px', fontWeight: typography.fontWeight.bold, color: errorText }}>{recentErrors}</div>
+                      </div>
+                    </div>
+
+                    {/* Users table */}
+                    <div style={{ marginBottom: '24px' }}>
+                      <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 12px' }}>
+                        {'\uD83D\uDC65'} {tStats.userTable || 'Users Overview'}
+                      </h4>
+                      {admin.users.length === 0 ? (
+                        <p style={{ color: colors.text.muted, textAlign: 'center', padding: '20px' }}>{tStats.noUsers || 'No users.'}</p>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
+                            <thead>
+                              <tr style={{ borderBottom: '2px solid ' + colors.border.light }}>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.email || 'Email'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.organization || 'Organization'}</th>
+                                <th style={{ textAlign: 'center', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.projects || 'Projects'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.lastActive || 'Last Active'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.aiProvider || 'AI Provider'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.registered || 'Registered'}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {admin.users
+                                .sort(function(a, b) { return (statsUserProjects[b.id] || 0) - (statsUserProjects[a.id] || 0); })
+                                .map(function(user) {
+                                  var projCount = statsUserProjects[user.id] || 0;
+                                  var settings = statsUserSettings[user.id];
+                                  var provider = settings ? settings.ai_provider : '—';
+                                  var providerIcons = { gemini: '\uD83D\uDC8E', openai: '\uD83E\uDDE0', openrouter: '\uD83C\uDF10' };
+                                  return (
+                                    <tr key={user.id} style={{ borderBottom: '1px solid ' + colors.border.light, background: rowDefaultBg }}
+                                      onMouseEnter={function(e) { e.currentTarget.style.background = rowHoverBg; }}
+                                      onMouseLeave={function(e) { e.currentTarget.style.background = rowDefaultBg; }}>
+                                      <td style={{ padding: '10px 12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <UserAvatar name={user.displayName} email={user.email} size={28} />
+                                          <span style={{ color: colors.text.body }}>{user.email}</span>
+                                        </div>
+                                      </td>
+                                      <td style={{ padding: '10px 12px', color: user.orgName ? colors.text.body : colors.text.muted, fontSize: typography.fontSize.xs }}>{user.orgName || '\u2014'}</td>
+                                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                        <span style={{ padding: '2px 10px', borderRadius: radii.full, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, background: projCount > 0 ? primaryBadgeBg : 'transparent', border: projCount > 0 ? '1px solid ' + primaryBadgeBorder : '1px solid ' + colors.border.light, color: projCount > 0 ? primaryBadgeText : colors.text.muted }}>{projCount}</span>
+                                      </td>
+                                      <td style={{ padding: '10px 12px', color: colors.text.muted }}>{user.lastSignIn ? formatDate(user.lastSignIn) : '\u2014'}</td>
+                                      <td style={{ padding: '10px 12px' }}>
+                                        <span style={{ fontSize: typography.fontSize.xs, color: colors.text.body }}>{(providerIcons[provider] || '') + ' ' + (provider || '\u2014')}</span>
+                                      </td>
+                                      <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(user.createdAt, true)}</td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Projects table */}
+                    <div>
+                      <h4 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 12px' }}>
+                        {'\uD83D\uDCC1'} {tStats.projectTable || 'Projects Overview'}
+                      </h4>
+                      {statsProjects.length === 0 ? (
+                        <p style={{ color: colors.text.muted, textAlign: 'center', padding: '20px' }}>{tStats.noProjects || 'No projects.'}</p>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: typography.fontSize.sm }}>
+                            <thead>
+                              <tr style={{ borderBottom: '2px solid ' + colors.border.light }}>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.projectTitle || 'Project'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.owner || 'Owner'}</th>
+                                <th style={{ textAlign: 'center', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.lang || 'Lang'}</th>
+                                <th style={{ textAlign: 'center', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.workPackages || 'WPs'}</th>
+                                <th style={{ textAlign: 'center', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.partnersCol || 'Partners'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.created || 'Created'}</th>
+                                <th style={{ textAlign: 'left', padding: '10px 12px', color: colors.text.muted, fontWeight: typography.fontWeight.semibold }}>{tStats.lastModified || 'Modified'}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {statsProjects
+                                .sort(function(a, b) { return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(); })
+                                .map(function(proj) {
+                                  return (
+                                    <tr key={proj.id} style={{ borderBottom: '1px solid ' + colors.border.light, background: rowDefaultBg }}
+                                      onMouseEnter={function(e) { e.currentTarget.style.background = rowHoverBg; }}
+                                      onMouseLeave={function(e) { e.currentTarget.style.background = rowDefaultBg; }}>
+                                      <td style={{ padding: '10px 12px' }}>
+                                        <div>
+                                          <div style={{ color: colors.text.body, fontWeight: typography.fontWeight.medium }}>{proj.title}</div>
+                                          <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, fontFamily: typography.fontFamily.mono }}>{proj.id.substring(0, 12)}...</div>
+                                        </div>
+                                      </td>
+                                      <td style={{ padding: '10px 12px', color: colors.text.body, fontSize: typography.fontSize.xs }}>{proj.ownerEmail}</td>
+                                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                        <span style={{ padding: '2px 8px', borderRadius: radii.full, fontSize: typography.fontSize.xs, background: secondaryInfoBg, border: '1px solid ' + secondaryInfoBorder, color: secondaryInfoText }}>{proj.language}</span>
+                                      </td>
+                                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: typography.fontWeight.bold, color: proj.wpCount > 0 ? primaryBadgeText : colors.text.muted }}>{proj.wpCount}</td>
+                                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: typography.fontWeight.bold, color: proj.partnerCount > 0 ? successText : colors.text.muted }}>{proj.partnerCount}</td>
+                                      <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(proj.createdAt, true)}</td>
+                                      <td style={{ padding: '10px 12px', color: colors.text.muted }}>{formatDate(proj.updatedAt)}</td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ═══ INSTRUCTIONS TAB ═══ */}
           {activeTab === 'instructions' && isUserAdmin && (
