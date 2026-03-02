@@ -37,7 +37,7 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-type TabId = 'users' | 'organizations' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
+type TabId = 'users' | 'organizations' | 'statistics' | 'instructions' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
 
 const QRCodeImage = ({ value, size = 200, colors: c }: { value: string; size?: number; colors?: typeof lightColors }) => {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
@@ -76,7 +76,7 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users', organizations: 'Organizations', instructions: 'Instructions', ai: 'AI Provider',
+      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', ai: 'AI Provider',
       profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base',
     },
     users: {
@@ -202,9 +202,8 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Nastavi AI ponudnika, profil in varnost',
     subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
-      users: 'Uporabniki', organizations: 'Organizacije', instructions: 'Pravila', ai: 'AI Ponudnik',
+      users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', ai: 'AI Ponudnik',
       profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
-    },
     users: {
       title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
       email: 'E-po\u0161ta', displayName: 'Ime', role: 'Vloga', registered: 'Registriran',
