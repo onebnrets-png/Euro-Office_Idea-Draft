@@ -1,5 +1,6 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
+// v1.3 — 2026-03-02 — FIX: position:fixed + viewport clamping (scroll container fix)
 // v1.2 — 2026-03-02 — FIX: Use React Portal to render panel in document.body
 //   so it always appears ABOVE all form fields regardless of stacking context
 // v1.1 — 2026-03-02 — FIX: z-index raised (insufficient — stacking context issue)
@@ -113,27 +114,27 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     var left = 0;
 
     if (position === 'right') {
-      top = rect.top - 8 + window.scrollY;
+      top = rect.top - 8;
       left = rect.right + 8;
-      // If panel goes off right edge, flip to left
       if (left + panelWidth > window.innerWidth - 16) {
         left = rect.left - panelWidth - 8;
       }
     } else if (position === 'left') {
-      top = rect.top - 8 + window.scrollY;
+      top = rect.top - 8;
       left = rect.left - panelWidth - 8;
-      // If panel goes off left edge, flip to right
       if (left < 16) {
         left = rect.right + 8;
       }
     } else {
-      // bottom
-      top = rect.bottom + 8 + window.scrollY;
+      top = rect.bottom + 8;
       left = rect.left + (rect.width / 2) - (panelWidth / 2);
-      // Clamp to viewport
       if (left < 16) left = 16;
       if (left + panelWidth > window.innerWidth - 16) left = window.innerWidth - 16 - panelWidth;
     }
+
+    // Clamp top to viewport
+    if (top < 8) top = 8;
+    if (top + 360 > window.innerHeight - 8) top = window.innerHeight - 8 - 360;
 
     setPanelPos({ top: top, left: left });
   }, [position, size]);
@@ -209,7 +210,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     React.createElement('div', {
       ref: panelRef,
       style: {
-        position: 'absolute',
+        position: 'fixed',
         top: panelPos.top + 'px',
         left: panelPos.left + 'px',
         width: panelWidth + 'px',
