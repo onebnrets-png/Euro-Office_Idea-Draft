@@ -127,6 +127,32 @@ const ADMIN_TEXT = {
       refreshing: 'Refreshing...',
       refresh: 'Refresh',
     },
+    statistics: {
+      title: 'Usage Statistics',
+      subtitle: 'Overview of platform usage, projects, and user activity',
+      totalProjects: 'Total Projects',
+      activeUsers30: 'Active Users (30d)',
+      avgProjectsPerUser: 'Avg Projects / User',
+      totalErrors30: 'Errors (30d)',
+      userTable: 'Users Overview',
+      email: 'Email',
+      organization: 'Organization',
+      projects: 'Projects',
+      lastActive: 'Last Active',
+      aiProvider: 'AI Provider',
+      registered: 'Registered',
+      projectTable: 'Projects Overview',
+      projectTitle: 'Project Title',
+      owner: 'Owner',
+      lang: 'Language',
+      created: 'Created',
+      lastModified: 'Last Modified',
+      workPackages: 'WPs',
+      partnersCol: 'Partners',
+      noProjects: 'No projects found.',
+      noUsers: 'No user data available.',
+      loading: 'Loading statistics...',
+    },
     instructions: {
       title: 'AI Instructions', subtitle: 'Edit the global AI instructions that apply to all users',
       save: 'Save Instructions', reset: 'Reset to Default',
@@ -251,6 +277,32 @@ const ADMIN_TEXT = {
       empty: 'Prazna',
       refreshing: 'Osve\u017Eujem...',
       refresh: 'Osve\u017Ei',
+    },
+      statistics: {
+      title: 'Statistika uporabe',
+      subtitle: 'Pregled uporabe platforme, projektov in aktivnosti uporabnikov',
+      totalProjects: 'Skupaj projektov',
+      activeUsers30: 'Aktivni uporabniki (30d)',
+      avgProjectsPerUser: 'Povpr. projektov / uporabnik',
+      totalErrors30: 'Napake (30d)',
+      userTable: 'Pregled uporabnikov',
+      email: 'E-po\u0161ta',
+      organization: 'Organizacija',
+      projects: 'Projekti',
+      lastActive: 'Zadnja aktivnost',
+      aiProvider: 'AI ponudnik',
+      registered: 'Registriran',
+      projectTable: 'Pregled projektov',
+      projectTitle: 'Naslov projekta',
+      owner: 'Lastnik',
+      lang: 'Jezik',
+      created: 'Ustvarjen',
+      lastModified: 'Zadnja sprememba',
+      workPackages: 'DS',
+      partnersCol: 'Partnerji',
+      noProjects: 'Ni najdenih projektov.',
+      noUsers: 'Ni podatkov o uporabnikih.',
+      loading: 'Nalagam statistiko...',
     },
     instructions: {
       title: 'AI Pravila', subtitle: 'Urejanje globalnih AI pravil, ki veljajo za vse uporabnike',
@@ -390,8 +442,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
   const adminTabs: TabId[] = isUserSuperAdmin
-    ? ['users', 'organizations', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
-    : ['users', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
+    ? ['users', 'organizations', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'errors', 'knowledge']
+    : ['users', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
   const regularTabs: TabId[] = ['ai', 'profile'];
   const availableTabs = isUserAdmin ? adminTabs : regularTabs;
   const defaultTab = initialTab && availableTabs.includes(initialTab as TabId) ? (initialTab as TabId) : (isUserAdmin ? 'users' : 'ai');
@@ -447,7 +499,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [allOrgs, setAllOrgs] = useState<Array<{ id: string; name: string; created_at?: string }>>([]);
   const [editingOrgUserId, setEditingOrgUserId] = useState<string | null>(null);
   const [selectedNewOrgId, setSelectedNewOrgId] = useState('');
-
+  // ★ v4.3: Statistics tab state
+  const [statsProjects, setStatsProjects] = useState<any[]>([]);
+  const [statsUserProjects, setStatsUserProjects] = useState<Record<string, number>>({});
+  const [statsUserSettings, setStatsUserSettings] = useState<Record<string, { ai_provider: string }>>({});
+  const [statsLoading, setStatsLoading] = useState(false);
   // ★ v4.2: Organizations tab state
   const [orgMemberCounts, setOrgMemberCounts] = useState<Record<string, number>>({});
   const [orgsLoading, setOrgsLoading] = useState(false);
@@ -813,7 +869,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
+  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', statistics: '\uD83D\uDCCA', instructions: '\uD83D\uDCCB', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
 
