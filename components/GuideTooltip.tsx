@@ -1,6 +1,6 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.0 — 2026-03-02
+// v1.1 — 2026-03-02 — FIX: z-index raised to 9999 to appear above form fields
 // Contextual Guide Tooltip — info button (ⓘ) that opens a floating
 // panel with tabbed content from guideContent.ts
 // Supports: dark mode, bilingual (EN/SI), animated, click-outside-close
@@ -144,7 +144,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var getPanelPosition = function(): React.CSSProperties {
     var base: React.CSSProperties = {
       position: 'absolute',
-      zIndex: zIndex.tooltip,
+      zIndex: 9999,
       width: panelWidth + 'px',
       maxHeight: maxHeight + 'px',
     };
@@ -172,7 +172,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
 
   // ─── RENDER ────────────────────────────────────────────────
   return (
-    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px' }}>
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px', zIndex: isOpen ? 9999 : 'auto' }}>
       {/* Info button */}
       <button
         ref={buttonRef}
