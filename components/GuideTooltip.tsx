@@ -1,8 +1,8 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
+// v1.4 — 2026-03-02 — FIX: "Rendered more hooks" crash — moved early returns AFTER all hooks
 // v1.3 — 2026-03-02 — FIX: position:fixed + viewport clamping (scroll container fix)
 // v1.2 — 2026-03-02 — FIX: Use React Portal to render panel in document.body
-//   so it always appears ABOVE all form fields regardless of stacking context
 // v1.1 — 2026-03-02 — FIX: z-index raised (insufficient — stacking context issue)
 // v1.0 — 2026-03-02 — Initial version
 // ═══════════════════════════════════════════════════════════════
@@ -71,6 +71,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var position = props.position || 'right';
   var size = props.size || 'md';
 
+  // ★ v1.4: ALL hooks MUST be called before any conditional return
   var panelRef = useRef<HTMLDivElement>(null);
   var buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -82,12 +83,11 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var activeTab = stateTab[0];
   var setActiveTab = stateTab[1];
 
-  // ★ v1.2: Track panel position for portal rendering
   var statePanelPos = useState({ top: 0, left: 0 });
   var panelPos = statePanelPos[0];
   var setPanelPos = statePanelPos[1];
 
-  // Get guide content
+  // Get guide content (no hook, just a function call)
   var guide: GuideEntry | null = null;
   try {
     guide = getFieldGuide(stepKey, fieldKey, language);
@@ -95,16 +95,12 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     guide = null;
   }
 
-  // If no guide content exists, don't render anything
-  if (!guide) return null;
-
   // Check if guide has any content
-  var hasContent = TAB_KEYS.some(function(key) {
+  var hasContent = guide ? TAB_KEYS.some(function(key) {
     return guide && guide[key] && guide[key].trim() !== '';
-  });
-  if (!hasContent) return null;
+  }) : false;
 
-  // ★ v1.2: Calculate panel position from button bounding rect
+  // ★ v1.4: Calculate panel position — useCallback BEFORE any return
   var updatePanelPosition = useCallback(function() {
     if (!buttonRef.current) return;
     var rect = buttonRef.current.getBoundingClientRect();
@@ -132,14 +128,13 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
       if (left + panelWidth > window.innerWidth - 16) left = window.innerWidth - 16 - panelWidth;
     }
 
-    // Clamp top to viewport
     if (top < 8) top = 8;
     if (top + 360 > window.innerHeight - 8) top = window.innerHeight - 8 - 360;
 
     setPanelPos({ top: top, left: left });
   }, [position, size]);
 
-  // Click outside handler
+  // ★ v1.4: Click outside handler — useEffect BEFORE any return
   useEffect(function() {
     if (!isOpen) return;
     var handleClickOutside = function(e: MouseEvent) {
@@ -156,7 +151,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     };
   }, [isOpen]);
 
-  // Escape key handler
+  // ★ v1.4: Escape key handler — useEffect BEFORE any return
   useEffect(function() {
     if (!isOpen) return;
     var handleEsc = function(e: KeyboardEvent) {
@@ -168,7 +163,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     };
   }, [isOpen]);
 
-  // ★ v1.2: Recalculate position on scroll/resize while open
+  // ★ v1.4: Scroll/resize handler — useEffect BEFORE any return
   useEffect(function() {
     if (!isOpen) return;
     updatePanelPosition();
@@ -182,6 +177,10 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
       window.removeEventListener('resize', handleScrollOrResize);
     };
   }, [isOpen, updatePanelPosition]);
+
+  // ★ v1.4: EARLY RETURNS — now AFTER all hooks
+  if (!guide) return null;
+  if (!hasContent) return null;
 
   // Theme colors
   var c = isDarkMode ? darkColors : colors;
