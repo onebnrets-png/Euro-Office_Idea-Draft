@@ -1,6 +1,7 @@
 // services/guideContent.ts
 // ═══════════════════════════════════════════════════════════════
 // Contextual Guide Content — step-by-step explanations for users
+// v1.3 — 2026-03-02 — Fix: moved import to top of file (ES module requirement)
 // v1.2 — 2026-03-02 — Guide overrides: SuperAdmin can customize guide content via global_settings
 // v1.1 — 2026-03-02 — Full content for ALL 6 steps EN+SI (replaced placeholders)
 // v1.0 — 2026-03-02
@@ -33,6 +34,7 @@ export interface StepGuide {
 }
 
 export type GuideLanguage = 'en' | 'si';
+import { supabase } from './supabaseClient.ts';
 
 // ═══════════════════════════════════════════════════════════════
 // ENGLISH
@@ -555,7 +557,6 @@ export function getAllFieldKeys(stepKey: string): string[] {
 // Pattern: same as Instructions custom_instructions in global_settings
 // ═══════════════════════════════════════════════════════════════
 
-import { supabase } from './supabaseClient.ts';
 
 // ─── CACHE ─────────────────────────────────────────────────────
 var _overridesCache: Record<string, string> | null = null;
