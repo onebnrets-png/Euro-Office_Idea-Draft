@@ -1,6 +1,6 @@
 // components/GuideTooltip.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.6 — 2026-03-02 — Use async getFieldGuideWithOverrides() for SuperAdmin custom content
+// v1.6 — 2026-03-02 — Async override support: reads SuperAdmin customized content from Supabase
 // v1.5 — 2026-03-02 — FIX: Dynamic panel height — adapts to content + viewport
 // v1.4 — 2026-03-02 — FIX: "Rendered more hooks" crash — moved early returns AFTER all hooks
 // v1.3 — 2026-03-02 — FIX: position:fixed + viewport clamping (scroll container fix)
@@ -89,35 +89,36 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
   var panelPos = statePanelPos[0];
   var setPanelPos = statePanelPos[1];
 
-  // ★ v1.6: Async guide content with overrides
+  // ★ v1.6: State for async guide content (with overrides)
   var stateGuide = useState<GuideEntry | null>(null);
   var guide = stateGuide[0];
   var setGuide = stateGuide[1];
 
   var stateLoading = useState(false);
-  var isLoadingGuide = stateLoading[0];
-  var setIsLoadingGuide = stateLoading[1];
+  var isLoading = stateLoading[0];
+  var setIsLoading = stateLoading[1];
 
   // ★ v1.6: Load default content synchronously first, then async override
   useEffect(function() {
-    // Immediate sync fallback
+    // Immediate: load default (sync)
+    var defaultGuide = null;
     try {
-      var defaultGuide = getFieldGuide(stepKey, fieldKey, language);
-      if (defaultGuide) setGuide(defaultGuide);
+      defaultGuide = getFieldGuide(stepKey, fieldKey, language);
     } catch (e) {
-      // ignore
+      defaultGuide = null;
     }
+    setGuide(defaultGuide);
 
-    // Then load with overrides (async)
-    setIsLoadingGuide(true);
-    getFieldGuideWithOverrides(stepKey, fieldKey, language)
-      .then(function(result) {
-        if (result) setGuide(result);
-        setIsLoadingGuide(false);
-      })
-      .catch(function() {
-        setIsLoadingGuide(false);
-      });
+    // Then: load with overrides (async)
+    setIsLoading(true);
+    getFieldGuideWithOverrides(stepKey, fieldKey, language).then(function(result) {
+      if (result) {
+        setGuide(result);
+      }
+      setIsLoading(false);
+    }).catch(function() {
+      setIsLoading(false);
+    });
   }, [stepKey, fieldKey, language]);
 
   // Check if guide has any content
@@ -161,15 +162,18 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
       if (left + panelWidth > viewW - PANEL_MARGIN) left = viewW - PANEL_MARGIN - panelWidth;
     }
 
+    // ★ v1.5: Clamp top and calculate how much vertical space is available
     if (top < PANEL_MARGIN) top = PANEL_MARGIN;
 
     var maxPanelHeight = viewH - top - PANEL_MARGIN;
+    // Ensure minimum usable height
     if (maxPanelHeight < 200) {
       top = viewH - 200 - PANEL_MARGIN;
       if (top < PANEL_MARGIN) top = PANEL_MARGIN;
       maxPanelHeight = viewH - top - PANEL_MARGIN;
     }
 
+    // ★ v1.5: Cap at 70% of viewport height for readability
     var cappedHeight = Math.min(maxPanelHeight, Math.floor(viewH * 0.7));
 
     setPanelPos({ top: top, left: left, availableHeight: cappedHeight });
@@ -233,7 +237,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
     return guide && guide[key] && guide[key].trim() !== '';
   });
 
-  // ★ v1.5: Dynamic content max height
+  // ★ v1.5: Dynamic content max height — uses available viewport space
   var contentMaxHeight = panelPos.availableHeight - TAB_BAR_HEIGHT - CLOSE_HINT_HEIGHT - CONTENT_PADDING;
   if (contentMaxHeight < 120) contentMaxHeight = 120;
 
@@ -314,7 +318,7 @@ var GuideTooltip = function GuideTooltip(props: GuideTooltipProps) {
         })
       ),
 
-      // ★ v1.5: Tab content — flex-grow + dynamic maxHeight
+      // ★ v1.5: Tab content — flex-grow + dynamic maxHeight based on viewport
       React.createElement('div', {
         style: {
           padding: '14px 16px',
