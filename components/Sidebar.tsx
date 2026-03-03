@@ -1,6 +1,8 @@
 // components/Sidebar.tsx
 // ═══════════════════════════════════════════════════════════════
 // EURO-OFFICE Sidebar — Design System Edition
+// v3.5 — 2026-03-03 — App version display in footer
+// ★ v3.5: Shows current app version (from Supabase global_settings) next to copyright
 // v3.4 — 2026-02-26 — COLLAPSE BUTTON MOVED TO TOP
 //   ★ v3.4: MOVE: Collapse/Expand button from footer to header
 //           — now matches DashboardPanel style (blue circle at top)
@@ -25,6 +27,7 @@ import { TEXT } from '../locales.ts';
 import { isSubStepCompleted } from '../utils.ts';
 import { getThemeMode, toggleTheme, onThemeChange } from '../services/themeService.ts';
 import { storageService } from '../services/storageService.ts';
+import { changelogService } from '../services/changelogService.ts';
 import type { ProjectData } from '../types.ts';
 
 // ─── Step Icons (SVG for collapsed mode) ─────────────────────
@@ -217,6 +220,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => getThemeMode() === 'dark');
+  const [appVersion, setAppVersion] = useState('');
+
+  React.useEffect(function() {
+    changelogService.getCurrentVersion().then(function(v) { setAppVersion(v); });
+  }, []);
 
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   React.useEffect(() => {
@@ -629,7 +637,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {!isCollapsed && (
             <p style={{ fontSize: '10px', color: tc.text.muted, textAlign: 'center', margin: spacing.sm + ' 0 0 0', opacity: 0.6 }}>
-              &copy; 2026 INFINITA d.o.o.
+              &copy; 2026 INFINITA d.o.o.{appVersion ? ' \u00B7 v' + appVersion : ''}
             </p>
           )}
         </div>
