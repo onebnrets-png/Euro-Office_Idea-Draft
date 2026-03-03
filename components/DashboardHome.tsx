@@ -1856,7 +1856,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
           const colSpan = cardSizes[cardId] || DEFAULT_CARD_SIZES[cardId] || 1;
 
           return (
-            <DashboardCard key={cardId} id={cardId} title={config.title} icon={config.icon}
+            <DashboardCard key={cardId} id={cardId} title={config.title} icon={config.icon} data-card-id={cardId}
               isDark={isDark} colors={c} colSpan={colSpan} language={language}
               gridCols={gridCols}
               onResize={handleResize} dragHandlers={dragHandlers} draggingId={draggingId}>
