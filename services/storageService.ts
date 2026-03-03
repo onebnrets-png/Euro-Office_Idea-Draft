@@ -747,13 +747,16 @@ export const storageService = {
       .single();
 
     if (error || !data) {
-      console.log(`[storageService.loadProject] ⚠️ No data found for lang=${language}, projectId=${targetId}`);
+      console.log('[storageService.loadProject] No data for lang=' + language + ', projectId=' + targetId);
       if (error) {
         logErrorQuick('storageService.loadProject', error, { language, projectId: targetId });
       }
-      return createEmptyProjectData();
+      return null;
     }
-
+    if (!data.data || (typeof data.data === 'object' && Object.keys(data.data).length === 0)) {
+      console.log('[storageService.loadProject] Empty data for lang=' + language + ', projectId=' + targetId);
+      return null;
+    }
     const goCheck = data.data?.generalObjectives;
     const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
     console.log(`[storageService.loadProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items)' : '⚠️ EMPTY'}`);
