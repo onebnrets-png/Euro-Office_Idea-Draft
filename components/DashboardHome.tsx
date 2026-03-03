@@ -305,7 +305,7 @@ const ProjectChartsCard: React.FC<{
 
     const projectIds = projectsMeta.map(p => p.id);
 
-            (async function() {
+    (async function() {
       try {
         var result = await supabase
           .from('project_data')
