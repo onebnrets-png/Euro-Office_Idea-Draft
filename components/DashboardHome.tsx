@@ -305,16 +305,14 @@ const ProjectChartsCard: React.FC<{
 
     const projectIds = projectsMeta.map(p => p.id);
 
-        (async function() {
+            (async function() {
       try {
         var result = await supabase
           .from('project_data')
           .select('project_id, language, data->projectIdea->projectAcronym')
           .in('project_id', projectIds);
-
         var data = result.data;
         var error = result.error;
-
         if (!error && data) {
           var map: Record<string, string> = {};
           data.forEach(function(row: any) {
@@ -331,6 +329,7 @@ const ProjectChartsCard: React.FC<{
         console.warn('ProjectChartsCard: Failed to preload acronyms', err);
       }
     })();
+
           setAcronyms(map);
         }
           data.forEach((row: any) => {
