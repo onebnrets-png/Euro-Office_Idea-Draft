@@ -1,7 +1,18 @@
 // components/DashboardHome.tsx
 // ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
-// v7.0 — 2026-02-23
+// v7.1 — 2026-03-03
+//
+// CHANGES v7.1:
+//   ★ AI Chatbot: text selectable + copy button on every AI response
+//   ★ AI Chatbot: regenerate last response button
+//   ★ AI Chatbot: thumbs up/down feedback on AI responses
+//   ★ AI Chatbot: system prompt — always respond in user's question language
+//   ★ AI Chatbot: system prompt — always cite verified sources with clickable links
+//   ★ AI Chatbot: renderFormattedText — markdown links + bare URLs rendered as clickable
+//   ★ AI Chatbot: export conversation as .md file
+//   ★ AI Chatbot: search through conversation history
+//   ★ AI Chatbot: improved typing animation (3-dot bounce)
 //
 // CHANGES v7.0:
 //   ★ CRITICAL FIX: AI Chatbot now uses FULL Knowledge Base context (getAllExtractedTexts)
@@ -67,7 +78,7 @@ interface DashboardHomeProps {
   onSwitchOrg: (orgId: string) => void;
 }
 
-interface ChatMessage { role: 'user' | 'assistant'; content: string; timestamp: number; }
+interface ChatMessage { role: 'user' | 'assistant'; content: string; timestamp: number; rating?: 'up' | 'down' | null; }
 interface ChatConversation { id: string; title: string; messages: ChatMessage[]; createdAt: number; updatedAt: number; }
 
 type CardId = 'projects' | 'chatbot' | 'admin' | 'organization' | 'activity';
@@ -99,30 +110,46 @@ function renderFormattedText(text: string): React.ReactNode {
       const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
       const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
       const codeMatch = remaining.match(/`(.+?)`/);
+      const mdLinkMatch = remaining.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/);
+      const bareLinkMatch = remaining.match(/(?<!\[|]\()https?:\/\/[^\s<>)\]]+/);
 
       const matches = [
         boldMatch ? { type: 'bold', match: boldMatch, idx: remaining.indexOf(boldMatch[0]) } : null,
         italicMatch ? { type: 'italic', match: italicMatch, idx: remaining.indexOf(italicMatch[0]) } : null,
         codeMatch ? { type: 'code', match: codeMatch, idx: remaining.indexOf(codeMatch[0]) } : null,
+        mdLinkMatch ? { type: 'mdLink', match: mdLinkMatch, idx: remaining.indexOf(mdLinkMatch[0]) } : null,
+        bareLinkMatch ? { type: 'bareLink', match: bareLinkMatch, idx: remaining.indexOf(bareLinkMatch[0]) } : null,
       ].filter(Boolean).sort((a, b) => a!.idx - b!.idx);
 
+      // If mdLink and bareLink overlap, prefer mdLink
+      if (matches.length >= 2 && matches[0]!.type === 'bareLink' && matches[1]!.type === 'mdLink' && matches[1]!.idx <= matches[0]!.idx + matches[0]!.match[0].length) {
+        matches.splice(0, 1);
+      }
+
       if (matches.length === 0) {
-        parts.push(<span key={`${key}-${partIdx++}`}>{remaining}</span>);
+        parts.push(<span key={key + '-' + partIdx++}>{remaining}</span>);
         break;
       }
 
       const first = matches[0]!;
       if (first.idx > 0) {
-        parts.push(<span key={`${key}-${partIdx++}`}>{remaining.substring(0, first.idx)}</span>);
+        parts.push(<span key={key + '-' + partIdx++}>{remaining.substring(0, first.idx)}</span>);
       }
 
       const inner = first.match[1];
       if (first.type === 'bold') {
-        parts.push(<strong key={`${key}-${partIdx++}`} style={{ fontWeight: 700 }}>{inner}</strong>);
+        parts.push(<strong key={key + '-' + partIdx++} style={{ fontWeight: 700 }}>{inner}</strong>);
       } else if (first.type === 'italic') {
-        parts.push(<em key={`${key}-${partIdx++}`}>{inner}</em>);
+        parts.push(<em key={key + '-' + partIdx++}>{inner}</em>);
       } else if (first.type === 'code') {
-        parts.push(<code key={`${key}-${partIdx++}`} style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: '3px', fontSize: '0.9em', fontFamily: 'monospace' }}>{inner}</code>);
+        parts.push(<code key={key + '-' + partIdx++} style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: '3px', fontSize: '0.9em', fontFamily: 'monospace' }}>{inner}</code>);
+      } else if (first.type === 'mdLink') {
+        const linkText = first.match[1];
+        const linkUrl = first.match[2];
+        parts.push(<a key={key + '-' + partIdx++} href={linkUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline', wordBreak: 'break-all' as const }}>{linkText}</a>);
+      } else if (first.type === 'bareLink') {
+        const linkUrl = first.match[0];
+        parts.push(<a key={key + '-' + partIdx++} href={linkUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline', wordBreak: 'break-all' as const }}>{linkUrl}</a>);
       }
 
       remaining = remaining.substring(first.idx + first.match[0].length);
@@ -135,23 +162,23 @@ function renderFormattedText(text: string): React.ReactNode {
     const trimmed = line.trim();
 
     if (trimmed.startsWith('### ')) {
-      elements.push(<div key={`l-${i}`} style={{ fontWeight: 700, fontSize: '1em', margin: '8px 0 4px' }}>{formatInline(trimmed.slice(4), `h3-${i}`)}</div>);
+      elements.push(<div key={'l-' + i} style={{ fontWeight: 700, fontSize: '1em', margin: '8px 0 4px' }}>{formatInline(trimmed.slice(4), 'h3-' + i)}</div>);
     } else if (trimmed.startsWith('## ')) {
-      elements.push(<div key={`l-${i}`} style={{ fontWeight: 700, fontSize: '1.05em', margin: '8px 0 4px' }}>{formatInline(trimmed.slice(3), `h2-${i}`)}</div>);
+      elements.push(<div key={'l-' + i} style={{ fontWeight: 700, fontSize: '1.05em', margin: '8px 0 4px' }}>{formatInline(trimmed.slice(3), 'h2-' + i)}</div>);
     } else if (trimmed.startsWith('# ')) {
-      elements.push(<div key={`l-${i}`} style={{ fontWeight: 700, fontSize: '1.1em', margin: '10px 0 4px' }}>{formatInline(trimmed.slice(2), `h1-${i}`)}</div>);
+      elements.push(<div key={'l-' + i} style={{ fontWeight: 700, fontSize: '1.1em', margin: '10px 0 4px' }}>{formatInline(trimmed.slice(2), 'h1-' + i)}</div>);
     } else if (trimmed === '---' || trimmed === '***') {
-      elements.push(<hr key={`l-${i}`} style={{ border: 'none', borderTop: '1px solid rgba(128,128,128,0.2)', margin: '8px 0' }} />);
+      elements.push(<hr key={'l-' + i} style={{ border: 'none', borderTop: '1px solid rgba(128,128,128,0.2)', margin: '8px 0' }} />);
     } else if (/^[\*\-]\s/.test(trimmed)) {
-      elements.push(<div key={`l-${i}`} style={{ paddingLeft: '12px', margin: '2px 0', display: 'flex', gap: '6px' }}><span style={{ flexShrink: 0 }}>•</span><span>{formatInline(trimmed.slice(2), `li-${i}`)}</span></div>);
+      elements.push(<div key={'l-' + i} style={{ paddingLeft: '12px', margin: '2px 0', display: 'flex', gap: '6px' }}><span style={{ flexShrink: 0 }}>•</span><span>{formatInline(trimmed.slice(2), 'li-' + i)}</span></div>);
     } else if (/^\d+\.\s/.test(trimmed)) {
       const numEnd = trimmed.indexOf('. ');
       const num = trimmed.substring(0, numEnd + 1);
-      elements.push(<div key={`l-${i}`} style={{ paddingLeft: '12px', margin: '2px 0', display: 'flex', gap: '6px' }}><span style={{ flexShrink: 0 }}>{num}</span><span>{formatInline(trimmed.slice(numEnd + 2), `nl-${i}`)}</span></div>);
+      elements.push(<div key={'l-' + i} style={{ paddingLeft: '12px', margin: '2px 0', display: 'flex', gap: '6px' }}><span style={{ flexShrink: 0 }}>{num}</span><span>{formatInline(trimmed.slice(numEnd + 2), 'nl-' + i)}</span></div>);
     } else if (trimmed === '') {
-      elements.push(<div key={`l-${i}`} style={{ height: '6px' }} />);
+      elements.push(<div key={'l-' + i} style={{ height: '6px' }} />);
     } else {
-      elements.push(<div key={`l-${i}`} style={{ margin: '2px 0' }}>{formatInline(trimmed, `p-${i}`)}</div>);
+      elements.push(<div key={'l-' + i} style={{ margin: '2px 0' }}>{formatInline(trimmed, 'p-' + i)}</div>);
     }
   });
 
@@ -231,14 +258,14 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
   const span = Math.min(colSpan, gridCols);
   return (
     <div draggable onDragStart={(e) => dragHandlers.onDragStart(e, id)} onDragOver={dragHandlers.onDragOver} onDrop={(e) => dragHandlers.onDrop(e, id)} onDragEnd={dragHandlers.onDragEnd}
-      style={{ background: c.surface.card, borderRadius: radii.xl, border: `1px solid ${isDragging ? c.primary[400] : c.border.light}`, boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden', opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)', transition: `all ${animation.duration.fast} ${animation.easing.default}`, gridColumn: `span ${span}`, display: 'flex', flexDirection: 'column' as const, cursor: 'grab', minHeight: 0 }}>
-      <div style={{ padding: `${spacing.md} ${spacing.lg}`, borderBottom: `1px solid ${c.border.light}`, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0 }}>
+      style={{ background: c.surface.card, borderRadius: radii.xl, border: '1px solid ' + (isDragging ? c.primary[400] : c.border.light), boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden', opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)', transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default, gridColumn: 'span ' + span, display: 'flex', flexDirection: 'column' as const, cursor: 'grab', minHeight: 0 }}>
+      <div style={{ padding: spacing.md + ' ' + spacing.lg, borderBottom: '1px solid ' + c.border.light, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0 }}>
         <span style={{ fontSize: '18px' }}>{icon}</span>
         <h3 style={{ margin: 0, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading, flex: 1 }}>{title}</h3>
         {gridCols > 1 && (
           <div style={{ display: 'flex', gap: '2px', marginRight: spacing.xs }}>
-            {span > 1 && <button onClick={(e) => { e.stopPropagation(); onResize(id, span - 1); }} draggable={false} title={language === 'si' ? 'Zoži' : 'Narrow'} style={{ background: 'none', border: `1px solid ${c.border.light}`, borderRadius: radii.sm, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.muted, fontSize: '12px' }} onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900]+'30' : c.primary[50]; e.currentTarget.style.color = c.primary[600]; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = c.text.muted; }}>◂</button>}
-            {span < gridCols && <button onClick={(e) => { e.stopPropagation(); onResize(id, span + 1); }} draggable={false} title={language === 'si' ? 'Razširi' : 'Widen'} style={{ background: 'none', border: `1px solid ${c.border.light}`, borderRadius: radii.sm, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.muted, fontSize: '12px' }} onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900]+'30' : c.primary[50]; e.currentTarget.style.color = c.primary[600]; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = c.text.muted; }}>▸</button>}
+            {span > 1 && <button onClick={(e) => { e.stopPropagation(); onResize(id, span - 1); }} draggable={false} title={language === 'si' ? 'Zoži' : 'Narrow'} style={{ background: 'none', border: '1px solid ' + c.border.light, borderRadius: radii.sm, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.muted, fontSize: '12px' }} onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900] + '30' : c.primary[50]; e.currentTarget.style.color = c.primary[600]; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = c.text.muted; }}>◂</button>}
+            {span < gridCols && <button onClick={(e) => { e.stopPropagation(); onResize(id, span + 1); }} draggable={false} title={language === 'si' ? 'Razširi' : 'Widen'} style={{ background: 'none', border: '1px solid ' + c.border.light, borderRadius: radii.sm, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.muted, fontSize: '12px' }} onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900] + '30' : c.primary[50]; e.currentTarget.style.color = c.primary[600]; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = c.text.muted; }}>▸</button>}
           </div>
         )}
         <div style={{ cursor: 'grab', color: c.text.muted, display: 'flex' }}><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
@@ -251,7 +278,7 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
 const DropZone: React.FC<{ index: number; isDark: boolean; colors: any; draggingId: CardId | null; onDropAtEnd: (e: React.DragEvent) => void }> = ({ isDark, colors: c, draggingId, onDropAtEnd }) => {
   const [isOver, setIsOver] = useState(false);
   if (!draggingId) return null;
-  return (<div onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsOver(true); }} onDragLeave={() => setIsOver(false)} onDrop={(e) => { e.preventDefault(); setIsOver(false); onDropAtEnd(e); }} style={{ gridColumn: 'span 1', minHeight: 80, borderRadius: radii.xl, border: `2px dashed ${isOver ? c.primary[400] : c.border.light}`, background: isOver ? (isDark ? c.primary[900]+'20' : c.primary[50]) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease', color: c.text.muted, fontSize: typography.fontSize.xs }}>{isOver ? '↓' : ''}</div>);
+  return (<div onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsOver(true); }} onDragLeave={() => setIsOver(false)} onDrop={(e) => { e.preventDefault(); setIsOver(false); onDropAtEnd(e); }} style={{ gridColumn: 'span 1', minHeight: 80, borderRadius: radii.xl, border: '2px dashed ' + (isOver ? c.primary[400] : c.border.light), background: isOver ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease', color: c.text.muted, fontSize: typography.fontSize.xs }}>{isOver ? '↓' : ''}</div>);
 };
 
 // ——— Project Charts Card — v6.2 — acronyms preloaded + auto-load first ————————
@@ -389,8 +416,8 @@ const ProjectChartsCard: React.FC<{
     <div style={{ display: 'flex', flexDirection: isNarrow ? 'column' as const : 'row' as const, gap: spacing.md, minHeight: isNarrow ? 300 : 220 }}>
       <div style={{
         width: isNarrow ? '100%' : 130, minWidth: isNarrow ? undefined : 110, flexShrink: 0,
-        borderRight: isNarrow ? 'none' : `1px solid ${c.border.light}`,
-        borderBottom: isNarrow ? `1px solid ${c.border.light}` : 'none',
+        borderRight: isNarrow ? 'none' : '1px solid ' + c.border.light,
+        borderBottom: isNarrow ? '1px solid ' + c.border.light : 'none',
         overflowY: 'auto', overflowX: isNarrow ? 'auto' : 'hidden',
         paddingRight: isNarrow ? 0 : spacing.xs, paddingBottom: isNarrow ? spacing.xs : 0,
         display: isNarrow ? 'flex' : 'block', gap: isNarrow ? spacing.xs : undefined,
@@ -418,11 +445,11 @@ const ProjectChartsCard: React.FC<{
               onClick={() => handleClick(p.id)}
               title={p.title || p.name || ''}
               style={{
-                padding: isNarrow ? `3px 8px` : `6px ${spacing.xs}`,
+                padding: isNarrow ? '3px 8px' : '6px ' + spacing.xs,
                 borderRadius: radii.sm, cursor: 'pointer',
-                background: isActive ? (isDark ? c.primary[900]+'60' : c.primary[100]) : 'transparent',
-                borderLeft: isNarrow ? 'none' : (isActive ? `3px solid ${c.primary[500]}` : '3px solid transparent'),
-                borderBottom: isNarrow ? (isActive ? `2px solid ${c.primary[500]}` : '2px solid transparent') : 'none',
+                background: isActive ? (isDark ? c.primary[900] + '60' : c.primary[100]) : 'transparent',
+                borderLeft: isNarrow ? 'none' : (isActive ? '3px solid ' + c.primary[500] : '3px solid transparent'),
+                borderBottom: isNarrow ? (isActive ? '2px solid ' + c.primary[500] : '2px solid transparent') : 'none',
                 marginBottom: isNarrow ? 0 : 3,
                 transition: 'background 0.15s ease',
                 display: 'flex', alignItems: 'center', gap: spacing.xs, flexShrink: 0,
@@ -496,7 +523,7 @@ const ProjectChartsCard: React.FC<{
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenProject(activeProjectId); }}
                   style={{
-                    background: 'none', border: `1px solid ${c.border.light}`, borderRadius: radii.md,
+                    background: 'none', border: '1px solid ' + c.border.light, borderRadius: radii.md,
                     padding: '2px 8px', fontSize: '10px', cursor: 'pointer',
                     color: c.primary[600], fontWeight: typography.fontWeight.semibold,
                     marginLeft: 'auto', flexShrink: 0,
@@ -535,7 +562,7 @@ const ProjectChartsCard: React.FC<{
             gap: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start',
           }}>
             {chartsData && chartsData.length > 0 && chartsData.map((chart: ExtractedChartData, idx: number) => (
-              <div key={`c-${idx}-${chart.chartType}`} style={{ flexShrink: 0, width: chartW }}>
+              <div key={'c-' + idx + '-' + chart.chartType} style={{ flexShrink: 0, width: chartW }}>
                 <ChartRenderer data={chart} width={chartW} height={chartH} showTitle={true} showSource={false} />
               </div>
             ))}
@@ -562,7 +589,6 @@ const ProjectChartsCard: React.FC<{
     </div>
   );
 };
-
 // ═══════════════════════════════════════════════════════════
 // EMAIL MODAL — v6.0 — Fullscreen overlay with Gmail/Outlook/Mailto
 // ═══════════════════════════════════════════════════════════
@@ -588,7 +614,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setSubject(`EURO-OFFICE: ${t('Message from', 'Sporočilo od')} ${senderName}`);
+      setSubject('EURO-OFFICE: ' + t('Message from', 'Sporočilo od') + ' ' + senderName);
       setBody('');
       setSent(false);
     }
@@ -605,26 +631,26 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const c = isDarkMode ? darkColors : lightColors;
 
   const buildSignature = () =>
-    `\n\n---\n${t('Sent via EURO-OFFICE', 'Poslano prek EURO-OFFICE')}\n${t('Organization', 'Organizacija')}: ${orgName}\n${t('From', 'Od')}: ${senderName}`;
+    '\n\n---\n' + t('Sent via EURO-OFFICE', 'Poslano prek EURO-OFFICE') + '\n' + t('Organization', 'Organizacija') + ': ' + orgName + '\n' + t('From', 'Od') + ': ' + senderName;
 
   const fullBody = body + buildSignature();
 
   const handleGmail = () => {
-    const url = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(recipientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
+    const url = 'https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(recipientEmail) + '&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(fullBody);
     window.open(url, '_blank');
     setSent(true);
     setTimeout(onClose, 600);
   };
 
   const handleOutlook = () => {
-    const url = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(recipientEmail)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
+    const url = 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(recipientEmail) + '&subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(fullBody);
     window.open(url, '_blank');
     setSent(true);
     setTimeout(onClose, 600);
   };
 
   const handleMailto = () => {
-    window.open(`mailto:${recipientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`, '_blank');
+    window.open('mailto:' + recipientEmail + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(fullBody), '_blank');
     setSent(true);
     setTimeout(onClose, 600);
   };
@@ -633,7 +659,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', borderRadius: 8,
-    border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`,
+    border: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
     background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
     color: c.text?.heading || c.text, fontSize: 14, outline: 'none',
     boxSizing: 'border-box' as const, fontFamily: 'inherit',
@@ -657,12 +683,12 @@ const EmailModal: React.FC<EmailModalProps> = ({
           borderRadius: 16, width: '100%', maxWidth: 600, maxHeight: '90vh',
           overflow: 'auto',
           boxShadow: '0 25px 60px rgba(0,0,0,0.35)',
-          border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+          border: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
         }}
       >
         <div style={{
           padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 12,
-          borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          borderBottom: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'),
         }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10,
@@ -697,7 +723,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
             <div style={{
               padding: '10px 14px', borderRadius: 8,
               background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-              border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+              border: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'),
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
               <div style={{
@@ -763,7 +789,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
         <div style={{
           padding: '16px 24px',
-          borderTop: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          borderTop: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'),
           display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end', alignItems: 'center',
         }}>
           {sent && (
@@ -774,7 +800,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
           <button onClick={onClose} style={{
             padding: '9px 18px', borderRadius: 8,
-            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`,
+            border: '1px solid ' + (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
             background: 'transparent', color: c.text?.muted || c.textSecondary,
             fontSize: 13, fontWeight: 600, cursor: 'pointer',
           }}>
@@ -875,7 +901,7 @@ const OrganizationCard: React.FC<{
           try {
             members = await organizationService.getOrgMembers(org.id);
           } catch (e) {
-            console.warn(`Failed to load members for org ${org.name}:`, e);
+            console.warn('Failed to load members for org ' + org.name + ':', e);
           }
 
           if (!isSuperAdmin && !isOrgAdmin) {
@@ -900,7 +926,7 @@ const OrganizationCard: React.FC<{
               }
             }
           } catch (e) {
-            console.warn(`Failed to load projects for org ${org.name}:`, e);
+            console.warn('Failed to load projects for org ' + org.name + ':', e);
           }
 
           const memberMap = new Map(members.map(m => [m.userId, m]));
@@ -960,7 +986,7 @@ const OrganizationCard: React.FC<{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '8px 12px', borderRadius: 8,
           background: isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)',
-          border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.2)'}`,
+          border: '1px solid ' + (isDark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.2)'),
           flexWrap: 'wrap' as const,
         }}>
           <span style={{ fontSize: 16 }}>👑</span>
@@ -1007,7 +1033,7 @@ const OrganizationCard: React.FC<{
         return (
           <div key={org.id} style={{
             borderRadius: 10, overflow: 'hidden',
-            border: `1px solid ${isActive ? colors.primary + '60' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`,
+            border: '1px solid ' + (isActive ? colors.primary + '60' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')),
             background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
           }}>
             <div
@@ -1077,7 +1103,7 @@ const OrganizationCard: React.FC<{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '10px 12px', borderRadius: 8,
                         background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
+                        border: '1px solid ' + (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
                         flexWrap: 'wrap' as const,
                       }}>
                         <div style={{
@@ -1117,7 +1143,7 @@ const OrganizationCard: React.FC<{
                             e.stopPropagation();
                             onOpenEmailModal({ name: member.displayName, email: member.email, orgName: org.name });
                           }}
-                          title={t(`Send message to ${member.displayName}`, `Pošlji sporočilo ${member.displayName}`)}
+                          title={t('Send message to ' + member.displayName, 'Pošlji sporočilo ' + member.displayName)}
                           style={{
                             width: 30, height: 30, borderRadius: '50%', border: 'none', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -1156,7 +1182,7 @@ const OrganizationCard: React.FC<{
                           display: 'flex', alignItems: 'center', gap: 10,
                           padding: '10px 12px', borderRadius: 8, cursor: onOpenProject ? 'pointer' : 'default',
                           background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
+                          border: '1px solid ' + (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
                           transition: 'background 0.15s', flexWrap: 'wrap' as const,
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'; }}
@@ -1173,7 +1199,7 @@ const OrganizationCard: React.FC<{
                             {project.title}
                           </div>
                           <div style={{ fontSize: 11, color: colors.textSecondary }}>
-                            {project.ownerName} {project.ownerEmail ? `(${project.ownerEmail})` : ''}
+                            {project.ownerName} {project.ownerEmail ? '(' + project.ownerEmail + ')' : ''}
                           </div>
                         </div>
 
@@ -1198,20 +1224,91 @@ const OrganizationCard: React.FC<{
     </div>
   );
 };
+// ——— AI Chatbot — v7.1 — selectable text, copy, regenerate, rating, sources, links ————————
 
-// ——— AI Chatbot — with formatted text + scroll fix ————————
-
-  const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null; projectData: any }> = ({ language, isDark, colors: c, activeOrg, projectData }) => {
+const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any; activeOrg: any | null; projectData: any }> = ({ language, isDark, colors: c, activeOrg, projectData }) => {
   const [conversations, setConversations] = useState<ChatConversation[]>(() => { try { const s = localStorage.getItem(CHAT_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [activeConvoId, setActiveConvoId] = useState<string | null>(() => conversations[0]?.id || null);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [historySearch, setHistorySearch] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeConvo = conversations.find(cv => cv.id === activeConvoId) || null;
   const messages = activeConvo?.messages || [];
+
+  const handleCopy = useCallback(function(text: string, idx: number) {
+    var plainText = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/`(.+?)`/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^#{1,3}\s/gm, '').replace(/^[\*\-]\s/gm, '• ');
+    navigator.clipboard.writeText(plainText).then(function() {
+      setCopiedIdx(idx);
+      setTimeout(function() { setCopiedIdx(null); }, 2000);
+    }).catch(function() {
+      var ta = document.createElement('textarea');
+      ta.value = plainText;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedIdx(idx);
+      setTimeout(function() { setCopiedIdx(null); }, 2000);
+    });
+  }, []);
+
+  const handleExportConversation = useCallback(function() {
+    if (!activeConvo || activeConvo.messages.length === 0) return;
+    var md = '# ' + activeConvo.title + '\n\n';
+    md = md + 'Exported: ' + new Date().toLocaleString() + '\n\n---\n\n';
+    activeConvo.messages.forEach(function(msg) {
+      var role = msg.role === 'user' ? '**You**' : '**AI Assistant**';
+      var time = new Date(msg.timestamp).toLocaleTimeString();
+      md = md + role + ' (' + time + '):\n\n' + msg.content + '\n\n---\n\n';
+    });
+    var blob = new Blob([md], { type: 'text/markdown' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'chat-' + (activeConvo.title || 'conversation').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [activeConvo]);
+
+  const handleRating = useCallback(function(msgIdx: number, rating: 'up' | 'down') {
+    if (!activeConvoId) return;
+    setConversations(function(prev) {
+      return prev.map(function(cv) {
+        if (cv.id !== activeConvoId) return cv;
+        var newMsgs = cv.messages.map(function(m, i) {
+          if (i !== msgIdx) return m;
+          return { ...m, rating: m.rating === rating ? null : rating };
+        });
+        return { ...cv, messages: newMsgs };
+      });
+    });
+  }, [activeConvoId]);
+
+  const handleRegenerate = useCallback(function() {
+    if (!activeConvoId || messages.length < 2 || isGenerating) return;
+    var lastUserIdx = -1;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx === -1) return;
+    var lastUserMsg = messages[lastUserIdx].content;
+    var trimmedMessages = messages.slice(0, lastUserIdx);
+    updateConvoMessages(activeConvoId, trimmedMessages);
+    setInput(lastUserMsg);
+    setTimeout(function() {
+      var sendBtn = document.querySelector('[data-chatbot-send]') as HTMLButtonElement;
+      if (sendBtn) sendBtn.click();
+    }, 100);
+  }, [activeConvoId, messages, isGenerating]);
 
   useEffect(() => { try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversations)); } catch {} }, [conversations]);
 
@@ -1219,7 +1316,6 @@ const OrganizationCard: React.FC<{
   useEffect(() => {
     if (messages.length > prevMsgCountRef.current) {
       requestAnimationFrame(() => {
-        // ★ v7.0: Scroll only WITHIN chat container, not the entire page
         if (chatContainerRef.current) {
           chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
@@ -1228,7 +1324,6 @@ const OrganizationCard: React.FC<{
     prevMsgCountRef.current = messages.length;
   }, [messages.length]);
 
-
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = 0;
@@ -1236,7 +1331,7 @@ const OrganizationCard: React.FC<{
   }, [activeConvoId]);
 
   const createNewConvo = useCallback(() => {
-    const id = `chat-${Date.now()}`;
+    const id = 'chat-' + Date.now();
     const newConvo: ChatConversation = { id, title: language === 'si' ? 'Nov pogovor' : 'New conversation', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
     setConversations(prev => { let u = [newConvo, ...prev]; if (u.length > MAX_CONVERSATIONS) u = u.slice(0, MAX_CONVERSATIONS); return u; });
     setActiveConvoId(id); setShowHistory(false);
@@ -1248,16 +1343,15 @@ const OrganizationCard: React.FC<{
     setConversations(prev => prev.map(cv => { if (cv.id !== convoId) return cv; const title = newMessages.find(m => m.role === 'user')?.content.substring(0, 40) || cv.title; return { ...cv, messages: newMessages, title, updatedAt: Date.now() }; }));
   }, []);
 
-    const handleSend = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || isGenerating) return;
 
-    // ★ v7.0: Rate limit check before chatbot call
     const rlStatus = getRateLimitStatus();
     if (rlStatus.requestsInWindow >= rlStatus.maxRequests - 1) {
       const waitMsg = language === 'si'
-        ? `⏳ Preveč zahtev — počakajte ${Math.ceil(rlStatus.cooldownRemaining / 1000)}s.`
-        : `⏳ Too many requests — please wait ${Math.ceil(rlStatus.cooldownRemaining / 1000)}s.`;
+        ? '⏳ Preveč zahtev — počakajte ' + Math.ceil(rlStatus.cooldownRemaining / 1000) + 's.'
+        : '⏳ Too many requests — please wait ' + Math.ceil(rlStatus.cooldownRemaining / 1000) + 's.';
       const waitChatMsg: ChatMessage = { role: 'assistant', content: waitMsg, timestamp: Date.now() };
       if (activeConvoId) {
         updateConvoMessages(activeConvoId, [...messages, { role: 'user', content: trimmed, timestamp: Date.now() }, waitChatMsg]);
@@ -1267,7 +1361,7 @@ const OrganizationCard: React.FC<{
 
     let convoId = activeConvoId;
     if (!convoId) {
-      convoId = `chat-${Date.now()}`;
+      convoId = 'chat-' + Date.now();
       const newConvo: ChatConversation = {
         id: convoId, title: trimmed.substring(0, 40), messages: [],
         createdAt: Date.now(), updatedAt: Date.now()
@@ -1289,19 +1383,16 @@ const OrganizationCard: React.FC<{
     try {
       // ═══ v7.0: Build rich context for chatbot ═══
 
-      // 1. KNOWLEDGE BASE — full extracted texts (not just search chunks)
+      // 1. KNOWLEDGE BASE
       let kbContext = '';
       if (activeOrg?.id) {
         try {
-          // First: get ALL extracted texts for comprehensive context
           const allTexts = await knowledgeBaseService.getAllExtractedTexts(activeOrg.id);
           if (allTexts.length > 0) {
-            // Limit total KB context to ~8000 chars to avoid token overflow
             const MAX_KB_CHARS = 8000;
             let totalChars = 0;
             const includedTexts: string[] = [];
 
-            // Also run keyword search to prioritize relevant docs
             let relevantFiles: Set<string> = new Set();
             try {
               const searchResults = await knowledgeBaseService.searchKnowledgeBase(activeOrg.id, trimmed, 5);
@@ -1311,7 +1402,6 @@ const OrganizationCard: React.FC<{
               });
             } catch {}
 
-            // Add relevant docs first, then fill remaining space
             const sorted = [...allTexts].sort((a, b) => {
               const aRel = relevantFiles.has(a.fileName) ? 0 : 1;
               const bRel = relevantFiles.has(b.fileName) ? 0 : 1;
@@ -1319,7 +1409,7 @@ const OrganizationCard: React.FC<{
             });
 
             for (const doc of sorted) {
-              const entry = `[${doc.fileName}]: ${doc.text.substring(0, 2000)}`;
+              const entry = '[' + doc.fileName + ']: ' + doc.text.substring(0, 2000);
               if (totalChars + entry.length > MAX_KB_CHARS) break;
               includedTexts.push(entry);
               totalChars += entry.length;
@@ -1336,33 +1426,30 @@ const OrganizationCard: React.FC<{
         }
       }
 
-      // 2. INSTRUCTIONS — directly from Instructions.ts + org overrides
+      // 2. INSTRUCTIONS
       let instructionsContext = '';
       try {
         const parts: string[] = [];
 
-        // ★ CRITICAL: Inject core rules directly from Instructions.ts
         if (INTERVENTION_LOGIC_FRAMEWORK) parts.push(INTERVENTION_LOGIC_FRAMEWORK);
         if (HUMANIZATION_RULES?.en) parts.push(HUMANIZATION_RULES.en);
         if (ACADEMIC_RIGOR_RULES?.en) parts.push(ACADEMIC_RIGOR_RULES.en);
 
-        // Admin overrides from Supabase (if any exist)
         const chatbotRole = getEffectiveOverrideSync('chatbot_system_role');
-        if (chatbotRole) parts.push(`Admin Override: ${chatbotRole}`);
+        if (chatbotRole) parts.push('Admin Override: ' + chatbotRole);
 
         const globalRules = getEffectiveOverrideSync('global_rules');
-        if (globalRules) parts.push(`Global Rules: ${globalRules}`);
+        if (globalRules) parts.push('Global Rules: ' + globalRules);
 
-        // Org-specific instructions
         if (activeOrg?.id) {
           try {
             const ins = await organizationService.getActiveOrgInstructions?.();
             if (ins) {
               const orgStr = Object.entries(ins)
                 .filter(([_, v]) => typeof v === 'string' && (v as string).trim().length > 0)
-                .map(([k, v]) => `${k}: ${v}`)
+                .map(([k, v]) => k + ': ' + v)
                 .join('\n');
-              if (orgStr) parts.push(`Organization Instructions:\n${orgStr}`);
+              if (orgStr) parts.push('Organization Instructions:\n' + orgStr);
             }
           } catch {}
         }
@@ -1373,7 +1460,8 @@ const OrganizationCard: React.FC<{
       } catch (e) {
         console.warn('[AIChatbot] Instructions load failed:', e);
       }
-            // 3. ACTIVE PROJECT CONTEXT — COMPLETE project data for full chatbot awareness
+
+      // 3. ACTIVE PROJECT CONTEXT
       let projectContext = '';
       if (projectData) {
         try {
@@ -1381,129 +1469,117 @@ const OrganizationCard: React.FC<{
           const MAX_SHORT = 200;
           const parts: string[] = [];
 
-          // --- Project Idea ---
           const pi = projectData.projectIdea;
-          if (pi?.projectTitle) parts.push(`Project Title: ${pi.projectTitle}`);
-          if (pi?.projectAcronym) parts.push(`Acronym: ${pi.projectAcronym}`);
-          if (pi?.mainAim) parts.push(`Main Aim: ${pi.mainAim}`);
-          if (pi?.stateOfTheArt) parts.push(`State of the Art: ${pi.stateOfTheArt.substring(0, MAX_FIELD)}`);
-          if (pi?.proposedSolution) parts.push(`Proposed Solution: ${pi.proposedSolution.substring(0, MAX_FIELD)}`);
-          if (pi?.startDate) parts.push(`Start Date: ${pi.startDate}`);
-          if (pi?.durationMonths) parts.push(`Duration: ${pi.durationMonths} months`);
+          if (pi?.projectTitle) parts.push('Project Title: ' + pi.projectTitle);
+          if (pi?.projectAcronym) parts.push('Acronym: ' + pi.projectAcronym);
+          if (pi?.mainAim) parts.push('Main Aim: ' + pi.mainAim);
+          if (pi?.stateOfTheArt) parts.push('State of the Art: ' + pi.stateOfTheArt.substring(0, MAX_FIELD));
+          if (pi?.proposedSolution) parts.push('Proposed Solution: ' + pi.proposedSolution.substring(0, MAX_FIELD));
+          if (pi?.startDate) parts.push('Start Date: ' + pi.startDate);
+          if (pi?.durationMonths) parts.push('Duration: ' + pi.durationMonths + ' months');
           if (pi?.policies?.length > 0) {
-            const pols = pi.policies.filter((p: any) => p.name?.trim()).map((p: any) => `- ${p.name}: ${(p.description || '').substring(0, 120)}`).join('\n');
-            if (pols) parts.push(`EU Policies:\n${pols}`);
+            const pols = pi.policies.filter((p: any) => p.name?.trim()).map((p: any) => '- ' + p.name + ': ' + (p.description || '').substring(0, 120)).join('\n');
+            if (pols) parts.push('EU Policies:\n' + pols);
           }
           if (pi?.readinessLevels) {
             const rl = pi.readinessLevels;
             const rls = ['TRL', 'SRL', 'ORL', 'LRL'].map(k => {
               const r = rl[k];
-              return r?.level != null ? `${k}: Level ${r.level} — ${(r.justification || '').substring(0, 80)}` : null;
+              return r?.level != null ? k + ': Level ' + r.level + ' — ' + (r.justification || '').substring(0, 80) : null;
             }).filter(Boolean).join('; ');
-            if (rls) parts.push(`Readiness Levels: ${rls}`);
+            if (rls) parts.push('Readiness Levels: ' + rls);
           }
 
-          // --- Problem Analysis ---
           const pa = projectData.problemAnalysis;
-          if (pa?.coreProblem?.title) parts.push(`Core Problem: ${pa.coreProblem.title}`);
-          if (pa?.coreProblem?.description) parts.push(`Problem Description: ${pa.coreProblem.description.substring(0, MAX_FIELD)}`);
+          if (pa?.coreProblem?.title) parts.push('Core Problem: ' + pa.coreProblem.title);
+          if (pa?.coreProblem?.description) parts.push('Problem Description: ' + pa.coreProblem.description.substring(0, MAX_FIELD));
           if (pa?.causes?.length > 0) {
-            const causes = pa.causes.filter((c: any) => c.title?.trim()).map((c: any) => `- ${c.title}: ${(c.description || '').substring(0, MAX_SHORT)}`).join('\n');
-            if (causes) parts.push(`Causes:\n${causes}`);
+            const causes = pa.causes.filter((cc: any) => cc.title?.trim()).map((cc: any) => '- ' + cc.title + ': ' + (cc.description || '').substring(0, MAX_SHORT)).join('\n');
+            if (causes) parts.push('Causes:\n' + causes);
           }
           if (pa?.consequences?.length > 0) {
-            const conseqs = pa.consequences.filter((c: any) => c.title?.trim()).map((c: any) => `- ${c.title}: ${(c.description || '').substring(0, MAX_SHORT)}`).join('\n');
-            if (conseqs) parts.push(`Consequences:\n${conseqs}`);
+            const conseqs = pa.consequences.filter((cc: any) => cc.title?.trim()).map((cc: any) => '- ' + cc.title + ': ' + (cc.description || '').substring(0, MAX_SHORT)).join('\n');
+            if (conseqs) parts.push('Consequences:\n' + conseqs);
           }
 
-          // --- Objectives ---
           if (projectData.generalObjectives?.length > 0) {
-            const objs = projectData.generalObjectives.filter((o: any) => o.title?.trim()).map((o: any) => `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [KPI: ${o.indicator || 'n/a'}]`).join('\n');
-            if (objs) parts.push(`General Objectives:\n${objs}`);
+            const objs = projectData.generalObjectives.filter((o: any) => o.title?.trim()).map((o: any) => '- ' + o.title + ': ' + (o.description || '').substring(0, MAX_SHORT) + ' [KPI: ' + (o.indicator || 'n/a') + ']').join('\n');
+            if (objs) parts.push('General Objectives:\n' + objs);
           }
           if (projectData.specificObjectives?.length > 0) {
-            const sObjs = projectData.specificObjectives.filter((o: any) => o.title?.trim()).map((o: any) => `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [KPI: ${o.indicator || 'n/a'}]`).join('\n');
-            if (sObjs) parts.push(`Specific Objectives:\n${sObjs}`);
+            const sObjs = projectData.specificObjectives.filter((o: any) => o.title?.trim()).map((o: any) => '- ' + o.title + ': ' + (o.description || '').substring(0, MAX_SHORT) + ' [KPI: ' + (o.indicator || 'n/a') + ']').join('\n');
+            if (sObjs) parts.push('Specific Objectives:\n' + sObjs);
           }
 
-          // --- Project Management ---
           const pm = projectData.projectManagement;
-          if (pm?.description) parts.push(`Project Management:\n${pm.description.substring(0, MAX_FIELD)}`);
+          if (pm?.description) parts.push('Project Management:\n' + pm.description.substring(0, MAX_FIELD));
           if (pm?.structure) {
             const s = pm.structure;
             const struct = [s.coordinator, s.steeringCommittee, s.advisoryBoard, s.wpLeaders].filter(Boolean).join(' | ');
-            if (struct) parts.push(`Management Structure: ${struct}`);
+            if (struct) parts.push('Management Structure: ' + struct);
           }
 
-          // --- Activities (WPs + tasks + deliverables + milestones) ---
           if (projectData.activities?.length > 0) {
             const wps = projectData.activities.filter((wp: any) => wp.title?.trim()).map((wp: any) => {
-              const tasks = (wp.tasks || []).filter((t: any) => t.title?.trim()).map((t: any) =>
-                `  · ${t.id}: ${t.title} (${t.startDate || '?'} → ${t.endDate || '?'})`
+              const tasks = (wp.tasks || []).filter((tt: any) => tt.title?.trim()).map((tt: any) =>
+                '  · ' + tt.id + ': ' + tt.title + ' (' + (tt.startDate || '?') + ' → ' + (tt.endDate || '?') + ')'
               ).join('\n');
               const delivs = (wp.deliverables || []).filter((d: any) => d.title?.trim()).map((d: any) =>
-                `  » D: ${d.title} — ${(d.description || '').substring(0, 100)}`
+                '  » D: ' + d.title + ' — ' + (d.description || '').substring(0, 100)
               ).join('\n');
               const miles = (wp.milestones || []).filter((m: any) => m.description?.trim()).map((m: any) =>
-                `  ◆ M: ${m.description} (${m.date || '?'})`
+                '  ◆ M: ' + m.description + ' (' + (m.date || '?') + ')'
               ).join('\n');
-              return `- ${wp.id}: ${wp.title}${tasks ? '\n' + tasks : ''}${delivs ? '\n' + delivs : ''}${miles ? '\n' + miles : ''}`;
+              return '- ' + wp.id + ': ' + wp.title + (tasks ? '\n' + tasks : '') + (delivs ? '\n' + delivs : '') + (miles ? '\n' + miles : '');
             }).join('\n');
-            if (wps) parts.push(`Work Packages, Tasks, Deliverables & Milestones:\n${wps}`);
+            if (wps) parts.push('Work Packages, Tasks, Deliverables & Milestones:\n' + wps);
           }
 
-          // --- Risks ---
           if (projectData.risks?.length > 0) {
             const risks = projectData.risks.filter((r: any) => r.title?.trim()).map((r: any) =>
-              `- [${r.category || '?'}] ${r.title} (Likelihood: ${r.likelihood || '?'}, Impact: ${r.impact || '?'})\n  Description: ${(r.description || '').substring(0, MAX_SHORT)}\n  Mitigation: ${(r.mitigation || '').substring(0, MAX_SHORT)}`
+              '- [' + (r.category || '?') + '] ' + r.title + ' (Likelihood: ' + (r.likelihood || '?') + ', Impact: ' + (r.impact || '?') + ')\n  Description: ' + (r.description || '').substring(0, MAX_SHORT) + '\n  Mitigation: ' + (r.mitigation || '').substring(0, MAX_SHORT)
             ).join('\n');
-            if (risks) parts.push(`Risk Register:\n${risks}`);
+            if (risks) parts.push('Risk Register:\n' + risks);
           }
 
-          // --- Outputs ---
           if (projectData.outputs?.length > 0) {
             const outputs = projectData.outputs.filter((o: any) => o.title?.trim()).map((o: any) =>
-              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+              '- ' + o.title + ': ' + (o.description || '').substring(0, MAX_SHORT) + ' [Indicator: ' + (o.indicator || '').substring(0, 100) + ']'
             ).join('\n');
-            if (outputs) parts.push(`Outputs:\n${outputs}`);
+            if (outputs) parts.push('Outputs:\n' + outputs);
           }
 
-          // --- Outcomes ---
           if (projectData.outcomes?.length > 0) {
             const outcomes = projectData.outcomes.filter((o: any) => o.title?.trim()).map((o: any) =>
-              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+              '- ' + o.title + ': ' + (o.description || '').substring(0, MAX_SHORT) + ' [Indicator: ' + (o.indicator || '').substring(0, 100) + ']'
             ).join('\n');
-            if (outcomes) parts.push(`Outcomes:\n${outcomes}`);
+            if (outcomes) parts.push('Outcomes:\n' + outcomes);
           }
 
-          // --- Impacts ---
           if (projectData.impacts?.length > 0) {
             const impacts = projectData.impacts.filter((o: any) => o.title?.trim()).map((o: any) =>
-              `- ${o.title}: ${(o.description || '').substring(0, MAX_SHORT)} [Indicator: ${(o.indicator || '').substring(0, 100)}]`
+              '- ' + o.title + ': ' + (o.description || '').substring(0, MAX_SHORT) + ' [Indicator: ' + (o.indicator || '').substring(0, 100) + ']'
             ).join('\n');
-            if (impacts) parts.push(`Impacts:\n${impacts}`);
+            if (impacts) parts.push('Impacts:\n' + impacts);
           }
 
-          // --- KERs ---
           if (projectData.kers?.length > 0) {
             const kers = projectData.kers.filter((k: any) => k.title?.trim()).map((k: any) =>
-              `- ${k.title}: ${(k.description || '').substring(0, MAX_SHORT)}\n  Exploitation: ${(k.exploitationStrategy || '').substring(0, MAX_SHORT)}`
+              '- ' + k.title + ': ' + (k.description || '').substring(0, MAX_SHORT) + '\n  Exploitation: ' + (k.exploitationStrategy || '').substring(0, MAX_SHORT)
             ).join('\n');
-            if (kers) parts.push(`Key Exploitable Results (KERs):\n${kers}`);
+            if (kers) parts.push('Key Exploitable Results (KERs):\n' + kers);
           }
 
-          // --- Partners ---
           if (projectData.partners?.length > 0) {
             const partners = projectData.partners.filter((p: any) => p.name?.trim()).map((p: any) =>
-              `- ${p.code || '?'}: ${p.name} (${p.partnerType || '?'}, PM rate: €${p.pmRate || '?'}/month)\n  Expertise: ${(p.expertise || '').substring(0, 150)}`
+              '- ' + (p.code || '?') + ': ' + p.name + ' (' + (p.partnerType || '?') + ', PM rate: €' + (p.pmRate || '?') + '/month)\n  Expertise: ' + (p.expertise || '').substring(0, 150)
             ).join('\n');
-            if (partners) parts.push(`Partnership:\n${partners}`);
+            if (partners) parts.push('Partnership:\n' + partners);
           }
 
-          // --- Finance summary ---
-          if (projectData.fundingModel) parts.push(`Funding Model: ${projectData.fundingModel}`);
+          if (projectData.fundingModel) parts.push('Funding Model: ' + projectData.fundingModel);
           if (projectData.indirectCostSettings) {
-            parts.push(`Indirect Costs: ${projectData.indirectCostSettings.percentage}% on [${(projectData.indirectCostSettings.appliesToCategories || []).join(', ')}]`);
+            parts.push('Indirect Costs: ' + projectData.indirectCostSettings.percentage + '% on [' + (projectData.indirectCostSettings.appliesToCategories || []).join(', ') + ']');
           }
 
           if (parts.length > 0) {
@@ -1513,42 +1589,41 @@ const OrganizationCard: React.FC<{
           console.warn('[AIChatbot] Project context build failed:', e);
         }
       }
-      // 4. CONVERSATION HISTORY (last 10 messages)
+
+      // 4. CONVERSATION HISTORY
       const hist = currentMessages.slice(-10)
-        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + m.content)
         .join('\n');
 
-      // 5. BUILD FULL PROMPT with rich system message
-      const langName = language === 'si' ? 'Slovenian' : 'English';
-      const systemPrompt = `You are EURO-OFFICE AI Assistant — an expert consultant specializing in EU project funding (Horizon Europe, Erasmus+, Interreg, Creative Europe, CERV, LIFE, Digital Europe, and other EU programs).
+      // 5. BUILD FULL PROMPT — v7.1: language matching + verified sources
+      const systemPrompt = 'You are EURO-OFFICE AI Assistant — an expert consultant specializing in EU project funding (Horizon Europe, Erasmus+, Interreg, Creative Europe, CERV, LIFE, Digital Europe, and other EU programs).\n\n' +
+        'Your core competencies:\n' +
+        '- EU project proposal writing and structure (problem analysis, objectives, work packages, deliverables, milestones, Gantt charts, PERT diagrams)\n' +
+        '- Intervention logic and logical frameworks\n' +
+        '- Partner consortium design and allocation\n' +
+        '- Budget planning and co-financing rules\n' +
+        '- Impact assessment, KERs, dissemination strategies\n' +
+        '- Readiness levels (TRL, SRL, ORL, LRL)\n\n' +
+        'RESPONSE LANGUAGE: CRITICAL RULE — You MUST ALWAYS respond in the SAME LANGUAGE as the user\'s question. If the user writes in Slovenian, respond in Slovenian. If the user writes in English, respond in English. If the user writes in German, respond in German. NEVER switch languages unless the user explicitly asks you to.\n\n' +
+        'VERIFIED SOURCES: You MUST cite verified, real sources with clickable URLs whenever possible. Use markdown link format [Source Name](https://url). Prioritize official EU sources:\n' +
+        '- European Commission: https://ec.europa.eu\n' +
+        '- CORDIS: https://cordis.europa.eu\n' +
+        '- Funding & Tenders Portal: https://ec.europa.eu/info/funding-tenders/opportunities/portal\n' +
+        '- EUR-Lex: https://eur-lex.europa.eu\n' +
+        'If you reference a Knowledge Base document, cite it as [KB: filename]. If you cannot verify a source, clearly state that the information is based on your general expertise.\n\n' +
+        'IMPORTANT RULES:\n' +
+        '- Use the KNOWLEDGE BASE documents below as your primary reference — cite document names when relevant\n' +
+        '- Consider the ACTIVE PROJECT context — tailor advice to the user\'s specific project\n' +
+        '- Follow INSTRUCTIONS & RULES set by the organization administrator\n' +
+        '- Be precise, actionable, and concrete — avoid vague generalities\n' +
+        '- When discussing EU project sections, reference the specific fields the user should fill in\n' +
+        '- Format responses clearly with markdown (headers, bullets, bold) for readability\n' +
+        '- At the end of substantive answers, include a "Sources:" section with numbered clickable links';
 
-Your core competencies:
-- EU project proposal writing and structure (problem analysis, objectives, work packages, deliverables, milestones, Gantt charts, PERT diagrams)
-- Intervention logic and logical frameworks
-- Partner consortium design and allocation
-- Budget planning and co-financing rules
-- Impact assessment, KERs, dissemination strategies
-- Readiness levels (TRL, SRL, ORL, LRL)
+      const prompt = systemPrompt + kbContext + instructionsContext + projectContext +
+        '\n\n══ CONVERSATION ══\n' + hist + '\n\nUser: ' + trimmed + '\nAssistant:';
 
-RESPONSE LANGUAGE: Always respond in ${langName}. If the user writes in another language, still respond in ${langName} unless explicitly asked otherwise.
-
-IMPORTANT RULES:
-- Use the KNOWLEDGE BASE documents below as your primary reference — cite document names when relevant
-- Consider the ACTIVE PROJECT context — tailor advice to the user's specific project
-- Follow INSTRUCTIONS & RULES set by the organization administrator
-- Be precise, actionable, and concrete — avoid vague generalities
-- When discussing EU project sections, reference the specific fields the user should fill in
-- Format responses clearly with markdown (headers, bullets, bold) for readability`;
-
-      const prompt = `${systemPrompt}${kbContext}${instructionsContext}${projectContext}
-
-══ CONVERSATION ══
-${hist}
-
-User: ${trimmed}
-Assistant:`;
-
-      // 6. CALL AI with taskType: 'chatbot' for light model routing
+      // 6. CALL AI
       const result = await generateContent({
         prompt,
         taskType: 'chatbot',
@@ -1561,8 +1636,8 @@ Assistant:`;
     } catch (e: any) {
       console.error('[AIChatbot] Generation error:', e);
       const errorMsg = language === 'si'
-        ? `Napaka: ${e.message || 'Neznana napaka'}`
-        : `Error: ${e.message || 'Unknown error'}`;
+        ? 'Napaka: ' + (e.message || 'Neznana napaka')
+        : 'Error: ' + (e.message || 'Unknown error');
       updateConvoMessages(convoId, [...currentMessages, { role: 'assistant', content: errorMsg, timestamp: Date.now() }]);
     } finally {
       setIsGenerating(false);
@@ -1573,34 +1648,117 @@ Assistant:`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', minHeight: 300 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, flexShrink: 0, flexWrap: 'wrap' as const }}>
-        <button onClick={createNewConvo} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs, cursor: 'pointer', fontWeight: typography.fontWeight.semibold }}>+ {language === 'si' ? 'Nov pogovor' : 'New chat'}</button>
-        <button onClick={() => setShowHistory(!showHistory)} style={{ background: showHistory ? c.primary[100] : 'transparent', color: c.text.body, border: `1px solid ${c.border.light}`, borderRadius: radii.md, padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs, cursor: 'pointer' }}>{language === 'si' ? `Zgodovina (${conversations.length})` : `History (${conversations.length})`}</button>
+        <button onClick={createNewConvo} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: spacing.xs + ' ' + spacing.sm, fontSize: typography.fontSize.xs, cursor: 'pointer', fontWeight: typography.fontWeight.semibold }}>+ {language === 'si' ? 'Nov pogovor' : 'New chat'}</button>
+        <button onClick={function() { setShowHistory(!showHistory); }} style={{ background: showHistory ? c.primary[100] : 'transparent', color: c.text.body, border: '1px solid ' + c.border.light, borderRadius: radii.md, padding: spacing.xs + ' ' + spacing.sm, fontSize: typography.fontSize.xs, cursor: 'pointer' }}>{language === 'si' ? 'Zgodovina (' + conversations.length + ')' : 'History (' + conversations.length + ')'}</button>
+        {activeConvo && activeConvo.messages.length > 0 && (
+          <button onClick={handleExportConversation} title={language === 'si' ? 'Izvozi pogovor' : 'Export conversation'} style={{ background: 'transparent', color: c.text.muted, border: '1px solid ' + c.border.light, borderRadius: radii.md, padding: spacing.xs + ' ' + spacing.sm, fontSize: typography.fontSize.xs, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>📥 {language === 'si' ? 'Izvozi' : 'Export'}</button>
+        )}
       </div>
       {showHistory && (
-        <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: spacing.sm, border: `1px solid ${c.border.light}`, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main }}>
+        <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: spacing.sm, border: '1px solid ' + c.border.light, borderRadius: radii.md, background: isDark ? c.surface.sidebar : c.surface.main }}>
+          <div style={{ padding: spacing.xs + ' ' + spacing.sm, borderBottom: '1px solid ' + c.border.light, position: 'sticky' as const, top: 0, background: isDark ? c.surface.sidebar : c.surface.main, zIndex: 1 }}>
+            <input
+              value={historySearch}
+              onChange={function(e) { setHistorySearch(e.target.value); }}
+              placeholder={language === 'si' ? 'Išči pogovore...' : 'Search conversations...'}
+              style={{ width: '100%', padding: '4px 8px', borderRadius: radii.sm, border: '1px solid ' + c.border.light, background: 'transparent', color: c.text.body, fontSize: '11px', outline: 'none', boxSizing: 'border-box' as const }}
+            />
+          </div>
           {conversations.length === 0 && <div style={{ padding: spacing.sm, fontSize: typography.fontSize.xs, color: c.text.muted, textAlign: 'center' as const }}>{language === 'si' ? 'Ni pogovorov' : 'No conversations'}</div>}
-          {conversations.map(conv => (
-            <div key={conv.id} style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, padding: `${spacing.xs} ${spacing.sm}`, background: conv.id === activeConvoId ? (isDark ? c.primary[900]+'30' : c.primary[50]) : 'transparent', cursor: 'pointer', borderBottom: `1px solid ${c.border.light}` }}>
-              <div onClick={() => { setActiveConvoId(conv.id); setShowHistory(false); }} style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.title}</div>
-              <div style={{ fontSize: '9px', color: c.text.muted, flexShrink: 0 }}>{new Date(conv.updatedAt).toLocaleDateString()}</div>
-              <button onClick={(e) => { e.stopPropagation(); deleteConvo(conv.id); }} style={{ background: 'none', border: 'none', color: c.error[500], cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1 }}>×</button>
-            </div>
-          ))}
+          {conversations.filter(function(conv) {
+            if (!historySearch.trim()) return true;
+            var q = historySearch.toLowerCase();
+            if (conv.title.toLowerCase().indexOf(q) >= 0) return true;
+            return conv.messages.some(function(m) { return m.content.toLowerCase().indexOf(q) >= 0; });
+          }).map(function(conv) {
+            return (
+              <div key={conv.id} style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, padding: spacing.xs + ' ' + spacing.sm, background: conv.id === activeConvoId ? (isDark ? c.primary[900] + '30' : c.primary[50]) : 'transparent', cursor: 'pointer', borderBottom: '1px solid ' + c.border.light }}>
+                <div onClick={function() { setActiveConvoId(conv.id); setShowHistory(false); setHistorySearch(''); }} style={{ flex: 1, fontSize: typography.fontSize.xs, color: c.text.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.title}</div>
+                <div style={{ fontSize: '9px', color: c.text.muted, flexShrink: 0 }}>{new Date(conv.updatedAt).toLocaleDateString()}</div>
+                <button onClick={function(e) { e.stopPropagation(); deleteConvo(conv.id); }} style={{ background: 'none', border: 'none', color: c.error[500], cursor: 'pointer', fontSize: '14px', padding: '2px', lineHeight: 1 }}>×</button>
+              </div>
+            );
+          })}
         </div>
       )}
       <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs, marginBottom: spacing.sm }}>
         {messages.length === 0 && <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.xl }}>{language === 'si' ? 'Pozdravljen! Sem EURO-OFFICE AI pomočnik.' : 'Hello! I\'m the EURO-OFFICE AI Assistant.'}</div>}
-        {messages.map((msg, idx) => (
-          <div key={idx} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', background: msg.role === 'user' ? c.primary[500] : (isDark ? c.surface.sidebar : c.surface.main), color: msg.role === 'user' ? '#fff' : c.text.body, borderRadius: radii.lg, padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs, border: msg.role === 'assistant' ? `1px solid ${c.border.light}` : 'none', wordBreak: 'break-word' as const, lineHeight: 1.5 }}>
-            {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
+        {messages.map(function(msg, idx) {
+          var isAssistant = msg.role === 'assistant';
+          var isLastAssistant = isAssistant && idx === messages.length - 1;
+          return (
+            <div key={idx} style={{ alignSelf: isAssistant ? 'flex-start' : 'flex-end', maxWidth: '85%', position: 'relative' as const }}>
+              <div style={{
+                background: isAssistant ? (isDark ? c.surface.sidebar : c.surface.main) : c.primary[500],
+                color: isAssistant ? c.text.body : '#fff',
+                borderRadius: radii.lg,
+                padding: spacing.xs + ' ' + spacing.sm,
+                fontSize: typography.fontSize.xs,
+                border: isAssistant ? '1px solid ' + c.border.light : 'none',
+                wordBreak: 'break-word' as const,
+                lineHeight: 1.5,
+                userSelect: 'text' as const,
+                cursor: 'text',
+                WebkitUserSelect: 'text' as const,
+              }}>
+                {isAssistant ? renderFormattedText(msg.content) : msg.content}
+              </div>
+              {isAssistant && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' as const }}>
+                  <button
+                    onClick={function() { handleCopy(msg.content, idx); }}
+                    title={language === 'si' ? 'Kopiraj' : 'Copy'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: radii.sm, fontSize: '11px', color: copiedIdx === idx ? c.success[600] : c.text.muted, display: 'flex', alignItems: 'center', gap: '3px', transition: 'color 0.2s' }}
+                    onMouseEnter={function(e) { if (copiedIdx !== idx) (e.currentTarget as HTMLElement).style.color = c.primary[500]; }}
+                    onMouseLeave={function(e) { if (copiedIdx !== idx) (e.currentTarget as HTMLElement).style.color = c.text.muted; }}
+                  >
+                    {copiedIdx === idx ? '✓' : '📋'} {copiedIdx === idx ? (language === 'si' ? 'Kopirano!' : 'Copied!') : ''}
+                  </button>
+                  <button
+                    onClick={function() { handleRating(idx, 'up'); }}
+                    title={language === 'si' ? 'Dober odgovor' : 'Good response'}
+                    style={{ background: msg.rating === 'up' ? (isDark ? c.success[900] + '40' : c.success[50]) : 'none', border: msg.rating === 'up' ? '1px solid ' + c.success[400] : 'none', cursor: 'pointer', padding: '2px 5px', borderRadius: radii.sm, fontSize: '11px', color: msg.rating === 'up' ? c.success[600] : c.text.muted, transition: 'all 0.2s' }}
+                  >
+                    👍
+                  </button>
+                  <button
+                    onClick={function() { handleRating(idx, 'down'); }}
+                    title={language === 'si' ? 'Slab odgovor' : 'Poor response'}
+                    style={{ background: msg.rating === 'down' ? (isDark ? c.error[900] + '40' : c.error[50]) : 'none', border: msg.rating === 'down' ? '1px solid ' + c.error[400] : 'none', cursor: 'pointer', padding: '2px 5px', borderRadius: radii.sm, fontSize: '11px', color: msg.rating === 'down' ? c.error[600] : c.text.muted, transition: 'all 0.2s' }}
+                  >
+                    👎
+                  </button>
+                  {isLastAssistant && !isGenerating && (
+                    <button
+                      onClick={handleRegenerate}
+                      title={language === 'si' ? 'Regeneriraj odgovor' : 'Regenerate response'}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: radii.sm, fontSize: '11px', color: c.text.muted, display: 'flex', alignItems: 'center', gap: '3px', transition: 'color 0.2s' }}
+                      onMouseEnter={function(e) { (e.currentTarget as HTMLElement).style.color = c.primary[500]; }}
+                      onMouseLeave={function(e) { (e.currentTarget as HTMLElement).style.color = c.text.muted; }}
+                    >
+                      🔄 {language === 'si' ? 'Regeneriraj' : 'Regenerate'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {isGenerating && (
+          <div style={{ alignSelf: 'flex-start', maxWidth: '85%', background: isDark ? c.surface.sidebar : c.surface.main, borderRadius: radii.lg, padding: spacing.xs + ' ' + spacing.sm, fontSize: typography.fontSize.xs, color: c.text.muted, border: '1px solid ' + c.border.light, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {language === 'si' ? 'Generiram' : 'Generating'}
+            <span style={{ display: 'inline-flex', gap: '3px' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.primary[400], animation: 'chatDot1 1.4s infinite ease-in-out' }}></span>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.primary[400], animation: 'chatDot2 1.4s infinite ease-in-out' }}></span>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.primary[400], animation: 'chatDot3 1.4s infinite ease-in-out' }}></span>
+            </span>
           </div>
-        ))}
-        {isGenerating && <div style={{ alignSelf: 'flex-start', maxWidth: '85%', background: isDark ? c.surface.sidebar : c.surface.main, borderRadius: radii.lg, padding: `${spacing.xs} ${spacing.sm}`, fontSize: typography.fontSize.xs, color: c.text.muted, border: `1px solid ${c.border.light}` }}>{language === 'si' ? 'Generiram...' : 'Generating...'}<span style={{ animation: 'pulse 1.5s infinite' }}> ●</span></div>}
+        )}
         <div ref={chatEndRef} />
       </div>
       <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0 }}>
-        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'} disabled={isGenerating} style={{ flex: 1, padding: `${spacing.xs} ${spacing.sm}`, borderRadius: radii.md, border: `1px solid ${c.border.light}`, background: isDark ? c.surface.sidebar : c.surface.main, color: c.text.body, fontSize: typography.fontSize.xs, outline: 'none' }} />
-        <button onClick={handleSend} disabled={isGenerating || !input.trim()} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: `${spacing.xs} ${spacing.md}`, fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer', opacity: isGenerating || !input.trim() ? 0.5 : 1, fontWeight: typography.fontWeight.semibold }}>{isGenerating ? '...' : '➤'}</button>
+        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'} disabled={isGenerating} style={{ flex: 1, padding: spacing.xs + ' ' + spacing.sm, borderRadius: radii.md, border: '1px solid ' + c.border.light, background: isDark ? c.surface.sidebar : c.surface.main, color: c.text.body, fontSize: typography.fontSize.xs, outline: 'none' }} />
+        <button data-chatbot-send onClick={handleSend} disabled={isGenerating || !input.trim()} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: spacing.xs + ' ' + spacing.md, fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer', opacity: isGenerating || !input.trim() ? 0.5 : 1, fontWeight: typography.fontWeight.semibold }}>{isGenerating ? '...' : '➤'}</button>
       </div>
     </div>
   );
@@ -1616,7 +1774,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
   const c = isDark ? darkColors : lightColors;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ★ v6.1: Responsive grid columns
   const [gridCols, setGridCols] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768 ? GRID_COLS_MOBILE : GRID_COLS_DESKTOP);
 
   useEffect(() => {
@@ -1628,7 +1785,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // ★ v6.0: Email modal state
   const [emailModal, setEmailModal] = useState<{ name: string; email: string; orgName: string } | null>(null);
   const currentUserName = storageService.getCurrentUserDisplayName() || 'User';
 
@@ -1678,10 +1834,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     <div ref={containerRef} style={{ padding: gridCols === 1 ? spacing.md : spacing.xl, maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column' as const, gap: spacing.lg }}>
       <div style={{ marginBottom: spacing.sm }}>
         <h1 style={{ margin: 0, fontSize: gridCols === 1 ? typography.fontSize.xl : typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold, color: c.text.heading }}>{language === 'si' ? 'Nadzorna plošča' : 'Dashboard'}</h1>
-        <p style={{ margin: `${spacing.xs} 0 0`, color: c.text.muted, fontSize: typography.fontSize.sm }}>{orgName}{totalProjects > 0 && ` · ${totalProjects} ${language === 'si' ? 'projektov' : 'projects'}`}</p>
+        <p style={{ margin: spacing.xs + ' 0 0', color: c.text.muted, fontSize: typography.fontSize.sm }}>{orgName}{totalProjects > 0 ? ' · ' + totalProjects + ' ' + (language === 'si' ? 'projektov' : 'projects') : ''}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: gridCols === 1 ? spacing.md : spacing.lg, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + gridCols + ', minmax(0, 1fr))', gap: gridCols === 1 ? spacing.md : spacing.lg, alignItems: 'start' }}>
         {visibleCards.map(cardId => {
           const cardConfig: Record<CardId, { title: string; icon: string }> = {
             projects: { title: language === 'si' ? 'Moji projekti' : 'My Projects', icon: '📁' },
@@ -1702,12 +1858,12 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
 
               {cardId === 'projects' && (
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: spacing.sm }}>
-                  <button onClick={onCreateProject} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: `${spacing.sm} ${spacing.md}`, fontSize: typography.fontSize.sm, cursor: 'pointer', fontWeight: typography.fontWeight.semibold, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>+ {language === 'si' ? 'Nov projekt' : 'New Project'}</button>
+                  <button onClick={onCreateProject} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: spacing.sm + ' ' + spacing.md, fontSize: typography.fontSize.sm, cursor: 'pointer', fontWeight: typography.fontWeight.semibold, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>+ {language === 'si' ? 'Nov projekt' : 'New Project'}</button>
                   {projectsMeta.length === 0 && <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.md }}>{language === 'si' ? 'Še nimate projektov.' : 'No projects yet.'}</div>}
                   {projectsMeta.map(p => {
                     const progress = getProjectProgress(p.id === currentProjectId ? projectData : null);
                     return (
-                      <div key={p.id} onClick={() => onOpenProject(p.id)} style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, border: `1px solid ${p.id === currentProjectId ? c.primary[400] : c.border.light}`, cursor: 'pointer', background: p.id === currentProjectId ? (isDark ? c.primary[900]+'20' : c.primary[50]) : 'transparent', transition: `all ${animation.duration.fast} ${animation.easing.default}` }}>
+                      <div key={p.id} onClick={() => onOpenProject(p.id)} style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, border: '1px solid ' + (p.id === currentProjectId ? c.primary[400] : c.border.light), cursor: 'pointer', background: p.id === currentProjectId ? (isDark ? c.primary[900] + '20' : c.primary[50]) : 'transparent', transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default }}>
                         <LocalProgressRing percent={progress} size={40} strokeWidth={4} color={c.primary[500]} bgColor={c.border.light} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: c.text.heading, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title || p.name || (language === 'si' ? 'Brez imena' : 'Untitled')}</div>
@@ -1720,7 +1876,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                 </div>
               )}
 
-             {cardId === 'chatbot' && <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} projectData={projectData} />}
+              {cardId === 'chatbot' && <AIChatbot language={language} isDark={isDark} colors={c} activeOrg={activeOrg} projectData={projectData} />}
 
               {cardId === 'admin' && isAdmin && (
                 <div style={{ display: 'grid', gridTemplateColumns: gridCols === 1 ? '1fr' : '1fr 1fr', gap: spacing.xs }}>
@@ -1733,8 +1889,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                     { label: language === 'si' ? 'Profil' : 'Profile', tab: 'profile', icon: '👤' },
                     { label: language === 'si' ? 'Baza znanja' : 'Knowledge Base', tab: 'knowledge', icon: '📚' },
                   ].map(item => (
-                    <button key={item.tab} onClick={() => onOpenAdmin(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, padding: spacing.sm, borderRadius: radii.md, border: `1px solid ${c.border.light}`, background: 'transparent', cursor: 'pointer', color: c.text.body, fontSize: typography.fontSize.xs, textAlign: 'left' as const }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900]+'30' : c.primary[50]; }}
+                    <button key={item.tab} onClick={() => onOpenAdmin(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, padding: spacing.sm, borderRadius: radii.md, border: '1px solid ' + c.border.light, background: 'transparent', cursor: 'pointer', color: c.text.body, fontSize: typography.fontSize.xs, textAlign: 'left' as const }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? c.primary[900] + '30' : c.primary[50]; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                       <span>{item.icon}</span> {item.label}
                     </button>
@@ -1762,6 +1918,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
 
         <DropZone index={visibleCards.length} isDark={isDark} colors={c} draggingId={draggingId} onDropAtEnd={handleDropAtEnd} />
       </div>
+
+      {/* ★ v7.1: CSS keyframes for chatbot typing dots */}
+      <style>{'\n@keyframes chatDot1 { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }\n@keyframes chatDot2 { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 50% { transform: scale(1); opacity: 1; } }\n@keyframes chatDot3 { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 60% { transform: scale(1); opacity: 1; } }\n'}</style>
 
       {/* ★ v6.0: EmailModal — renders at root level, OUTSIDE all cards */}
       <EmailModal
