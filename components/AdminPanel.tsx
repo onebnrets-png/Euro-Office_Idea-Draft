@@ -36,7 +36,7 @@ import { organizationService } from '../services/organizationService.ts';
 import { supabase } from '../services/supabaseClient.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 import { getAllGuideKeys, getFieldGuide, fetchGuideOverrides, saveGuideOverrides, invalidateGuideOverridesCache, buildGuideOverrideKey } from '../services/guideContent.ts';
-
+import { changelogService, TYPE_CONFIG, type ChangelogEntry, type VersionGroup } from '../services/changelogService.ts';
 interface AdminPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -44,7 +44,7 @@ interface AdminPanelProps {
   initialTab?: string;
 }
 
-type TabId = 'users' | 'organizations' | 'statistics' | 'instructions' | 'guideEditor' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge';
+type TabId = 'users' | 'organizations' | 'statistics' | 'instructions' | 'guideEditor' | 'ai' | 'profile' | 'audit' | 'errors' | 'knowledge' | 'changelog';
 
 const QRCodeImage = ({ value, size = 200, colors: c }: { value: string; size?: number; colors?: typeof lightColors }) => {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8`;
@@ -83,8 +83,8 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', guideEditor: 'Guide Editor', ai: 'AI Provider',
-      profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base',
+      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instusers: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', guideEditor: 'Guide Editor', ai: 'AI Provider',
+      profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base', changelog: 'Changelog',
     },
     users: {
       title: 'User Management', subtitle: 'View and manage all registered users',
@@ -267,7 +267,7 @@ const ADMIN_TEXT = {
     subtitleSuperAdmin: 'Polni nadzor sistema \u2014 uporabniki, AI, pravila, blagovna znamka & dnevnik',
     tabs: {
       users: 'Uporabniki', organizations: 'Organizacije', statistics: 'Statistika', instructions: 'Pravila', guideEditor: 'Urejevalnik vodnika', ai: 'AI Ponudnik',
-      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja',
+      profile: 'Profil & Varnost', audit: 'Dnevnik', errors: 'Dnevnik napak', knowledge: 'Baza znanja', changelog: 'Zgodovina verzij',
      },
     users: {
       title: 'Upravljanje uporabnikov', subtitle: 'Pregled in upravljanje vseh registriranih uporabnikov',
@@ -512,8 +512,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const isUserAdmin = admin.isAdmin;
   const isUserSuperAdmin = admin.isSuperAdmin;
   const adminTabs: TabId[] = isUserSuperAdmin
-    ? ['users', 'organizations', 'statistics', 'instructions', 'guideEditor', 'ai', 'profile', 'audit', 'errors', 'knowledge']
-    : ['users', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'knowledge'];
+    ? ['users', 'organizations', 'statistics', 'instructions', 'guideEditor', 'ai', 'profile', 'audit', 'errors', 'knowledge', 'changelog']
+    : ['users', 'statistics', 'instructions', 'ai', 'profile', 'audit', 'knowledge', 'changelog'];
   const regularTabs: TabId[] = ['ai', 'profile'];
   const availableTabs = isUserAdmin ? adminTabs : regularTabs;
   const defaultTab = initialTab && availableTabs.includes(initialTab as TabId) ? (initialTab as TabId) : (isUserAdmin ? 'users' : 'ai');
@@ -588,6 +588,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [guideSelectedProp, setGuideSelectedProp] = useState('whatIsThis');
   const [guideEditorText, setGuideEditorText] = useState('');
   const [guideEditorChanged, setGuideEditorChanged] = useState(false);
+  // ★ v4.6: Changelog tab state
+  const [changelogGroups, setChangelogGroups] = useState<VersionGroup[]>([]);
+  const [changelogLoading, setChangelogLoading] = useState(false);
+  const [changelogSearch, setChangelogSearch] = useState('');
+  const [changelogTypeFilter, setChangelogTypeFilter] = useState('');
   // ★ v4.2: Organizations tab state
   const [orgMemberCounts, setOrgMemberCounts] = useState<Record<string, number>>({});
   const [orgsLoading, setOrgsLoading] = useState(false);
@@ -682,6 +687,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       loadStatistics();
     }
   }, [activeTab, isOpen, isUserAdmin]);
+
+  // ★ v4.6: Load changelog when tab is active
+  useEffect(function() {
+    if (activeTab === 'changelog' && isOpen) {
+      setChangelogLoading(true);
+      changelogService.getGroupedByVersion().then(function(groups) {
+        setChangelogGroups(groups);
+        setChangelogLoading(false);
+      }).catch(function() {
+        setChangelogLoading(false);
+      });
+    }
+  }, [activeTab, isOpen]);
 
   useEffect(() => {
     if (activeTab === 'knowledge' && isOpen && isUserAdmin) {
@@ -1127,7 +1145,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const totalAdmins = admin.users.filter(u => u.role === 'admin').length;
   const totalSuperAdmins = admin.users.filter(u => u.role === 'superadmin').length;
   const instructionSections = Object.keys(t.instructions.sections) as (keyof typeof t.instructions.sections)[];
-  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', statistics: '\uD83D\uDCCA', instructions: '\uD83D\uDCCB', guideEditor: '\uD83D\uDCD6', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA' };
+  const TAB_ICONS: Record<TabId, string> = { users: '\uD83D\uDC65', organizations: '\uD83C\uDFE2', statistics: '\uD83D\uDCCA', instructions: '\uD83D\uDCCB', guideEditor: '\uD83D\uDCD6', ai: '\uD83E\uDD16', profile: '\uD83D\uDC64', audit: '\uD83D\uDCDC', errors: '\uD83D\uDC1B', knowledge: '\uD83D\uDCDA', changelog: '\uD83D\uDCCB' };
   const currentModels = aiProvider === 'gemini' ? GEMINI_MODELS : aiProvider === 'openai' ? OPENAI_MODELS : OPENROUTER_MODELS;
   const hasMFA = mfaFactors.length > 0;
 
@@ -2402,6 +2420,130 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
               )}
             </div>
           )}
+
+        {/* ═══ CHANGELOG TAB ═══ ★ v4.6 */}
+          {activeTab === 'changelog' && (() => {
+            var filteredGroups = changelogGroups.map(function(group) {
+              var filtered = group.entries.filter(function(entry) {
+                var matchType = !changelogTypeFilter || entry.type === changelogTypeFilter;
+                var matchSearch = !changelogSearch || entry.title.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.description.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.code.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0;
+                return matchType && matchSearch;
+              });
+              return { version: group.version, entries: filtered, latestDate: group.latestDate };
+            }).filter(function(g) { return g.entries.length > 0; });
+
+            var allTypes = ['FEAT', 'FIX', 'UI', 'PERF', 'REFACTOR', 'SECURITY', 'DB'];
+
+            return (
+              <div>
+                <div style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
+                    {'\uD83D\uDCCB'} {language === 'si' ? 'Zgodovina verzij' : 'Version History'}
+                  </h3>
+                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>
+                    {language === 'si' ? 'Kronolo\u0161ki pregled vseh sprememb aplikacije' : 'Chronological overview of all application changes'}
+                  </p>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                  <input type="text" value={changelogSearch} onChange={function(e) { setChangelogSearch(e.target.value); }}
+                    placeholder={language === 'si' ? 'I\u0161\u010Di po \u0161ifri, naslovu ali opisu...' : 'Search by code, title or description...'}
+                    style={{ flex: 1, minWidth: '200px', fontSize: typography.fontSize.sm, padding: '8px 12px', borderRadius: radii.lg, border: '1px solid ' + colors.border.light, background: colors.surface.card, color: colors.text.body, outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' as const }}>
+                    <button onClick={function() { setChangelogTypeFilter(''); }}
+                      style={{ padding: '5px 12px', borderRadius: radii.md, border: !changelogTypeFilter ? '2px solid ' + colors.primary[500] : '1px solid ' + colors.border.light, background: !changelogTypeFilter ? primaryBadgeBg : 'transparent', color: !changelogTypeFilter ? primaryBadgeText : colors.text.muted, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                      {language === 'si' ? 'Vse' : 'All'}
+                    </button>
+                    {allTypes.map(function(type) {
+                      var conf = TYPE_CONFIG[type] || { label: { en: type, si: type }, color: '#666', bgColor: '#f0f0f0', icon: '' };
+                      var isActive = changelogTypeFilter === type;
+                      return (
+                        <button key={type} onClick={function() { setChangelogTypeFilter(isActive ? '' : type); }}
+                          style={{ padding: '5px 10px', borderRadius: radii.md, border: isActive ? '2px solid ' + conf.color : '1px solid ' + colors.border.light, background: isActive ? (isDark ? conf.color + '20' : conf.bgColor) : 'transparent', color: isActive ? conf.color : colors.text.muted, cursor: 'pointer', fontSize: typography.fontSize.xs, fontWeight: isActive ? typography.fontWeight.bold : typography.fontWeight.medium }}>
+                          {conf.icon} {conf.label[language] || conf.label.en}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {changelogLoading ? <SkeletonTable rows={5} cols={4} /> : filteredGroups.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: colors.text.muted }}>
+                    {changelogSearch || changelogTypeFilter ? (language === 'si' ? 'Ni rezultatov za iskanje.' : 'No results found.') : (language === 'si' ? 'Ni vnosov v zgodovini.' : 'No changelog entries.')}
+                  </div>
+                ) : (
+                  <div>
+                    {filteredGroups.map(function(group) {
+                      return (
+                        <div key={group.version} style={{ marginBottom: '28px' }}>
+                          {/* Version header */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid ' + colors.border.light }}>
+                            <span style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.primary[600], fontFamily: typography.fontFamily.mono }}>
+                              v{group.version}
+                            </span>
+                            <span style={{ fontSize: typography.fontSize.xs, color: colors.text.muted }}>
+                              {formatDate(group.latestDate, true)}
+                            </span>
+                            <span style={{ padding: '2px 10px', borderRadius: radii.full, background: primaryBadgeBg, border: '1px solid ' + primaryBadgeBorder, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
+                              {group.entries.length} {language === 'si' ? 'sprememb' : 'changes'}
+                            </span>
+                          </div>
+
+                          {/* Entries */}
+                          {group.entries.map(function(entry) {
+                            var conf = TYPE_CONFIG[entry.type] || { label: { en: entry.type, si: entry.type }, color: '#666', bgColor: '#f0f0f0', icon: '' };
+                            return (
+                              <div key={entry.id} style={{ display: 'flex', gap: '12px', padding: '12px 16px', marginBottom: '6px', borderRadius: radii.lg, border: '1px solid ' + colors.border.light, background: colors.surface.card, alignItems: 'flex-start' }}>
+                                {/* Code badge */}
+                                <div style={{ flexShrink: 0, minWidth: '70px' }}>
+                                  <span style={{ fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: colors.primary[600] }}>
+                                    {entry.code}
+                                  </span>
+                                </div>
+                                {/* Type badge */}
+                                <div style={{ flexShrink: 0 }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 10px', borderRadius: radii.full, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, background: isDark ? conf.color + '20' : conf.bgColor, color: conf.color, border: '1px solid ' + conf.color + '40' }}>
+                                    {conf.icon} {conf.label[language] || conf.label.en}
+                                  </span>
+                                </div>
+                                {/* Content */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.heading, fontSize: typography.fontSize.sm, marginBottom: '2px' }}>
+                                    {entry.title}
+                                  </div>
+                                  {entry.description && (
+                                    <div style={{ color: colors.text.muted, fontSize: typography.fontSize.xs, lineHeight: '1.5', marginBottom: '4px' }}>
+                                      {entry.description}
+                                    </div>
+                                  )}
+                                  {entry.files_changed && entry.files_changed.length > 0 && (
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' as const, marginTop: '4px' }}>
+                                      {entry.files_changed.map(function(file, idx) {
+                                        return (
+                                          <span key={idx} style={{ padding: '1px 6px', borderRadius: radii.sm, background: isDark ? 'rgba(99,102,241,0.1)' : '#F0F0FF', color: isDark ? '#A5B4FC' : '#4F46E5', fontSize: '10px', fontFamily: typography.fontFamily.mono }}>
+                                            {file}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Date */}
+                                <div style={{ flexShrink: 0, fontSize: typography.fontSize.xs, color: colors.text.muted, whiteSpace: 'nowrap' as const }}>
+                                  {formatDate(entry.released_at, true)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         </div>
       </div>
