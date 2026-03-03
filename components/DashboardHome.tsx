@@ -330,21 +330,7 @@ const ProjectChartsCard: React.FC<{
       }
     })();
 
-          setAcronyms(map);
-        }
-          data.forEach((row: any) => {
-            const acr = row.projectAcronym;
-            if (acr && typeof acr === 'string' && acr.trim()) {
-              map[row.project_id] = acr.trim();
-            }
-          });
-          setAcronyms(map);
-        }
-      } catch (err) {
-        console.warn('ProjectChartsCard: Failed to preload acronyms', err);
-      }
-    })();
-  }, [projectsMeta, language]);
+     }, [projectsMeta, language]);
 
   useEffect(function() {
     if (currentProjectId && projectData) {
