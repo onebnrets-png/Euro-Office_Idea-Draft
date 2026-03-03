@@ -83,7 +83,7 @@ const ADMIN_TEXT = {
     subtitleRegular: 'Configure AI provider, profile and security',
     subtitleSuperAdmin: 'Full system control — users, AI, instructions, branding & audit',
     tabs: {
-      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instusers: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', guideEditor: 'Guide Editor', ai: 'AI Provider',
+      users: 'Users', organizations: 'Organizations', statistics: 'Statistics', instructions: 'Instructions', guideEditor: 'Guide Editor', ai: 'AI Provider',
       profile: 'Profile & Security', audit: 'Audit Log', errors: 'Error Log', knowledge: 'Knowledge Base', changelog: 'Changelog',
     },
     users: {
