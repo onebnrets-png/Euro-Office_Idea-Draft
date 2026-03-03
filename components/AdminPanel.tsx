@@ -1,9 +1,10 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// v4.6 — 2026-03-03
+// ★ v4.6: NEW "Changelog" tab — version history with EO codes, type badges, grouped by version
 // ★ v4.5: Guide Editor textarea shows default content (editable), same pattern as Instructions
 // v4.4 — 2026-03-02
-// ★ v4.4: NEW "Guide Editor" tab — SuperAdmin can customize contextual guide content
 // v4.3 — 2026-03-02
 // ★ v4.3: NEW "Statistics" tab — usage overview, projects per user, project details
 // ★ v4.3: Drag & drop tab reordering — saved per user in user_settings.admin_tab_order
