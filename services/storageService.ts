@@ -1,7 +1,8 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
-// v5.3 — 2026-03-02
+// v5.4 — 2026-03-03
+// ★ v5.4: loadProject() returns null for skeleton data (empty createEmptyProjectData objects)
 // ★ v5.3: getAdminTabOrder() + setAdminTabOrder() for drag & drop tab reordering
 //
 // CHANGES:
@@ -757,6 +758,22 @@ export const storageService = {
       console.log('[storageService.loadProject] Empty data for lang=' + language + ', projectId=' + targetId);
       return null;
     }
+
+    // ★ v5.4: Check if data has any REAL content (not just empty skeleton from createEmptyProjectData)
+    var hasRealContent = false;
+    var pd = data.data;
+    if (pd.projectIdea && (pd.projectIdea.projectTitle || '').trim().length > 0) hasRealContent = true;
+    if (pd.projectIdea && (pd.projectIdea.mainAim || '').trim().length > 0) hasRealContent = true;
+    if (pd.problemAnalysis && pd.problemAnalysis.coreProblem && (pd.problemAnalysis.coreProblem.title || '').trim().length > 0) hasRealContent = true;
+    if (Array.isArray(pd.generalObjectives) && pd.generalObjectives.some(function(o) { return (o.title || '').trim().length > 0; })) hasRealContent = true;
+    if (Array.isArray(pd.specificObjectives) && pd.specificObjectives.some(function(o) { return (o.title || '').trim().length > 0; })) hasRealContent = true;
+    if (Array.isArray(pd.activities) && pd.activities.some(function(wp) { return (wp.title || '').trim().length > 0; })) hasRealContent = true;
+
+    if (!hasRealContent) {
+      console.log('[storageService.loadProject] Skeleton data (no real content) for lang=' + language + ', projectId=' + targetId);
+      return null;
+    }
+
     const goCheck = data.data?.generalObjectives;
     const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
     console.log(`[storageService.loadProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items)' : '⚠️ EMPTY'}`);
