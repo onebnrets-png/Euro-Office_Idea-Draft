@@ -256,10 +256,11 @@ interface CardProps {
 const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark, colors: c, colSpan, language, gridCols, onResize, dragHandlers, draggingId }) => {
   const isDragging = draggingId === id;
   const span = Math.min(colSpan, gridCols);
+  const cardDragRef = useRef(true);
   return (
-    <div draggable onDragStart={(e) => dragHandlers.onDragStart(e, id)} onDragOver={dragHandlers.onDragOver} onDrop={(e) => dragHandlers.onDrop(e, id)} onDragEnd={dragHandlers.onDragEnd}
-      style={{ background: c.surface.card, borderRadius: radii.xl, border: '1px solid ' + (isDragging ? c.primary[400] : c.border.light), boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden', opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)', transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default, gridColumn: 'span ' + span, display: 'flex', flexDirection: 'column' as const, cursor: 'grab', minHeight: 0 }}>
-      <div style={{ padding: spacing.md + ' ' + spacing.lg, borderBottom: '1px solid ' + c.border.light, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0 }}>
+    <div draggable={cardDragRef.current} onDragStart={function(e) { if (!cardDragRef.current) { e.preventDefault(); return; } dragHandlers.onDragStart(e, id); }} onDragOver={dragHandlers.onDragOver} onDrop={function(e) { dragHandlers.onDrop(e, id); }} onDragEnd={dragHandlers.onDragEnd}
+      style={{ background: c.surface.card, borderRadius: radii.xl, border: '1px solid ' + (isDragging ? c.primary[400] : c.border.light), boxShadow: isDragging ? shadows.xl : shadows.card, overflow: 'hidden', opacity: isDragging ? 0.7 : 1, transform: isDragging ? 'scale(1.02)' : 'scale(1)', transition: 'all ' + animation.duration.fast + ' ' + animation.easing.default, gridColumn: 'span ' + span, display: 'flex', flexDirection: 'column' as const, minHeight: 0 }}>
+      <div style={{ padding: spacing.md + ' ' + spacing.lg, borderBottom: '1px solid ' + c.border.light, display: 'flex', alignItems: 'center', gap: spacing.sm, flexShrink: 0, cursor: 'grab' }}>
         <span style={{ fontSize: '18px' }}>{icon}</span>
         <h3 style={{ margin: 0, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: c.text.heading, flex: 1 }}>{title}</h3>
         {gridCols > 1 && (
@@ -270,7 +271,7 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
         )}
         <div style={{ cursor: 'grab', color: c.text.muted, display: 'flex' }}><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
       </div>
-      <div style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0 }}>{children}</div>
+      <div onMouseEnter={function() { cardDragRef.current = false; }} onMouseLeave={function() { cardDragRef.current = true; }} style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0, cursor: 'auto' }}>{children}</div>
     </div>
   );
 };
