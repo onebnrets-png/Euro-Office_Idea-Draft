@@ -292,6 +292,7 @@ const ProjectChartsCard: React.FC<{
 }> = ({ language, isDark, colors: c, colSpan, projectsMeta, projectData, currentProjectId, onOpenProject }) => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [loadedData, setLoadedData] = useState<Record<string, any>>({});
+  const [loadedLang, setLoadedLang] = useState<Record<string, string>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [acronyms, setAcronyms] = useState<Record<string, string>>({});
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -340,37 +341,40 @@ const ProjectChartsCard: React.FC<{
     })();
   }, [projectsMeta, language]);
 
-  useEffect(() => {
+  useEffect(function() {
     if (currentProjectId && projectData) {
       setLoadedData(prev => ({ ...prev, [currentProjectId]: projectData }));
+      setLoadedLang(prev => ({ ...prev, [currentProjectId]: language }));
       if (!activeProjectId) setActiveProjectId(currentProjectId);
     }
-  }, [currentProjectId, projectData]);
+  }, [currentProjectId, projectData, language]);
 
   const loadProjectData = useCallback(async (projectId: string) => {
     if (loadedData[projectId]) { setActiveProjectId(projectId); return; }
     if (projectId === currentProjectId && projectData) {
       setLoadedData(prev => ({ ...prev, [projectId]: projectData }));
+      setLoadedLang(prev => ({ ...prev, [projectId]: language }));
       setActiveProjectId(projectId);
       return;
     }
     setLoadingId(projectId); setActiveProjectId(projectId);
     try {
-      // Try current language first
+      var usedLang = language;
       var data = await storageService.loadProject(language, projectId);
-      // Fallback: try the other language if no data found
       if (!data) {
-        var fallbackLang = language === 'en' ? 'si' : 'en';
-        data = await storageService.loadProject(fallbackLang, projectId);
+        usedLang = language === 'en' ? 'si' : 'en';
+        data = await storageService.loadProject(usedLang, projectId);
       }
-      if (data) setLoadedData(prev => ({ ...prev, [projectId]: data }));
+      if (data) {
+        setLoadedData(prev => ({ ...prev, [projectId]: data }));
+        setLoadedLang(prev => ({ ...prev, [projectId]: usedLang }));
+      }
     } catch (err) {
       console.warn('ProjectChartsCard: Failed to load', projectId, err);
     } finally {
       setLoadingId(null);
     }
   }, [loadedData, currentProjectId, projectData, language]);
-
   useEffect(() => {
     if (autoLoadedRef.current) return;
     if (projectsMeta.length === 0) return;
@@ -393,12 +397,16 @@ const ProjectChartsCard: React.FC<{
       setLoadingId(targetId);
       setActiveProjectId(targetId);
       try {
+        var usedLang = language;
         var data = await storageService.loadProject(language, targetId);
         if (!data) {
-          var fallbackLang = language === 'en' ? 'si' : 'en';
-          data = await storageService.loadProject(fallbackLang, targetId);
+          usedLang = language === 'en' ? 'si' : 'en';
+          data = await storageService.loadProject(usedLang, targetId);
         }
-        if (data) setLoadedData(prev => ({ ...prev, [targetId]: data }));
+        if (data) {
+          setLoadedData(prev => ({ ...prev, [targetId]: data }));
+          setLoadedLang(prev => ({ ...prev, [targetId]: usedLang }));
+        }
       } catch (err) {
         console.warn('ProjectChartsCard: Auto-load failed', targetId, err);
       } finally {
@@ -418,10 +426,11 @@ const ProjectChartsCard: React.FC<{
   useEffect(() => { return () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }; }, []);
 
   const activeData = activeProjectId ? loadedData[activeProjectId] : null;
-  const chartsData = useMemo(() => {
-    if (!activeData) return null;
-    try { return extractStructuralData(activeData, language); } catch { return null; }
-  }, [activeData]);
+  const chartsData = useMemo(function() {
+    if (!activeData || !activeProjectId) return null;
+    var dataLang = loadedLang[activeProjectId] || language;
+    try { return extractStructuralData(activeData, dataLang); } catch { return null; }
+  }, [activeData, activeProjectId, loadedLang, language]);
   const isLoading = loadingId === activeProjectId;
   const chartW = colSpan >= 2 ? CHART_WIDTH : Math.min(200, CHART_WIDTH);
   const chartH = colSpan >= 2 ? CHART_HEIGHT : Math.min(130, CHART_HEIGHT);
