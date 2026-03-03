@@ -312,21 +312,18 @@ const ProjectChartsCard: React.FC<{
           .select('project_id, language, data->projectIdea->projectAcronym')
           .in('project_id', projectIds);
 
-        if (!error && data) {
           if (!error && data) {
-          const map: Record<string, string> = {};
-          // First pass: add all acronyms (any language)
+          var map: Record<string, string> = {};
           data.forEach(function(row: any) {
             var acr = row.projectAcronym;
             if (acr && typeof acr === 'string' && acr.trim()) {
-              // Only set if not already set, or if this row matches preferred language
               if (!map[row.project_id] || row.language === language) {
                 map[row.project_id] = acr.trim();
               }
             }
           });
           setAcronyms(map);
-        };
+        }
           data.forEach((row: any) => {
             const acr = row.projectAcronym;
             if (acr && typeof acr === 'string' && acr.trim()) {
@@ -343,17 +340,17 @@ const ProjectChartsCard: React.FC<{
 
   useEffect(function() {
     if (currentProjectId && projectData) {
-      setLoadedData(prev => ({ ...prev, [currentProjectId]: projectData }));
-      setLoadedLang(prev => ({ ...prev, [currentProjectId]: language }));
+      setLoadedData(function(prev) { return Object.assign({}, prev, { [currentProjectId]: projectData }); });
+      setLoadedLang(function(prev) { return Object.assign({}, prev, { [currentProjectId]: language }); });
       if (!activeProjectId) setActiveProjectId(currentProjectId);
     }
   }, [currentProjectId, projectData, language]);
 
-  const loadProjectData = useCallback(async (projectId: string) => {
+  const loadProjectData = useCallback(async function(projectId: string) {
     if (loadedData[projectId]) { setActiveProjectId(projectId); return; }
     if (projectId === currentProjectId && projectData) {
-      setLoadedData(prev => ({ ...prev, [projectId]: projectData }));
-      setLoadedLang(prev => ({ ...prev, [projectId]: language }));
+      setLoadedData(function(prev) { return Object.assign({}, prev, { [projectId]: projectData }); });
+      setLoadedLang(function(prev) { return Object.assign({}, prev, { [projectId]: language }); });
       setActiveProjectId(projectId);
       return;
     }
@@ -366,8 +363,8 @@ const ProjectChartsCard: React.FC<{
         data = await storageService.loadProject(usedLang, projectId);
       }
       if (data) {
-        setLoadedData(prev => ({ ...prev, [projectId]: data }));
-        setLoadedLang(prev => ({ ...prev, [projectId]: usedLang }));
+        setLoadedData(function(prev) { return Object.assign({}, prev, { [projectId]: data }); });
+        setLoadedLang(function(prev) { return Object.assign({}, prev, { [projectId]: usedLang }); });
       }
     } catch (err) {
       console.warn('ProjectChartsCard: Failed to load', projectId, err);
@@ -393,7 +390,7 @@ const ProjectChartsCard: React.FC<{
       return;
     }
 
-    (async () => {
+    (async function() {
       setLoadingId(targetId);
       setActiveProjectId(targetId);
       try {
@@ -404,8 +401,8 @@ const ProjectChartsCard: React.FC<{
           data = await storageService.loadProject(usedLang, targetId);
         }
         if (data) {
-          setLoadedData(prev => ({ ...prev, [targetId]: data }));
-          setLoadedLang(prev => ({ ...prev, [targetId]: usedLang }));
+          setLoadedData(function(prev) { return Object.assign({}, prev, { [targetId]: data }); });
+          setLoadedLang(function(prev) { return Object.assign({}, prev, { [targetId]: usedLang }); });
         }
       } catch (err) {
         console.warn('ProjectChartsCard: Auto-load failed', targetId, err);
@@ -428,7 +425,7 @@ const ProjectChartsCard: React.FC<{
   const activeData = activeProjectId ? loadedData[activeProjectId] : null;
   const chartsData = useMemo(function() {
     if (!activeData || !activeProjectId) return null;
-    var dataLang = loadedLang[activeProjectId] || language;
+    var dataLang = (loadedLang[activeProjectId]) || language;
     try { return extractStructuralData(activeData, dataLang); } catch { return null; }
   }, [activeData, activeProjectId, loadedLang, language]);
   const isLoading = loadingId === activeProjectId;
