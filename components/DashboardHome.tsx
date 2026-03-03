@@ -308,12 +308,24 @@ const ProjectChartsCard: React.FC<{
       try {
         const { data, error } = await supabase
           .from('project_data')
-          .select('project_id, data->projectIdea->projectAcronym')
-          .in('project_id', projectIds)
-          .eq('language', language);
+          .select('project_id, language, data->projectIdea->projectAcronym')
+          .in('project_id', projectIds);
 
         if (!error && data) {
+          if (!error && data) {
           const map: Record<string, string> = {};
+          // First pass: add all acronyms (any language)
+          data.forEach(function(row: any) {
+            var acr = row.projectAcronym;
+            if (acr && typeof acr === 'string' && acr.trim()) {
+              // Only set if not already set, or if this row matches preferred language
+              if (!map[row.project_id] || row.language === language) {
+                map[row.project_id] = acr.trim();
+              }
+            }
+          });
+          setAcronyms(map);
+        };
           data.forEach((row: any) => {
             const acr = row.projectAcronym;
             if (acr && typeof acr === 'string' && acr.trim()) {
@@ -344,7 +356,13 @@ const ProjectChartsCard: React.FC<{
     }
     setLoadingId(projectId); setActiveProjectId(projectId);
     try {
-      const data = await storageService.loadProject(language, projectId);
+      // Try current language first
+      var data = await storageService.loadProject(language, projectId);
+      // Fallback: try the other language if no data found
+      if (!data) {
+        var fallbackLang = language === 'en' ? 'si' : 'en';
+        data = await storageService.loadProject(fallbackLang, projectId);
+      }
       if (data) setLoadedData(prev => ({ ...prev, [projectId]: data }));
     } catch (err) {
       console.warn('ProjectChartsCard: Failed to load', projectId, err);
@@ -375,7 +393,11 @@ const ProjectChartsCard: React.FC<{
       setLoadingId(targetId);
       setActiveProjectId(targetId);
       try {
-        const data = await storageService.loadProject(language, targetId);
+        var data = await storageService.loadProject(language, targetId);
+        if (!data) {
+          var fallbackLang = language === 'en' ? 'si' : 'en';
+          data = await storageService.loadProject(fallbackLang, targetId);
+        }
         if (data) setLoadedData(prev => ({ ...prev, [targetId]: data }));
       } catch (err) {
         console.warn('ProjectChartsCard: Auto-load failed', targetId, err);
