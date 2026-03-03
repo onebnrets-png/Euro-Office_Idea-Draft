@@ -270,8 +270,7 @@ const DashboardCard: React.FC<CardProps> = ({ id, title, icon, children, isDark,
         )}
         <div style={{ cursor: 'grab', color: c.text.muted, display: 'flex' }}><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg></div>
       </div>
-      <div style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0 }}>{children}</div>
-    </div>
+      <div draggable={false} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }} style={{ padding: spacing.lg, flex: 1, overflow: 'auto', minHeight: 0, userSelect: 'auto' as const }}>{children}</div>
   );
 };
 
@@ -1681,14 +1680,18 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
           })}
         </div>
       )}
-      <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs, marginBottom: spacing.sm }}>
+      <div ref={chatContainerRef} draggable={false} style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' as const, gap: spacing.xs, marginBottom: spacing.sm, userSelect: 'text' as const }}>
         {messages.length === 0 && <div style={{ textAlign: 'center' as const, color: c.text.muted, fontSize: typography.fontSize.xs, padding: spacing.xl }}>{language === 'si' ? 'Pozdravljen! Sem EURO-OFFICE AI pomočnik.' : 'Hello! I\'m the EURO-OFFICE AI Assistant.'}</div>}
         {messages.map(function(msg, idx) {
           var isAssistant = msg.role === 'assistant';
           var isLastAssistant = isAssistant && idx === messages.length - 1;
           return (
             <div key={idx} style={{ alignSelf: isAssistant ? 'flex-start' : 'flex-end', maxWidth: '85%', position: 'relative' as const }}>
-              <div style={{
+              <div
+                draggable={false}
+                onMouseDown={function(e) { e.stopPropagation(); }}
+                onDragStart={function(e) { e.preventDefault(); e.stopPropagation(); }}
+                style={{
                 background: isAssistant ? (isDark ? c.surface.sidebar : c.surface.main) : c.primary[500],
                 color: isAssistant ? c.text.body : '#fff',
                 borderRadius: radii.lg,
@@ -1700,6 +1703,7 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
                 userSelect: 'text' as const,
                 cursor: 'text',
                 WebkitUserSelect: 'text' as const,
+                MozUserSelect: 'text' as const,
               }}>
                 {isAssistant ? renderFormattedText(msg.content) : msg.content}
               </div>
