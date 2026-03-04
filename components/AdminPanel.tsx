@@ -1,7 +1,8 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v4.6 — 2026-03-03
+// v4.7 — 2026-03-04
+// ★ v4.7: Statistics tab — org-scoped for Admin (only own org projects/users), global for SuperAdmin
 // ★ v4.6: NEW "Changelog" tab — version history with EO codes, type badges, grouped by version
 // ★ v4.5: Guide Editor textarea shows default content (editable), same pattern as Instructions
 // v4.4 — 2026-03-02
@@ -722,25 +723,48 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 4000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(timer); } }, [message]);
-    // ★ v4.3: Load statistics data
+      // ★ v4.3 → v4.7: Load statistics data — org-scoped for Admin, global for SuperAdmin
   const loadStatistics = async () => {
     setStatsLoading(true);
     try {
-      // Load all projects with owner info
-      var projectsResult = await supabase
-        .from('projects')
-        .select('id, owner_id, title, created_at, updated_at');
-      var projects = (projectsResult.data || []);
+      var isSuperRole = storageService.isSuperAdmin();
+      var activeOrgId = storageService.getActiveOrgId();
 
-      // Load project_data for WP/partner counts
-      var projectDataResult = await supabase
-        .from('project_data')
-        .select('project_id, language, data');
+      var projects: any[] = [];
+
+      if (isSuperRole) {
+        // SuperAdmin: ALL projects across all organizations
+        var projectsResultAll = await supabase
+          .from('projects')
+          .select('id, owner_id, title, created_at, updated_at, organization_id');
+        projects = (projectsResultAll.data || []);
+      } else if (activeOrgId) {
+        // Admin: only projects in their own organization
+        var projectsResultOrg = await supabase
+          .from('projects')
+          .select('id, owner_id, title, created_at, updated_at, organization_id')
+          .eq('organization_id', activeOrgId);
+        projects = (projectsResultOrg.data || []);
+      } else {
+        // No active org — show nothing
+        projects = [];
+      }
+
+      // Get project IDs for filtering project_data
+      var projectIds = projects.map(function(p) { return p.id; });
+
+      // Load project_data only for relevant projects
       var projectDataMap = {};
-      (projectDataResult.data || []).forEach(function(pd) {
-        if (!projectDataMap[pd.project_id]) projectDataMap[pd.project_id] = {};
-        projectDataMap[pd.project_id][pd.language] = pd.data;
-      });
+      if (projectIds.length > 0) {
+        var projectDataResult = await supabase
+          .from('project_data')
+          .select('project_id, language, data')
+          .in('project_id', projectIds);
+        (projectDataResult.data || []).forEach(function(pd) {
+          if (!projectDataMap[pd.project_id]) projectDataMap[pd.project_id] = {};
+          projectDataMap[pd.project_id][pd.language] = pd.data;
+        });
+      }
 
       // Enrich projects with data info
       var enriched = projects.map(function(proj) {
@@ -756,7 +780,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           title: proj.title || '(Untitled)',
           ownerId: proj.owner_id,
           ownerEmail: ownerUser ? ownerUser.email : proj.owner_id.substring(0, 8) + '...',
-          language: languages.join(', ') || '—',
+          language: languages.join(', ') || '\u2014',
           createdAt: proj.created_at,
           updatedAt: proj.updated_at,
           wpCount: wpCount,
@@ -766,7 +790,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
       setStatsProjects(enriched);
 
-      // Count projects per user
+      // Count projects per user — only from filtered projects
       var userProjectCounts = {};
       projects.forEach(function(p) {
         if (!userProjectCounts[p.owner_id]) userProjectCounts[p.owner_id] = 0;
@@ -774,14 +798,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       });
       setStatsUserProjects(userProjectCounts);
 
-      // Load user settings (AI provider)
-      var settingsResult = await supabase
-        .from('user_settings')
-        .select('user_id, ai_provider');
+      // Load user settings (AI provider) — only for users visible to this admin
+      var visibleUserIds = admin.users.map(function(u) { return u.id; });
       var settingsMap = {};
-      (settingsResult.data || []).forEach(function(s) {
-        settingsMap[s.user_id] = { ai_provider: s.ai_provider || 'gemini' };
-      });
+      if (visibleUserIds.length > 0) {
+        var settingsResult = await supabase
+          .from('user_settings')
+          .select('user_id, ai_provider')
+          .in('user_id', visibleUserIds);
+        (settingsResult.data || []).forEach(function(s) {
+          settingsMap[s.user_id] = { ai_provider: s.ai_provider || 'gemini' };
+        });
+      }
       setStatsUserSettings(settingsMap);
 
     } catch (err) {
