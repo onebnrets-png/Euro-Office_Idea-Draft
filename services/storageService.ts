@@ -781,7 +781,7 @@ export const storageService = {
     return data.data;
   },
 
-  async saveProject(projectData: any, language: string = 'en', projectId: string | null = null) {
+    async saveProject(projectData: any, language: string = 'en', projectId: string | null = null) {
     const userId = await this.getCurrentUserId();
     if (!userId) return;
 
@@ -797,11 +797,48 @@ export const storageService = {
       }
     }
 
-    const goCheck = projectData?.generalObjectives;
-    const goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some((item: any) => item?.title?.trim());
-    console.log(`[storageService.saveProject] lang=${language}, projectId=${targetId}, generalObjectives: ${goHasContent ? '✅ HAS (' + goCheck.length + ' items, first="' + (goCheck[0]?.title || '').substring(0, 40) + '")' : '⚠️ EMPTY'}`);
+    // ★ v5.5: SAVE GUARD — prevent saving empty skeleton over existing data
+    var hasRealContent = false;
+    if (projectData) {
+      if (projectData.projectIdea && (projectData.projectIdea.projectTitle || '').trim().length > 0) hasRealContent = true;
+      if (projectData.projectIdea && (projectData.projectIdea.mainAim || '').trim().length > 0) hasRealContent = true;
+      if (projectData.problemAnalysis && projectData.problemAnalysis.coreProblem && (projectData.problemAnalysis.coreProblem.title || '').trim().length > 0) hasRealContent = true;
+      if (Array.isArray(projectData.generalObjectives) && projectData.generalObjectives.some(function(o) { return (o.title || '').trim().length > 0; })) hasRealContent = true;
+      if (Array.isArray(projectData.specificObjectives) && projectData.specificObjectives.some(function(o) { return (o.title || '').trim().length > 0; })) hasRealContent = true;
+      if (Array.isArray(projectData.activities) && projectData.activities.some(function(wp) { return (wp.title || '').trim().length > 0; })) hasRealContent = true;
+    }
 
-    const { error: dataError } = await supabase
+    if (!hasRealContent) {
+      // Check if existing data in DB has real content — if yes, BLOCK the save
+      var existingCheck = await supabase
+        .from('project_data')
+        .select('data')
+        .eq('project_id', targetId)
+        .eq('language', language)
+        .single();
+
+      if (existingCheck.data && existingCheck.data.data) {
+        var existingData = existingCheck.data.data;
+        var existingHasContent = false;
+        if (existingData.projectIdea && (existingData.projectIdea.projectTitle || '').trim().length > 0) existingHasContent = true;
+        if (existingData.projectIdea && (existingData.projectIdea.mainAim || '').trim().length > 0) existingHasContent = true;
+        if (existingData.problemAnalysis && existingData.problemAnalysis.coreProblem && (existingData.problemAnalysis.coreProblem.title || '').trim().length > 0) existingHasContent = true;
+        if (Array.isArray(existingData.generalObjectives) && existingData.generalObjectives.some(function(o) { return (o.title || '').trim().length > 0; })) existingHasContent = true;
+        if (Array.isArray(existingData.activities) && existingData.activities.some(function(wp) { return (wp.title || '').trim().length > 0; })) existingHasContent = true;
+
+        if (existingHasContent) {
+          console.error('[storageService.saveProject] BLOCKED — refusing to overwrite real data with empty skeleton! projectId=' + targetId + ', lang=' + language);
+          logErrorQuick('storageService.saveProject.BLOCKED_EMPTY_OVERWRITE', { message: 'Attempted to save empty skeleton over existing data' }, { projectId: targetId, language: language });
+          return;
+        }
+      }
+    }
+
+    var goCheck = projectData?.generalObjectives;
+    var goHasContent = Array.isArray(goCheck) && goCheck.length > 0 && goCheck.some(function(item) { return item?.title?.trim(); });
+    console.log('[storageService.saveProject] lang=' + language + ', projectId=' + targetId + ', generalObjectives: ' + (goHasContent ? 'HAS (' + goCheck.length + ' items, first="' + ((goCheck[0]?.title || '').substring(0, 40)) + '")' : 'EMPTY'));
+
+    var dataError2 = await supabase
       .from('project_data')
       .upsert(
         {
@@ -812,20 +849,20 @@ export const storageService = {
         { onConflict: 'project_id,language' }
       );
 
-    if (dataError) {
-      console.error('Error saving project data:', dataError);
-      logErrorQuick('storageService.saveProject', dataError, { projectId: targetId, language });
+    if (dataError2.error) {
+      console.error('Error saving project data:', dataError2.error);
+      logErrorQuick('storageService.saveProject', dataError2.error, { projectId: targetId, language: language });
     }
 
-    const newTitle = projectData.projectIdea?.projectTitle;
+    var newTitle = projectData.projectIdea?.projectTitle;
     if (newTitle && newTitle.trim() !== '') {
-      const { error: titleError } = await supabase
+      var titleResult = await supabase
         .from('projects')
         .update({ title: newTitle.trim() })
         .eq('id', targetId);
 
-      if (titleError) {
-        logErrorQuick('storageService.saveProject.title', titleError, { projectId: targetId });
+      if (titleResult.error) {
+        logErrorQuick('storageService.saveProject.title', titleResult.error, { projectId: targetId });
       }
     }
 
