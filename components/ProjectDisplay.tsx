@@ -1529,14 +1529,23 @@ const renderActivities = (props) => {
             <div id="gantt-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
                 <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">{t.subSteps.ganttChart}<GuideTooltip stepKey="activities" fieldKey="ganttChart" language={language} size="sm" /></h3>
                 <div className="chart-container-white bg-white rounded-xl">
-                    <GanttChart activities={activities} language={language} id="gantt-chart-interactive" />
+                    <GanttChart 
+                        activities={activities} 
+                        language={language} 
+                        id="gantt-chart-interactive"
+                        key={'gantt-' + activities.length + '-' + activities.reduce(function(acc, wp) { return acc + (wp.tasks || []).length + '-' + (wp.tasks || []).reduce(function(s, t) { return s + (t.startDate || '') + (t.endDate || ''); }, ''); }, '')}
+                    />
                 </div>
             </div>
 
             <div id="pert-chart" className="mt-12 mb-8 border-t-2 border-slate-200 pt-8">
                 <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">{t.subSteps.pertChart}<GuideTooltip stepKey="activities" fieldKey="pertChart" language={language} size="sm" /></h3>
                 <div className="chart-container-white bg-white rounded-xl">
-                    <PERTChart activities={activities} language={language} />
+                    <PERTChart 
+                        activities={activities} 
+                        language={language}
+                        key={'pert-' + activities.length + '-' + activities.reduce(function(acc, wp) { return acc + (wp.tasks || []).length; }, 0)}
+                    />
                 </div>
             </div>
 
