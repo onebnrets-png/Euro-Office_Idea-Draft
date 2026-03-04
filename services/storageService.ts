@@ -1,6 +1,7 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
+// ★ v5.5: SAVE GUARD — blocks saving empty skeleton over existing real data
 // v5.4 — 2026-03-03
 // ★ v5.4: loadProject() returns null for skeleton data (empty createEmptyProjectData objects)
 // ★ v5.3: getAdminTabOrder() + setAdminTabOrder() for drag & drop tab reordering
