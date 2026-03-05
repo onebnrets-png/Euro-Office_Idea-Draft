@@ -94,6 +94,7 @@ export const useAdmin = () => {
 
     try {
       const isSuperRole = storageService.isSuperAdmin();
+      console.log('[AuditLog] isSuperAdmin:', isSuperRole, '| email:', storageService.getCurrentUser());
       const activeOrgId = storageService.getActiveOrgId();
 
       if (isSuperRole) {
