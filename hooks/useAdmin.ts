@@ -655,9 +655,9 @@ export const useAdmin = () => {
           return;
         }
         logData = data || [];
-            } else {
-        // ★ v1.6: Admin sees audit logs relevant to their organization
-        // (where admin OR target is a member of the same org)
+                 } else {
+        // ★ v1.6 FIX: Admin sees audit logs ONLY where action is within their org
+        // Rule: admin_id must be in org AND (target_user_id is in org OR target_user_id is NULL)
         var activeOrgId = storageService.getActiveOrgId();
         if (!activeOrgId) {
           logData = [];
@@ -673,36 +673,29 @@ export const useAdmin = () => {
           if (orgUserIds.length === 0) {
             logData = [];
           } else {
-            // Fetch logs where admin_id OR target_user_id is in org
-            // Supabase doesn't support OR across two .in() filters easily,
-            // so fetch by admin_id in org, then by target_user_id in org, merge & dedupe
-            var logByAdmin = await supabase
+            // Fetch all logs where admin_id is in org
+            var logByOrgAdmin = await supabase
               .from('admin_log')
               .select('*')
               .in('admin_id', orgUserIds)
               .order('created_at', { ascending: false })
-              .limit(limit);
+              .limit(limit * 2);
 
-            var logByTarget = await supabase
-              .from('admin_log')
-              .select('*')
-              .in('target_user_id', orgUserIds)
-              .order('created_at', { ascending: false })
-              .limit(limit);
+            // Filter client-side: keep only entries where target is also in org OR target is null
+            var orgUserIdSet = {};
+            orgUserIds.forEach(function(uid) { orgUserIdSet[uid] = true; });
 
-            // Merge and dedupe by id
-            var mergedMap = {};
-            (logByAdmin.data || []).forEach(function(entry) { mergedMap[entry.id] = entry; });
-            (logByTarget.data || []).forEach(function(entry) { mergedMap[entry.id] = entry; });
+            logData = (logByOrgAdmin.data || []).filter(function(entry) {
+              // No target (system action like instructions_update) — OK if admin is in org
+              if (!entry.target_user_id) return true;
+              // Target must also be in the same org
+              return orgUserIdSet[entry.target_user_id] === true;
+            });
 
-            logData = Object.values(mergedMap);
-
-            // Sort by created_at descending
+            // Sort by created_at descending and apply limit
             logData.sort(function(a, b) {
               return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
-
-            // Apply limit
             logData = logData.slice(0, limit);
           }
         }
