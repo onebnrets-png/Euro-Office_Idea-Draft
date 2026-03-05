@@ -686,10 +686,25 @@ export const useAdmin = () => {
             var orgUserIdSet = {};
             orgUserIds.forEach(function(uid) { orgUserIdSet[uid] = true; });
 
+            // Build set of org member emails for fallback check
+            var orgEmailsResult = await supabase
+              .from('profiles')
+              .select('id, email')
+              .in('id', orgUserIds);
+            var orgEmailSet = {};
+            (orgEmailsResult.data || []).forEach(function(p) {
+              if (p.email) orgEmailSet[p.email.toLowerCase()] = true;
+            });
+
             logData = (logByOrgAdmin.data || []).filter(function(entry) {
-              // No target (system action like instructions_update) — OK if admin is in org
-              if (!entry.target_user_id) return true;
-              // Target must also be in the same org
+              if (!entry.target_user_id) {
+                // No target_user_id — check if details has a target email outside org
+                var detailEmail = entry.details?.target_email || entry.details?.deleted_email || entry.details?.removed_email || null;
+                if (!detailEmail) return true;
+                // If details mentions a specific person, they must be in org
+                return orgEmailSet[detailEmail.toLowerCase()] === true;
+              }
+              // Target must be in the same org
               return orgUserIdSet[entry.target_user_id] === true;
             });
 
