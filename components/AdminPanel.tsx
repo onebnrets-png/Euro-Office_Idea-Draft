@@ -2,6 +2,13 @@
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
 // v4.8 — 2026-03-05
+// ★ v4.8: Export TXT/JSON + Import JSON across all admin tabs (SuperAdmin only)
+//   - Instructions: Export TXT + JSON + Import JSON
+//   - Guide Editor: Export TXT + JSON + Import JSON  
+//   - Users: Export TXT + JSON
+//   - Organizations: Export TXT + JSON
+//   - Statistics: Export TXT + JSON
+//   - Changelog: Export TXT + JSON
 // ★ v4.8: Instructions Export TXT/JSON + Import JSON (SuperAdmin only) with validation + audit log
 // v4.7 — 2026-03-04
 // ★ v4.7: Statistics tab — org-scoped for Admin (only own org projects/users), global for SuperAdmin
@@ -1313,12 +1320,72 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
           )}
 
           {/* ═══ USERS TAB ═══ */}
-          {activeTab === 'users' && isUserAdmin && (
+            {activeTab === 'users' && isUserAdmin && (
             <div>
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>{t.users.title}</h3>
-                <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{t.users.subtitle}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                  <div>
+                    <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>{t.users.title}</h3>
+                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{t.users.subtitle}</p>
+                  </div>
+                  {isUserSuperAdmin && admin.users.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={function() {
+                        var lines = [];
+                        lines.push('=' .repeat(60));
+                        lines.push('EURO-OFFICE USERS');
+                        lines.push('Exported: ' + new Date().toISOString());
+                        lines.push('Total: ' + admin.users.length);
+                        lines.push('=' .repeat(60));
+                        lines.push('');
+                        admin.users.forEach(function(u, i) {
+                          lines.push('-'.repeat(40));
+                          lines.push('User #' + (i + 1));
+                          lines.push('-'.repeat(40));
+                          lines.push('Email:        ' + u.email);
+                          lines.push('Name:         ' + (u.displayName || '-'));
+                          lines.push('Role:         ' + u.role);
+                          lines.push('Organization: ' + (u.orgName || '-'));
+                          lines.push('Registered:   ' + formatDate(u.createdAt));
+                          lines.push('Last Login:   ' + (u.lastSignIn ? formatDate(u.lastSignIn) : 'Never'));
+                          lines.push('');
+                        });
+                        var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-users-' + new Date().toISOString().split('T')[0] + '.txt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} {language === 'si' ? 'Izvoz TXT' : 'Export TXT'}</button>
+                      <button onClick={function() {
+                        var exportData = {
+                          _meta: { format: 'euro-office-users', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', total: admin.users.length },
+                          users: admin.users.map(function(u) {
+                            return { email: u.email, displayName: u.displayName || '', role: u.role, organization: u.orgName || '', registeredAt: u.createdAt || '', lastSignIn: u.lastSignIn || '' };
+                          })
+                        };
+                        var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-users-' + new Date().toISOString().split('T')[0] + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} {language === 'si' ? 'Izvoz JSON' : 'Export JSON'}</button>
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
+
                   <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{t.users.totalUsers}: {totalUsers}</span>
                   <span style={{ padding: '4px 12px', borderRadius: radii.full, background: warningBadgeBg, border: `1px solid ${warningBadgeBorder}`, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{t.users.totalAdmins}: {totalAdmins}</span>
                   <span style={{ padding: '4px 12px', borderRadius: radii.full, background: superadminBadgeBg, border: `1px solid ${superadminBadgeBorder}`, color: superadminBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>{'\uD83D\uDC51'} {t.users.totalSuperAdmins}: {totalSuperAdmins}</span>
@@ -1436,9 +1503,63 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                     <span style={{ padding: '4px 12px', borderRadius: radii.full, background: primaryBadgeBg, border: `1px solid ${primaryBadgeBorder}`, color: primaryBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold }}>
                       {(t as any).organizations.totalOrgs}: {allOrgs.length}
                     </span>
+                      {allOrgs.length > 0 && (
+                      <button onClick={function() {
+                        var lines = [];
+                        lines.push('=' .repeat(60));
+                        lines.push('EURO-OFFICE ORGANIZATIONS');
+                        lines.push('Exported: ' + new Date().toISOString());
+                        lines.push('Total: ' + allOrgs.length);
+                        lines.push('=' .repeat(60));
+                        lines.push('');
+                        allOrgs.forEach(function(org, i) {
+                          var mc = orgMemberCounts[org.id];
+                          lines.push('-'.repeat(40));
+                          lines.push('Org #' + (i + 1));
+                          lines.push('-'.repeat(40));
+                          lines.push('Name:    ' + org.name);
+                          lines.push('ID:      ' + org.id);
+                          lines.push('Members: ' + (mc !== undefined ? mc : '?'));
+                          lines.push('Created: ' + formatDate(org.created_at || null, true));
+                          lines.push('');
+                        });
+                        var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-organizations-' + new Date().toISOString().split('T')[0] + '.txt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} TXT</button>
+                    )}
+                    {allOrgs.length > 0 && (
+                      <button onClick={function() {
+                        var exportData = {
+                          _meta: { format: 'euro-office-organizations', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', total: allOrgs.length },
+                          organizations: allOrgs.map(function(org) {
+                            return { id: org.id, name: org.name, members: orgMemberCounts[org.id] !== undefined ? orgMemberCounts[org.id] : null, createdAt: org.created_at || '' };
+                          })
+                        };
+                        var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-organizations-' + new Date().toISOString().split('T')[0] + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} JSON</button>
+                    )}
                     <button onClick={async () => { await loadAllOrgs(); }} disabled={orgsLoading}
                       style={{ fontSize: '11px', padding: '5px 12px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: orgsLoading ? 'wait' : 'pointer' }}>
-                      {orgsLoading ? (t as any).organizations.refreshing : `\u21BB ${(t as any).organizations.refresh}`}
+                      {orgsLoading ? (t as any).organizations.refreshing : '\u21BB ' + ((t as any).organizations.refresh)}
                     </button>
                   </div>
                 </div>
@@ -1574,8 +1695,73 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
                     {'\uD83D\uDCCA'} {tStats.title || 'Usage Statistics'}
                   </h3>
-                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{tStats.subtitle || ''}</p>
+                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>{tStats.subtitle || ''}</p>
                 </div>
+                {isUserSuperAdmin && statsProjects.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={function() {
+                      var lines = [];
+                      lines.push('=' .repeat(60));
+                      lines.push('EURO-OFFICE STATISTICS');
+                      lines.push('Exported: ' + new Date().toISOString());
+                      lines.push('=' .repeat(60));
+                      lines.push('');
+                      lines.push('SUMMARY');
+                      lines.push('  Total Projects: ' + statsProjects.length);
+                      lines.push('  Total Users:    ' + admin.users.length);
+                      lines.push('');
+                      lines.push('-'.repeat(40));
+                      lines.push('USERS');
+                      lines.push('-'.repeat(40));
+                      admin.users.forEach(function(u) {
+                        var projCount = statsUserProjects[u.id] || 0;
+                        var settings = statsUserSettings[u.id];
+                        lines.push('  ' + u.email + ' | Projects: ' + projCount + ' | Provider: ' + (settings ? settings.ai_provider : '-') + ' | Last: ' + (u.lastSignIn ? formatDate(u.lastSignIn) : 'Never'));
+                      });
+                      lines.push('');
+                      lines.push('-'.repeat(40));
+                      lines.push('PROJECTS');
+                      lines.push('-'.repeat(40));
+                      statsProjects.forEach(function(p) {
+                        lines.push('  ' + p.title + ' | Owner: ' + p.ownerEmail + ' | Lang: ' + p.language + ' | WPs: ' + p.wpCount + ' | Partners: ' + p.partnerCount + ' | Modified: ' + formatDate(p.updatedAt));
+                      });
+                      var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-statistics-' + new Date().toISOString().split('T')[0] + '.txt';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                    >{'\u2193 '} TXT</button>
+                    <button onClick={function() {
+                      var exportData = {
+                        _meta: { format: 'euro-office-statistics', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown' },
+                        summary: { totalProjects: statsProjects.length, totalUsers: admin.users.length },
+                        users: admin.users.map(function(u) {
+                          return { email: u.email, projects: statsUserProjects[u.id] || 0, aiProvider: (statsUserSettings[u.id] || {}).ai_provider || '-', lastSignIn: u.lastSignIn || '', registeredAt: u.createdAt || '' };
+                        }),
+                        projects: statsProjects.map(function(p) {
+                          return { id: p.id, title: p.title, ownerEmail: p.ownerEmail, language: p.language, wpCount: p.wpCount, partnerCount: p.partnerCount, createdAt: p.createdAt, updatedAt: p.updatedAt };
+                        })
+                      };
+                      var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-statistics-' + new Date().toISOString().split('T')[0] + '.json';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                    >{'\u2193 '} JSON</button>
+                  </div>
+                )}
 
                 {statsLoading ? <SkeletonTable rows={3} cols={4} /> : (
                   <>
@@ -2346,10 +2532,117 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           {totalOverrides} {language === 'si' ? 'prilagoditev' : 'override(s)'}
                         </span>
                       )}
+                        <button onClick={function() {
+                        // ═══ GUIDE EXPORT TXT ═══
+                        var lines = [];
+                        lines.push('=' .repeat(60));
+                        lines.push('EURO-OFFICE GUIDE CONTENT OVERRIDES');
+                        lines.push('Exported: ' + new Date().toISOString());
+                        lines.push('Total overrides: ' + totalOverrides);
+                        lines.push('=' .repeat(60));
+                        lines.push('');
+                        var keys = Object.keys(guideOverrides).sort();
+                        keys.forEach(function(key) {
+                          var val = guideOverrides[key];
+                          if (val && val.trim() !== '') {
+                            lines.push('-'.repeat(40));
+                            lines.push('KEY: ' + key);
+                            lines.push('-'.repeat(40));
+                            lines.push(val);
+                            lines.push('');
+                          }
+                        });
+                        var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-guide-overrides-' + new Date().toISOString().split('T')[0] + '.txt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} TXT</button>
+                      <button onClick={function() {
+                        // ═══ GUIDE EXPORT JSON ═══
+                        var exportData = {
+                          _meta: { format: 'euro-office-guide-overrides', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', totalOverrides: totalOverrides, description: 'Edit values and re-import. Keys follow pattern: stepKey.fieldKey.lang.property' },
+                          overrides: guideOverrides
+                        };
+                        var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-guide-overrides-' + new Date().toISOString().split('T')[0] + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                        style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                      >{'\u2193 '} JSON</button>
+                      <label style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.primary[400], background: colors.primary[600], color: '#fff', cursor: 'pointer', fontWeight: typography.fontWeight.bold, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        {'\u2191 '} {language === 'si' ? 'Uvoz' : 'Import'}
+                        <input type="file" accept=".json" style={{ display: 'none' }} onChange={function(ev) {
+                          var file = ev.target.files?.[0];
+                          if (!file) return;
+                          var reader = new FileReader();
+                          reader.onload = function(e) {
+                            try {
+                              var parsed = JSON.parse(e.target?.result);
+                              var newOverrides = parsed.overrides || parsed;
+                              // Remove _meta if present at top level
+                              if (newOverrides._meta) delete newOverrides._meta;
+                              var overrideCount = Object.keys(newOverrides).filter(function(k) { return newOverrides[k] && newOverrides[k].trim && newOverrides[k].trim() !== ''; }).length;
+                              if (overrideCount === 0 && Object.keys(newOverrides).length === 0) {
+                                setToast({ message: language === 'si' ? 'Neveljavna JSON datoteka.' : 'Invalid JSON file.', type: 'error' });
+                                ev.target.value = '';
+                                return;
+                              }
+                              setConfirmModal({
+                                isOpen: true,
+                                title: language === 'si' ? 'Uvoz vsebine vodnika' : 'Import Guide Content',
+                                message: (language === 'si'
+                                  ? 'To bo PREPISALO vso vsebino vodnika!\n\nDatoteka: ' + file.name + '\nPrilagoditve: ' + overrideCount
+                                  : 'This will OVERWRITE all guide content overrides!\n\nFile: ' + file.name + '\nOverrides: ' + overrideCount)
+                                  + (language === 'si' ? '\n\nAli ste prepri\u010Dani?' : '\n\nAre you sure?'),
+                                onConfirm: async function() {
+                                  setConfirmModal(null);
+                                  setGuideEditorSaving(true);
+                                  var userId = await storageService.getCurrentUserId();
+                                  var result = await saveGuideOverrides(newOverrides, userId || '');
+                                  if (result.success) {
+                                    setGuideOverrides(newOverrides);
+                                    setGuideEditorChanged(false);
+                                    setToast({ message: (language === 'si' ? 'Vsebina vodnika uvo\u017Eena! ' : 'Guide content imported! ') + overrideCount + (language === 'si' ? ' prilagoditev.' : ' overrides.'), type: 'success' });
+                                    try {
+                                      await supabase.from('admin_log').insert({
+                                        admin_id: userId,
+                                        action: 'guide_content_import',
+                                        target_user_id: null,
+                                        details: { fileName: file.name, overrideCount: overrideCount, importedAt: new Date().toISOString() },
+                                      });
+                                    } catch (logErr) { /* ignore */ }
+                                  } else {
+                                    setToast({ message: (language === 'si' ? 'Napaka pri uvozu: ' : 'Import failed: ') + (result.message || ''), type: 'error' });
+                                  }
+                                  setGuideEditorSaving(false);
+                                },
+                              });
+                            } catch (parseErr) {
+                              setToast({ message: language === 'si' ? 'Neveljavna JSON datoteka.' : 'Invalid JSON file.', type: 'error' });
+                            }
+                            ev.target.value = '';
+                          };
+                          reader.readAsText(file);
+                        }} />
+                      </label>
                       <button onClick={handleGuideResetAll} disabled={totalOverrides === 0 || guideEditorSaving}
                         style={{ fontSize: '11px', padding: '5px 12px', borderRadius: radii.md, border: '1px solid ' + dangerBtnBorder, background: dangerBtnBg, color: dangerBtnText, cursor: totalOverrides === 0 ? 'not-allowed' : 'pointer', opacity: totalOverrides === 0 ? 0.5 : 1 }}>
                         {'\uD83D\uDDD1\uFE0F'} {tGuide.resetAll || 'Reset All'}
                       </button>
+
                     </div>
                   </div>
                 </div>
@@ -2636,10 +2929,70 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                   <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, margin: '0 0 4px' }}>
                     {'\uD83D\uDCCB'} {language === 'si' ? 'Zgodovina verzij' : 'Version History'}
                   </h3>
-                  <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>
+                    <p style={{ color: colors.text.muted, fontSize: typography.fontSize.sm, margin: 0 }}>
                     {language === 'si' ? 'Kronolo\u0161ki pregled vseh sprememb aplikacije' : 'Chronological overview of all application changes'}
                   </p>
                 </div>
+                {isUserSuperAdmin && changelogGroups.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={function() {
+                      var lines = [];
+                      lines.push('=' .repeat(60));
+                      lines.push('EURO-OFFICE CHANGELOG');
+                      lines.push('Exported: ' + new Date().toISOString());
+                      lines.push('=' .repeat(60));
+                      lines.push('');
+                      changelogGroups.forEach(function(group) {
+                        lines.push('');
+                        lines.push('=' .repeat(40));
+                        lines.push('VERSION ' + group.version + ' (' + formatDate(group.latestDate, true) + ')');
+                        lines.push('=' .repeat(40));
+                        group.entries.forEach(function(entry) {
+                          lines.push('');
+                          lines.push('  [' + entry.code + '] [' + entry.type + '] ' + entry.title);
+                          if (entry.description) lines.push('  ' + entry.description);
+                          if (entry.files_changed && entry.files_changed.length > 0) lines.push('  Files: ' + entry.files_changed.join(', '));
+                          lines.push('  Date: ' + formatDate(entry.released_at, true));
+                        });
+                      });
+                      var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-changelog-' + new Date().toISOString().split('T')[0] + '.txt';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                    >{'\u2193 '} TXT</button>
+                    <button onClick={function() {
+                      var allEntries = [];
+                      changelogGroups.forEach(function(g) {
+                        g.entries.forEach(function(e) {
+                          allEntries.push({ version: g.version, code: e.code, type: e.type, title: e.title, description: e.description || '', filesChanged: e.files_changed || [], releasedAt: e.released_at || '' });
+                        });
+                      });
+                      var exportData = {
+                        _meta: { format: 'euro-office-changelog', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', totalEntries: allEntries.length },
+                        changelog: allEntries
+                      };
+                      var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-changelog-' + new Date().toISOString().split('T')[0] + '.json';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
+                    >{'\u2193 '} JSON</button>
+                  </div>
+                )}
+
 
                 {/* Filters */}
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
