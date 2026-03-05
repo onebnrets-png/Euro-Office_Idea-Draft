@@ -1,6 +1,8 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// v4.8 — 2026-03-05
+// ★ v4.8: Instructions Export TXT/JSON + Import JSON (SuperAdmin only) with validation + audit log
 // v4.7 — 2026-03-04
 // ★ v4.7: Statistics tab — org-scoped for Admin (only own org projects/users), global for SuperAdmin
 // ★ v4.6: NEW "Changelog" tab — version history with EO codes, type badges, grouped by version
@@ -1710,24 +1712,190 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
             );
           })()}
 
-          {/* ═══ INSTRUCTIONS TAB ═══ */}
+          {/* ═══ INSTRUCTIONS TAB ═══ ★ v4.8: Export TXT/JSON + Import JSON (SuperAdmin only) */}
           {activeTab === 'instructions' && isUserAdmin && (
-            <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
-              <div style={{ width: '200px', flexShrink: 0, borderRight: `1px solid ${colors.border.light}`, paddingRight: '16px' }}>
-                {instructionSections.map((section) => (
-                  <button key={section} onClick={() => setActiveInstructionSection(section)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', marginBottom: '4px', borderRadius: radii.md, border: 'none', cursor: 'pointer', background: activeInstructionSection === section ? primaryBadgeBg : 'transparent', color: activeInstructionSection === section ? primaryBadgeText : colors.text.body, fontSize: typography.fontSize.xs, fontWeight: activeInstructionSection === section ? typography.fontWeight.semibold : typography.fontWeight.medium }}>
-                    {t.instructions.sections[section]}
-                  </button>
-                ))}
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
-                  {t.instructions.sections[activeInstructionSection as keyof typeof t.instructions.sections] || activeInstructionSection}
-                </h3>
-                <textarea value={editedInstructions[activeInstructionSection] || ''} onChange={(e) => handleInstructionChange(activeInstructionSection, e.target.value)} placeholder={getDefaultPlaceholder(activeInstructionSection)} style={{ ...inputStyle, minHeight: '300px', resize: 'vertical', fontFamily: typography.fontFamily.mono, fontSize: '12px', lineHeight: '1.6' }} />
-                <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                  <button onClick={handleSaveGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>{t.instructions.save}</button>
-                  <button onClick={handleResetGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: `1px solid ${colors.border.light}`, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{t.instructions.reset}</button>
+            <div>
+              {/* ★ v4.8: Export/Import toolbar — SuperAdmin only */}
+              {isUserSuperAdmin && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '12px 16px', borderRadius: radii.lg, background: superadminBadgeBg, border: '1px solid ' + superadminBadgeBorder }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>{'\uD83D\uDC51'}</span>
+                    <span style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: superadminBadgeText }}>
+                      {language === 'si' ? 'Upravljanje pravil (SuperAdmin)' : 'Instructions Management (SuperAdmin)'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={function() {
+                      // ═══ EXPORT TXT ═══
+                      var sections = Object.keys(t.instructions.sections);
+                      var lines = [];
+                      lines.push('=' .repeat(60));
+                      lines.push('EURO-OFFICE AI INSTRUCTIONS');
+                      lines.push('Exported: ' + new Date().toISOString());
+                      lines.push('Version: ' + (admin.globalInstructions?.app_version || '1.1.0'));
+                      lines.push('=' .repeat(60));
+                      lines.push('');
+                      sections.forEach(function(section) {
+                        var label = t.instructions.sections[section] || section;
+                        var content = editedInstructions[section] || '';
+                        lines.push('-'.repeat(60));
+                        lines.push('SECTION: ' + label + ' [' + section + ']');
+                        lines.push('-'.repeat(60));
+                        lines.push('');
+                        lines.push(content || '(empty)');
+                        lines.push('');
+                        lines.push('');
+                      });
+                      lines.push('=' .repeat(60));
+                      lines.push('END OF INSTRUCTIONS');
+                      lines.push('=' .repeat(60));
+                      var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-instructions-' + new Date().toISOString().split('T')[0] + '.txt';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '6px 12px', borderRadius: radii.md, border: '1px solid ' + superadminBadgeBorder, background: 'transparent', color: superadminBadgeText, cursor: 'pointer', fontWeight: typography.fontWeight.semibold }}
+                    >
+                      {'\u2193'} {language === 'si' ? 'Izvoz TXT' : 'Export TXT'}
+                    </button>
+                    <button onClick={function() {
+                      // ═══ EXPORT JSON ═══
+                      var exportData = {
+                        _meta: {
+                          format: 'euro-office-instructions',
+                          version: '1.0',
+                          exportedAt: new Date().toISOString(),
+                          exportedBy: storageService.getCurrentUser() || 'unknown',
+                          appVersion: admin.globalInstructions?.app_version || '1.1.0',
+                          description: 'Edit the values below and re-import via SuperAdmin panel. Do NOT change the keys (global, language, academic, etc).'
+                        }
+                      };
+                      var sections = Object.keys(t.instructions.sections);
+                      sections.forEach(function(section) {
+                        exportData[section] = editedInstructions[section] || '';
+                      });
+                      var jsonStr = JSON.stringify(exportData, null, 2);
+                      var blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+                      var url = URL.createObjectURL(blob);
+                      var a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'euro-office-instructions-' + new Date().toISOString().split('T')[0] + '.json';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                      style={{ fontSize: '11px', padding: '6px 12px', borderRadius: radii.md, border: '1px solid ' + superadminBadgeBorder, background: 'transparent', color: superadminBadgeText, cursor: 'pointer', fontWeight: typography.fontWeight.semibold }}
+                    >
+                      {'\u2193'} {language === 'si' ? 'Izvoz JSON' : 'Export JSON'}
+                    </button>
+                    <label style={{ fontSize: '11px', padding: '6px 12px', borderRadius: radii.md, border: '1px solid ' + colors.primary[400], background: colors.primary[600], color: '#fff', cursor: 'pointer', fontWeight: typography.fontWeight.bold, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      {'\u2191'} {language === 'si' ? 'Uvoz JSON' : 'Import JSON'}
+                      <input type="file" accept=".json" style={{ display: 'none' }} onChange={function(e) {
+                        var file = e.target.files?.[0];
+                        if (!file) return;
+                        var reader = new FileReader();
+                        reader.onload = function(ev) {
+                          try {
+                            var parsed = JSON.parse(ev.target?.result);
+                            // Validate structure
+                            var validSections = Object.keys(t.instructions.sections);
+                            var foundSections = [];
+                            var invalidKeys = [];
+                            Object.keys(parsed).forEach(function(key) {
+                              if (key === '_meta') return;
+                              if (validSections.indexOf(key) >= 0) {
+                                foundSections.push(key);
+                              } else {
+                                invalidKeys.push(key);
+                              }
+                            });
+                            if (foundSections.length === 0) {
+                              setToast({ message: language === 'si' ? 'Neveljavna JSON datoteka — ni prepoznanih sekcij.' : 'Invalid JSON file — no recognized sections found.', type: 'error' });
+                              e.target.value = '';
+                              return;
+                            }
+                            var warningText = '';
+                            if (invalidKeys.length > 0) {
+                              warningText = (language === 'si' ? '\n\nNeznane sekcije (bodo ignorirane): ' : '\n\nUnknown sections (will be ignored): ') + invalidKeys.join(', ');
+                            }
+                            setConfirmModal({
+                              isOpen: true,
+                              title: language === 'si' ? 'Uvoz AI pravil' : 'Import AI Instructions',
+                              message: (language === 'si'
+                                ? 'To bo PREPISALO vsa AI pravila za VSE uporabnike v sistemu!\n\nDatoteka: ' + file.name + '\nPrepoznane sekcije: ' + foundSections.length + ' / ' + validSections.length
+                                : 'This will OVERWRITE all AI instructions for ALL users in the system!\n\nFile: ' + file.name + '\nRecognized sections: ' + foundSections.length + ' / ' + validSections.length)
+                                + warningText
+                                + (language === 'si' ? '\n\nAli ste prepri\u010Dani?' : '\n\nAre you sure?'),
+                              onConfirm: async function() {
+                                setConfirmModal(null);
+                                // Build new instructions object
+                                var newInstructions = {};
+                                foundSections.forEach(function(key) {
+                                  newInstructions[key] = parsed[key];
+                                });
+                                // Save via admin
+                                var result = await admin.saveGlobalInstructions(newInstructions);
+                                if (result.success) {
+                                  // Update local state
+                                  var defaults = buildDefaultInstructionsDisplay();
+                                  var merged = {};
+                                  Object.keys(defaults).forEach(function(key) {
+                                    merged[key] = newInstructions[key] !== undefined ? newInstructions[key] : defaults[key];
+                                  });
+                                  setEditedInstructions(merged);
+                                  setToast({ message: (language === 'si' ? 'Pravila uspe\u0161no uvo\u017Eena! ' : 'Instructions imported successfully! ') + foundSections.length + (language === 'si' ? ' sekcij posodobljenih.' : ' sections updated.'), type: 'success' });
+                                  // Audit log
+                                  try {
+                                    var userId = await storageService.getCurrentUserId();
+                                    await supabase.from('admin_log').insert({
+                                      admin_id: userId,
+                                      action: 'instructions_import',
+                                      target_user_id: null,
+                                      details: { fileName: file.name, sectionsImported: foundSections.length, sectionsSkipped: invalidKeys.length, importedAt: new Date().toISOString() },
+                                    });
+                                  } catch (logErr) { /* ignore */ }
+                                } else {
+                                  setToast({ message: (language === 'si' ? 'Napaka pri uvozu: ' : 'Import failed: ') + (result.message || ''), type: 'error' });
+                                }
+                              },
+                            });
+                          } catch (parseErr) {
+                            setToast({ message: language === 'si' ? 'Neveljavna JSON datoteka — napaka pri raz\u010Dlenjevanju.' : 'Invalid JSON file — parsing error.', type: 'error' });
+                          }
+                          e.target.value = '';
+                        };
+                        reader.readAsText(file);
+                      }} />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '20px', minHeight: '400px' }}>
+                <div style={{ width: '200px', flexShrink: 0, borderRight: '1px solid ' + colors.border.light, paddingRight: '16px' }}>
+                  {instructionSections.map(function(section) {
+                    return (
+                      <button key={section} onClick={function() { setActiveInstructionSection(section); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', marginBottom: '4px', borderRadius: radii.md, border: 'none', cursor: 'pointer', background: activeInstructionSection === section ? primaryBadgeBg : 'transparent', color: activeInstructionSection === section ? primaryBadgeText : colors.text.body, fontSize: typography.fontSize.xs, fontWeight: activeInstructionSection === section ? typography.fontWeight.semibold : typography.fontWeight.medium }}>
+                        {t.instructions.sections[section]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ color: colors.text.heading, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: '0 0 8px' }}>
+                    {t.instructions.sections[activeInstructionSection] || activeInstructionSection}
+                  </h3>
+                  <textarea value={editedInstructions[activeInstructionSection] || ''} onChange={function(e) { handleInstructionChange(activeInstructionSection, e.target.value); }} placeholder={getDefaultPlaceholder(activeInstructionSection)} style={Object.assign({}, inputStyle, { minHeight: '300px', resize: 'vertical', fontFamily: typography.fontFamily.mono, fontSize: '12px', lineHeight: '1.6' })} />
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                    <button onClick={handleSaveGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: 'none', background: colors.primary[600], color: '#fff', cursor: 'pointer', fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>{t.instructions.save}</button>
+                    <button onClick={handleResetGlobalInstructions} style={{ padding: '8px 20px', borderRadius: radii.lg, border: '1px solid ' + colors.border.light, background: colors.surface.card, color: colors.text.body, cursor: 'pointer', fontSize: typography.fontSize.sm }}>{t.instructions.reset}</button>
+                  </div>
                 </div>
               </div>
             </div>
