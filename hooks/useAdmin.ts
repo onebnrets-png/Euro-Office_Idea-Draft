@@ -696,12 +696,12 @@ export const useAdmin = () => {
               if (p.email) orgEmailSet[p.email.toLowerCase()] = true;
             });
 
-            logData = (logByOrgAdmin.data || []).filter(function(entry) {
+                        logData = (logByOrgAdmin.data || []).filter(function(entry) {
               if (!entry.target_user_id) {
-                // No target_user_id — check if details has a target email outside org
+                // No target — check details for hidden email
                 var detailEmail = entry.details?.target_email || entry.details?.deleted_email || entry.details?.removed_email || null;
-                if (!detailEmail) return true;
-                // If details mentions a specific person, they must be in org
+                if (!detailEmail) return false;
+                // Must be org member
                 return orgEmailSet[detailEmail.toLowerCase()] === true;
               }
               // Target must be in the same org
