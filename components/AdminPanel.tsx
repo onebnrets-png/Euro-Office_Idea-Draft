@@ -2532,91 +2532,119 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                           {totalOverrides} {language === 'si' ? 'prilagoditev' : 'override(s)'}
                         </span>
                       )}
-                        <button onClick={function() {
-                        // ═══ GUIDE EXPORT TXT — FULL CONTENT ═══
-var lines = [];
-lines.push('='.repeat(60));
-lines.push('EURO-OFFICE GUIDE CONTENT — FULL EXPORT');
-lines.push('Exported: ' + new Date().toISOString());
-lines.push('='.repeat(60));
-lines.push('');
-
-var guideSteps = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
-var guideProperties = ['whatIsThis', 'whyImportant', 'whatToWrite', 'tips', 'euContext', 'example'];
-var propLabels = tGuide.properties || { whatIsThis: 'What is this?', whyImportant: 'Why important?', whatToWrite: 'What to write', tips: 'Tips', euContext: 'EU Context', example: 'Example' };
-var langs = ['en', 'si'];
-
-langs.forEach(function(lang) {
-    lines.push('');
-    lines.push('#'.repeat(60));
-    lines.push('LANGUAGE: ' + lang.toUpperCase());
-    lines.push('#'.repeat(60));
-
-    guideSteps.forEach(function(stepKey) {
-        var allKeys = getAllGuideKeys();
-        var stepFields = allKeys.filter(function(k) { return k.indexOf(stepKey + '.') === 0; });
-        var fieldNames = [];
-        stepFields.forEach(function(k) {
-            var parts = k.split('.');
-            if (parts.length >= 2 && fieldNames.indexOf(parts[1]) < 0) {
-                fieldNames.push(parts[1]);
-            }
-        });
-
-        if (fieldNames.length === 0) return;
-
-        lines.push('');
-        lines.push('='.repeat(50));
-        lines.push('STEP: ' + stepKey);
-        lines.push('='.repeat(50));
-
-        fieldNames.forEach(function(fieldKey) {
-            var entry = getFieldGuide(stepKey, fieldKey, lang);
-            if (!entry) return;
-
-            var overridePrefix = '';
-            lines.push('');
-            lines.push('-'.repeat(40));
-            lines.push('FIELD: ' + stepKey + '.' + fieldKey + ' [' + lang + ']');
-            lines.push('-'.repeat(40));
-
-            guideProperties.forEach(function(prop) {
-                var val = entry[prop] || '';
-                var overrideKey = stepKey + '.' + fieldKey + '.' + lang + '.' + prop;
-                var isOverride = guideOverrides[overrideKey] && guideOverrides[overrideKey].trim() !== '';
-                lines.push('');
-                lines.push('  [' + (propLabels[prop] || prop) + ']' + (isOverride ? ' ** CUSTOM OVERRIDE **' : ''));
-                lines.push('  ' + val.replace(/\n/g, '\n  '));
-            });
-        });
-    });
-});
-
-var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-var url = URL.createObjectURL(blob);
-var a = document.createElement('a');
-a.href = url;
-a.download = 'euro-office-guide-FULL-' + new Date().toISOString().split('T')[0] + '.txt';
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-URL.revokeObjectURL(url);
-
+                                              <button onClick={function() {
+                        // ═══ GUIDE EXPORT TXT — FULL CONTENT (FIXED) ═══
+                        var lines = [];
+                        lines.push('='.repeat(60));
+                        lines.push('EURO-OFFICE GUIDE CONTENT — FULL EXPORT');
+                        lines.push('Exported: ' + new Date().toISOString());
+                        lines.push('Total overrides: ' + totalOverrides);
+                        lines.push('='.repeat(60));
+                        lines.push('');
+                        var guideSteps = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
+                        var guideProperties = ['whatIsThis', 'whyImportant', 'whatToWrite', 'tips', 'euContext', 'example'];
+                        var exportPropLabels = tGuide.properties || { whatIsThis: 'What is this?', whyImportant: 'Why important?', whatToWrite: 'What to write', tips: 'Tips', euContext: 'EU Context', example: 'Example' };
+                        var langs = ['en', 'si'];
+                        var allKeysExport = getAllGuideKeys();
+                        langs.forEach(function(lang) {
+                            lines.push('');
+                            lines.push('#'.repeat(60));
+                            lines.push('LANGUAGE: ' + lang.toUpperCase());
+                            lines.push('#'.repeat(60));
+                            guideSteps.forEach(function(stepKey) {
+                                var fieldNames = [];
+                                allKeysExport.forEach(function(item) {
+                                    if (item.stepKey === stepKey && fieldNames.indexOf(item.fieldKey) < 0) {
+                                        fieldNames.push(item.fieldKey);
+                                    }
+                                });
+                                if (fieldNames.length === 0) return;
+                                lines.push('');
+                                lines.push('='.repeat(50));
+                                lines.push('STEP: ' + prettyStepName(stepKey));
+                                lines.push('='.repeat(50));
+                                fieldNames.forEach(function(fieldKey) {
+                                    var entry = getFieldGuide(stepKey, fieldKey, lang);
+                                    if (!entry) return;
+                                    lines.push('');
+                                    lines.push('-'.repeat(40));
+                                    lines.push('FIELD: ' + stepKey + '.' + fieldKey + ' [' + lang + ']');
+                                    lines.push('-'.repeat(40));
+                                    guideProperties.forEach(function(prop) {
+                                        var val = entry[prop] || '';
+                                        var overrideKey = buildGuideOverrideKey(stepKey, fieldKey, lang, prop);
+                                        var isOverride = guideOverrides[overrideKey] && guideOverrides[overrideKey].trim() !== '';
+                                        lines.push('');
+                                        lines.push('  [' + (exportPropLabels[prop] || prop) + ']' + (isOverride ? ' ** CUSTOM OVERRIDE **' : ''));
+                                        if (val) {
+                                            lines.push('  ' + val.replace(/\n/g, '\n  '));
+                                        } else {
+                                            lines.push('  (empty)');
+                                        }
+                                    });
+                                });
+                            });
+                        });
+                        lines.push('');
+                        lines.push('='.repeat(60));
+                        lines.push('END OF GUIDE CONTENT');
+                        lines.push('='.repeat(60));
+                        var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'euro-office-guide-FULL-' + new Date().toISOString().split('T')[0] + '.txt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
                       }}
                         style={{ fontSize: '11px', padding: '5px 10px', borderRadius: radii.md, border: '1px solid ' + colors.border.medium, background: colors.surface.card, color: colors.text.body, cursor: 'pointer' }}
                       >{'\u2193 '} TXT</button>
-                      <button onClick={function() {
-                        
-                // ═══ GUIDE EXPORT JSON ═══
+
+                                            <button onClick={function() {
+                        // ═══ GUIDE EXPORT JSON — FULL CONTENT (FIXED) ═══
+                        var guideStepsJson = ['problemAnalysis', 'projectIdea', 'generalObjectives', 'specificObjectives', 'activities', 'expectedResults'];
+                        var guidePropsJson = ['whatIsThis', 'whyImportant', 'whatToWrite', 'tips', 'euContext', 'example'];
+                        var langsJson = ['en', 'si'];
+                        var allKeysJson = getAllGuideKeys();
+                        var guideFullContent = {};
+                        langsJson.forEach(function(lang) {
+                            guideFullContent[lang] = {};
+                            guideStepsJson.forEach(function(stepKey) {
+                                var fieldNames = [];
+                                allKeysJson.forEach(function(item) {
+                                    if (item.stepKey === stepKey && fieldNames.indexOf(item.fieldKey) < 0) {
+                                        fieldNames.push(item.fieldKey);
+                                    }
+                                });
+                                if (fieldNames.length === 0) return;
+                                guideFullContent[lang][stepKey] = {};
+                                fieldNames.forEach(function(fieldKey) {
+                                    var entry = getFieldGuide(stepKey, fieldKey, lang);
+                                    if (!entry) return;
+                                    guideFullContent[lang][stepKey][fieldKey] = {};
+                                    guidePropsJson.forEach(function(prop) {
+                                        var overrideKey = buildGuideOverrideKey(stepKey, fieldKey, lang, prop);
+                                        var isOverride = guideOverrides[overrideKey] && guideOverrides[overrideKey].trim() !== '';
+                                        guideFullContent[lang][stepKey][fieldKey][prop] = {
+                                            value: entry[prop] || '',
+                                            isOverride: isOverride
+                                        };
+                                    });
+                                });
+                            });
+                        });
                         var exportData = {
-                          _meta: { format: 'euro-office-guide-overrides', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', totalOverrides: totalOverrides, description: 'Edit values and re-import. Keys follow pattern: stepKey.fieldKey.lang.property' },
-                          overrides: guideOverrides
+                            _meta: { format: 'euro-office-guide-full', version: '1.0', exportedAt: new Date().toISOString(), exportedBy: storageService.getCurrentUser() || 'unknown', totalOverrides: totalOverrides, description: 'Full guide content with override flags. To re-import, use the overrides section below.' },
+                            guide: guideFullContent,
+                            overrides: guideOverrides
                         };
                         var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
                         var url = URL.createObjectURL(blob);
                         var a = document.createElement('a');
                         a.href = url;
-                        a.download = 'euro-office-guide-overrides-' + new Date().toISOString().split('T')[0] + '.json';
+                        a.download = 'euro-office-guide-FULL-' + new Date().toISOString().split('T')[0] + '.json';
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
