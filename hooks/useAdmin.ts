@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════
 // Admin hook — user management, role changes, delete users,
 // delete organizations, self-delete, instructions, audit log.
-//
+// ★ v1.6: fetchAdminLog() org-scoped — admin sees logs where admin OR target is in same org
 // v1.5 — 2026-03-01
 //   ★ v1.5: fetchUsers() returns orgName per user.
 //           New: changeUserOrganization() for Admin/SuperAdmin.
@@ -655,22 +655,57 @@ export const useAdmin = () => {
           return;
         }
         logData = data || [];
-      } else {
-        // Admin sees only their own actions
-        const currentUserId = await storageService.getCurrentUserId();
-        const { data, error: logError } = await supabase
-          .from('admin_log')
-          .select('*')
-          .eq('admin_id', currentUserId)
-          .order('created_at', { ascending: false })
-          .limit(limit);
+            } else {
+        // ★ v1.6: Admin sees audit logs relevant to their organization
+        // (where admin OR target is a member of the same org)
+        var activeOrgId = storageService.getActiveOrgId();
+        if (!activeOrgId) {
+          logData = [];
+        } else {
+          // Get all user IDs in this organization
+          var orgMembersResult = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', activeOrgId);
 
-        if (logError) {
-          console.error('fetchAdminLog error:', logError.message);
-          setError(logError.message);
-          return;
+          var orgUserIds = (orgMembersResult.data || []).map(function(m) { return m.user_id; });
+
+          if (orgUserIds.length === 0) {
+            logData = [];
+          } else {
+            // Fetch logs where admin_id OR target_user_id is in org
+            // Supabase doesn't support OR across two .in() filters easily,
+            // so fetch by admin_id in org, then by target_user_id in org, merge & dedupe
+            var logByAdmin = await supabase
+              .from('admin_log')
+              .select('*')
+              .in('admin_id', orgUserIds)
+              .order('created_at', { ascending: false })
+              .limit(limit);
+
+            var logByTarget = await supabase
+              .from('admin_log')
+              .select('*')
+              .in('target_user_id', orgUserIds)
+              .order('created_at', { ascending: false })
+              .limit(limit);
+
+            // Merge and dedupe by id
+            var mergedMap = {};
+            (logByAdmin.data || []).forEach(function(entry) { mergedMap[entry.id] = entry; });
+            (logByTarget.data || []).forEach(function(entry) { mergedMap[entry.id] = entry; });
+
+            logData = Object.values(mergedMap);
+
+            // Sort by created_at descending
+            logData.sort(function(a, b) {
+              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+
+            // Apply limit
+            logData = logData.slice(0, limit);
+          }
         }
-        logData = data || [];
       }
 
       const entries: AdminLogEntry[] = logData.map((entry: any) => {
