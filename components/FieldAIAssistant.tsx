@@ -1,6 +1,7 @@
 // components/FieldAIAssistant.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.0 — 2026-03-06 — EO-039: AI Asistent per-field popup
+// v1.1 — 2026-03-06 — EO-043: z-index fix — popup always on top
+// v1.0 — 2026-03-06 — EO-039: AI Assistant per-field popup
 // Popup component for contextual AI generation/improvement of any field.
 // User enters instructions → AI generates/improves content using:
 //   - User instructions (from popup textarea)
@@ -152,7 +153,7 @@ var FieldAIAssistant = function(props: FieldAIAssistantProps) {
         position: 'absolute',
         top: '100%',
         right: 0,
-        zIndex: 50,
+        zIndex: 9999,
         width: '420px',
         maxWidth: 'calc(100vw - 32px)',
         marginTop: '4px',
