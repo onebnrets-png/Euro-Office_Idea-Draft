@@ -1,6 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v7.10 — EO-043: z-index stacking context fix for AI Assistant popup
+// v7.11 — 2026-03-06 — EO-043: Portal anchor — passes anchorRect to FieldAIAssistant
 // v7.9 — 2026-03-06 — EO-039: AI Asistent per-field (FieldAIAssistant popup) — COMPLETE
 //   - TextArea: replaced GenerateButton with AI Assistant popup trigger
 //   - New props: onFieldAIGenerate, language passed through to TextArea
@@ -121,7 +121,9 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
     const fieldIsLoading = isLoading === `${enGen} ${String(path[path.length - 1])}...` || isLoading === `${siGen} ${String(path[path.length - 1])}...`;
     
     const textAreaRef = useRef(null);
+    const aiButtonRef = useRef<HTMLButtonElement>(null);
     const [aiAssistantOpen, setAiAssistantOpen] = React.useState(false);
+    const [aiAnchorRect, setAiAnchorRect] = React.useState<{ top: number; right: number; bottom: number; left: number; width: number; height: number } | null>(null);
     
     const adjustHeight = useCallback(() => {
         const el = textAreaRef.current;
@@ -185,7 +187,14 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
                 <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 focus-within:opacity-100">
                     {onFieldAIGenerate ? (
                         <button
-                            onClick={function() { setAiAssistantOpen(!aiAssistantOpen); }}
+                            ref={aiButtonRef}
+                            onClick={function() {
+                                if (!aiAssistantOpen && aiButtonRef.current) {
+                                    var rect = aiButtonRef.current.getBoundingClientRect();
+                                    setAiAnchorRect({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height });
+                                }
+                                setAiAssistantOpen(!aiAssistantOpen);
+                            }}
                             disabled={!!isLoading || missingApiKey}
                             className={'flex items-center justify-center font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95 p-1.5 border ' + (aiAssistantOpen ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:shadow-md')}
                             title={missingApiKey ? 'Setup API Key' : (generateTitle || 'AI Assistant')}
@@ -211,6 +220,7 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
                         currentValue={value || ''}
                         fieldLabel={label}
                         language={fieldLanguage || 'en'}
+                        anchorRect={aiAnchorRect}
                     />
                 )}
             </div>
