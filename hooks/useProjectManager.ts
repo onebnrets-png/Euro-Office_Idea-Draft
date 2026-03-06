@@ -293,10 +293,7 @@ var handleRedo = useCallback(function() {
       redoStackRef.current = [];
       setCanUndo(false);
       setCanRedo(false);
-      canUndo,
-      canRedo,
-      handleUndo,
-      handleRedo,
+      
       try {
         const loadedData = await storageService.loadProject(language, specificId);
 
