@@ -1,6 +1,11 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
+// Version 7.2 – 2026-03-06
+//
+// CHANGES v7.2 (2026-03-06):
+//   - NEW: TEMPERATURE_DEFAULTS documentation — differentiated AI temperature
+//     settings per task type and section (EO-031). Actual logic in aiProvider.ts.
 // Version 7.0 – 2026-02-22
 //
 // ARCHITECTURE PRINCIPLE:
@@ -1161,6 +1166,24 @@ export const GLOBAL_RULES = `
 14. Every deliverable and milestone indicator should be BINARY and verifiable (Lump Sum compliant).
 15. ZERO EMPTY FIELDS RULE (SUPREME — NO EXCEPTIONS): Every field defined in the JSON schema MUST contain substantive, meaningful content. An empty string (""), a placeholder like "N/A", or a field with only whitespace is a FATAL ERROR that causes the ENTIRE output to be REJECTED. This applies to EVERY field in EVERY section without exception: titles, descriptions, indicators, mitigations, exploitation strategies, justifications, names, dates — ALL fields. If you are unsure what to write for a field, generate your best professional attempt rather than leaving it empty.
 `;
+// ───────────────────────────────────────────────────────────────
+// TEMPERATURE DEFAULTS — ★ v7.2 EO-031
+// Documentation only — actual logic is in aiProvider.ts getDefaultTemperature()
+// These values control AI creativity vs determinism per task type.
+// ───────────────────────────────────────────────────────────────
+
+export const TEMPERATURE_DEFAULTS: Record<string, { temperature: number; rationale: string }> = {
+  'chartExtraction':      { temperature: 0.0, rationale: 'Data extraction — must be exact, no creativity' },
+  'allocation':           { temperature: 0.1, rationale: 'Budget/hour calculations — near-deterministic' },
+  'translation':          { temperature: 0.2, rationale: 'Translation — high accuracy, minimal paraphrasing variance' },
+  'chatbot':              { temperature: 0.3, rationale: 'Conversational — natural but focused responses' },
+  'summary':              { temperature: 0.3, rationale: 'Condensation — precision over creativity' },
+  'field':                { temperature: 0.4, rationale: 'Single field generation — moderate creativity for descriptions' },
+  'field_deterministic':  { temperature: 0.0, rationale: 'Likelihood/impact selectors — must pick correct value' },
+  'generation':           { temperature: 0.5, rationale: 'Full section generation — balanced creativity and structure' },
+  'projectTitleAcronym':  { temperature: 0.7, rationale: 'Title/acronym — needs most creativity for memorable branding' },
+  'fallback':             { temperature: 0.4, rationale: 'Default when task type is unknown' },
+};
 
 // ───────────────────────────────────────────────────────────────
 // FIELD-SPECIFIC RULES — EN only — ★ v7.0: Updated indicator + exploitation
