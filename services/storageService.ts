@@ -1,7 +1,7 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
-// ★ v5.6: NULL ARRAY GUARD — loadProject() ensures all array fields are [] not null (EO-028)
+// ★ v5.7: Web Search getters/setters (EO-042)\n// ★ v5.6:
 // ★ v5.5: SAVE GUARD — blocks saving empty skeleton over existing real data
 // v5.4 — 2026-03-03
 // ★ v5.4: loadProject() returns null for skeleton data (empty createEmptyProjectData objects)
@@ -582,6 +582,22 @@ export const storageService = {
 
   async setSecondaryModel(model: string) {
     await this.updateSettings({ secondary_model: model.trim() || null });
+  },
+
+  getWebSearchKey(): string | null {
+    return cachedSettings?.web_search_key || null;
+  },
+
+  async setWebSearchKey(key: string) {
+    await this.updateSettings({ web_search_key: key.trim() || null });
+  },
+
+  getWebSearchEnabled(): boolean {
+    return cachedSettings?.web_search_enabled || false;
+  },
+
+  async setWebSearchEnabled(enabled: boolean) {
+    await this.updateSettings({ web_search_enabled: enabled });
   },
 
   getCustomLogo(): string | null {
