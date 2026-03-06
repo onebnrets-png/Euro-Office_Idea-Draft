@@ -983,8 +983,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       setModelName(model || (provider === 'gemini' ? 'gemini-3-pro-preview' : provider === 'openai' ? 'gpt-5.2' : 'deepseek/deepseek-v3.2'));
       setSecondaryModelName(storageService.getSecondaryModel() || '');
       setCustomLogo(storageService.getCustomLogo());
-      setWebSearchKey(storageService.getCachedSettings()?.web_search_key || '');
-      setWebSearchEnabled(storageService.getCachedSettings()?.web_search_enabled || false);
+      setWebSearchKey(storageService.getWebSearchKey() || '');
+      setWebSearchEnabled(storageService.getWebSearchEnabled());
       setAppInstructions(JSON.parse(JSON.stringify(getFullInstructions())));
       setInstructionsChanged(false);
       try { const { totp } = await storageService.getMFAFactors(); setMfaFactors(totp.filter((f: any) => f.status === 'verified')); } catch { setMfaFactors([]); }
@@ -1133,8 +1133,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     await storageService.setApiKey(geminiKey.trim());
     await storageService.setOpenRouterKey(openRouterKey.trim());
     await storageService.setOpenAIKey(openaiKey.trim());
-    await storageService.saveSetting('web_search_key', webSearchKey.trim());
-    await storageService.saveSetting('web_search_enabled', webSearchEnabled);
+    await storageService.setWebSearchKey(webSearchKey.trim());
+    await storageService.setWebSearchEnabled(webSearchEnabled);
     const activeKey = aiProvider === 'gemini' ? geminiKey.trim() : aiProvider === 'openai' ? openaiKey.trim() : openRouterKey.trim();
     if (activeKey === '') { setMessage(language === 'si' ? 'Nastavitve shranjene.' : 'Settings saved.'); setIsValidating(false); setTimeout(() => onClose(), 1000); return; }
     const isValid = await validateProviderKey(aiProvider, activeKey);
