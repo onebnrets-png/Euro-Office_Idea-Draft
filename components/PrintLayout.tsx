@@ -156,13 +156,11 @@ const PrintLayout = ({ projectData, language = 'en', logo }) => {
 
     return (
         <div className="p-8 bg-white text-black font-sans relative">
-            <header className="text-center mb-12 relative">
-                <div className="absolute top-0 right-0">
-                    <img src={displayLogo} alt="Logo" className="h-12 w-auto object-contain" />
-                </div>
-                <h1 className="text-4xl font-bold mb-2 pt-4">{projectIdea.projectTitle || 'Project Proposal'}</h1>
-                {projectIdea.projectAcronym && <p className="text-2xl font-semibold text-gray-600">({projectIdea.projectAcronym})</p>}
-            </header>
+            <header className="text-center mb-12">
+    <h1 className="text-4xl font-bold mb-2">{projectIdea.projectTitle || 'Project Proposal'}</h1>
+    {projectIdea.projectAcronym && <p className="text-2xl font-semibold text-gray-600">({projectIdea.projectAcronym})</p>}
+    </header>
+
 
             <main>
                 {/* 1. Problem Analysis */}
