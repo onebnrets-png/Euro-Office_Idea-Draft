@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
-//
+// v1.4 - 
 // v1.3 — 2026-02-23 — FIX: Project duplication/loss race condition
 //   - NEW: isLoadingProjectRef guard — prevents auto-save and sync effect
 //     from interfering during loadActiveProject
@@ -145,7 +145,15 @@ export const useProjectManager = ({
 
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const isLoadingProjectRef = useRef(false);
-
+  
+  // ★ v1.4: Undo/Redo history stack (5 steps max)
+  const MAX_HISTORY = 5;
+  const undoStackRef = useRef<any[]>([]);
+  const redoStackRef = useRef<any[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const skipHistoryRef = useRef(false);
+  
   // ─── Helpers ───────────────────────────────────────────────────
 
   const hasContent = useCallback((data: any): boolean => {
@@ -169,6 +177,63 @@ export const useProjectManager = ({
     return false;
   }, []);
 
+  // ★ v1.4: Push current state to undo stack before any change
+const pushToHistory = useCallback(function(data: any) {
+  if (skipHistoryRef.current) return;
+  var stack = undoStackRef.current;
+  // Don't push if data is identical to last snapshot
+  if (stack.length > 0) {
+    var lastJson = JSON.stringify(stack[stack.length - 1]);
+    var currentJson = JSON.stringify(data);
+    if (lastJson === currentJson) return;
+  }
+  stack.push(JSON.parse(JSON.stringify(data)));
+  if (stack.length > MAX_HISTORY) {
+    stack.shift();
+  }
+  undoStackRef.current = stack;
+  redoStackRef.current = [];
+  setCanUndo(stack.length > 0);
+  setCanRedo(false);
+}, []);
+
+  // ★ v1.4: Undo — restore previous state
+var handleUndo = useCallback(function() {
+  var stack = undoStackRef.current;
+  if (stack.length === 0) return;
+  var previousState = stack.pop();
+  undoStackRef.current = stack;
+  // Push current state to redo
+  redoStackRef.current.push(JSON.parse(JSON.stringify(projectData)));
+  if (redoStackRef.current.length > MAX_HISTORY) redoStackRef.current.shift();
+  // Restore without pushing to history
+  skipHistoryRef.current = true;
+  setProjectData(previousState);
+  setHasUnsavedTranslationChanges(true);
+  skipHistoryRef.current = false;
+  setCanUndo(stack.length > 0);
+  setCanRedo(redoStackRef.current.length > 0);
+}, [projectData]);
+
+// ★ v1.4: Redo — restore next state
+var handleRedo = useCallback(function() {
+  var stack = redoStackRef.current;
+  if (stack.length === 0) return;
+  var nextState = stack.pop();
+  redoStackRef.current = stack;
+  // Push current state to undo
+  undoStackRef.current.push(JSON.parse(JSON.stringify(projectData)));
+  if (undoStackRef.current.length > MAX_HISTORY) undoStackRef.current.shift();
+  // Restore without pushing to history
+  skipHistoryRef.current = true;
+  setProjectData(nextState);
+  setHasUnsavedTranslationChanges(true);
+  skipHistoryRef.current = false;
+  setCanUndo(undoStackRef.current.length > 0);
+  setCanRedo(stack.length > 0);
+}, [projectData]);
+
+  
   const generateFilename = useCallback((extension: string): string => {
     const acronym = projectData.projectIdea?.projectAcronym?.trim();
     const title = projectData.projectIdea?.projectTitle?.trim();
@@ -224,14 +289,20 @@ export const useProjectManager = ({
     async (specificId: string | null = null) => {
       // ★ v1.3: Guard — prevent auto-save and sync effect during load
       isLoadingProjectRef.current = true;
-
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setCanUndo(false);
+      setCanRedo(false);
+      canUndo,
+      canRedo,
+      handleUndo,
+      handleRedo,
       try {
         const loadedData = await storageService.loadProject(language, specificId);
 
         if (loadedData) {
           // ★ v1.2: Migrate WP/Task prefixes to match current language
           const mergedData = migrateActivityPrefixes(safeMerge(loadedData), language);
-
           const otherLang = language === 'en' ? 'si' : 'en';
           const otherData = await storageService.loadProject(otherLang, specificId);
           const mergedOther = otherData ? migrateActivityPrefixes(safeMerge(otherData), otherLang) : null;
@@ -382,7 +453,9 @@ export const useProjectManager = ({
   // ─── Data update ──────────────────────────────────────────────
 
   const handleUpdateData = useCallback(
-    (path: (string | number)[], value: any) => {
+  (path: (string | number)[], value: any) => {
+    setProjectData((prevData: any) => {
+      pushToHistory(prevData);
       setProjectData((prevData: any) => {
         let newData = set(prevData, path, value);
         if (path[0] === 'activities') {
@@ -400,8 +473,9 @@ export const useProjectManager = ({
   );
 
   const handleAddItem = useCallback(
-    (path: (string | number)[], newItem: any) => {
-      setProjectData((prev: any) => {
+  (path: (string | number)[], newItem: any) => {
+    setProjectData((prev: any) => {
+      pushToHistory(prev);
         const list = getNestedValue(prev, path) || [];
         return set(prev, path, [...list, newItem]);
       });
@@ -411,8 +485,9 @@ export const useProjectManager = ({
   );
 
   const handleRemoveItem = useCallback(
-    (path: (string | number)[], index: number) => {
-      setProjectData((prev: any) => {
+  (path: (string | number)[], index: number) => {
+    setProjectData((prev: any) => {
+      pushToHistory(prev);
         const list = getNestedValue(prev, path);
         if (!Array.isArray(list)) return prev;
         const newList = list.filter((_: any, i: number) => i !== index);
