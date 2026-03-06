@@ -170,7 +170,7 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
     return (
         <div className={className}>
             <label className="block text-sm font-semibold text-slate-600 mb-1.5 tracking-wide">{label}</label>
-            <div className="relative">
+            <div className="relative" style={{ zIndex: aiAssistantOpen ? 9999 : 'auto' }}>
                 <textarea
                     ref={textAreaRef}
                     data-path={path.join(',')}
