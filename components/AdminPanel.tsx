@@ -1,7 +1,8 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
-// v5.1 - Web Search settings in AI tab (EO-042)
+// v5.2 - Web Search simplified — checkbox only, no Serper key (EO-042 fix)
+// v5.1 - Web Search settings in AI tab (EO-042) (REPLACED by v5.2)
 // v5.0 - Changelog Admin filtering (EO-033)
 // v4.9 — 2026-03-06
 // ★ v4.9: Instructions org isolation — Admin saves to organization_instructions, not global_settings
@@ -555,7 +556,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
   const [secondaryModelName, setSecondaryModelName] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
-  const [webSearchKey, setWebSearchKey] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   const [customLogo, setCustomLogo] = useState<string | null>(null);
@@ -983,7 +983,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
       setModelName(model || (provider === 'gemini' ? 'gemini-3-pro-preview' : provider === 'openai' ? 'gpt-5.2' : 'deepseek/deepseek-v3.2'));
       setSecondaryModelName(storageService.getSecondaryModel() || '');
       setCustomLogo(storageService.getCustomLogo());
-      setWebSearchKey(storageService.getWebSearchKey() || '');
       setWebSearchEnabled(storageService.getWebSearchEnabled());
       setAppInstructions(JSON.parse(JSON.stringify(getFullInstructions())));
       setInstructionsChanged(false);
@@ -1133,7 +1132,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     await storageService.setApiKey(geminiKey.trim());
     await storageService.setOpenRouterKey(openRouterKey.trim());
     await storageService.setOpenAIKey(openaiKey.trim());
-    await storageService.setWebSearchKey(webSearchKey.trim());
     await storageService.setWebSearchEnabled(webSearchEnabled);
     const activeKey = aiProvider === 'gemini' ? geminiKey.trim() : aiProvider === 'openai' ? openaiKey.trim() : openRouterKey.trim();
     if (activeKey === '') { setMessage(language === 'si' ? 'Nastavitve shranjene.' : 'Settings saved.'); setIsValidating(false); setTimeout(() => onClose(), 1000); return; }
@@ -2267,6 +2265,45 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                     </button>
                   )}
                 </div>
+              </div>
+
+              {/* ═══ WEB SEARCH ═══ ★ v5.2 EO-042 */}
+              <div style={{ marginTop: '28px', marginBottom: '20px', padding: '20px', borderRadius: radii.xl, background: secondaryInfoBg, border: '1px solid ' + secondaryInfoBorder }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '22px' }}>{'\uD83C\uDF10'}</span>
+                  <div>
+                    <h4 style={{ color: secondaryInfoText, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, margin: 0 }}>
+                      {language === 'si' ? 'Spletno iskanje za dokaze' : 'Web Search for Evidence'}
+                    </h4>
+                    <p style={{ color: secondaryInfoText, fontSize: typography.fontSize.xs, margin: '2px 0 0', opacity: 0.85 }}>
+                      {language === 'si'
+                        ? 'AI bo pri generiranju vsebine poiskal aktualne podatke, statistike in vire iz spleta. Deluje za Gemini in OpenRouter.'
+                        : 'AI will search for current data, statistics and sources from the web when generating content. Works with Gemini and OpenRouter.'}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: radii.lg, background: colors.surface.card, border: '1px solid ' + colors.border.light }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+                    <input type="checkbox" checked={webSearchEnabled} onChange={function(e) { setWebSearchEnabled(e.target.checked); }}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: colors.primary[600] }} />
+                    <span style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text.heading }}>
+                      {language === 'si' ? 'Omogo\u010Di spletno iskanje za dokaze' : 'Enable web search for evidence'}
+                    </span>
+                  </label>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: radii.full, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold,
+                    background: webSearchEnabled ? successBg : (isDark ? 'rgba(100,100,100,0.2)' : '#F3F4F6'),
+                    border: '1px solid ' + (webSearchEnabled ? successBorder : colors.border.light),
+                    color: webSearchEnabled ? successText : colors.text.muted,
+                  }}>
+                    {webSearchEnabled ? (language === 'si' ? 'VKLOPLJENO' : 'ON') : (language === 'si' ? 'IZKLOPLJENO' : 'OFF')}
+                  </span>
+                </div>
+                {webSearchEnabled && aiProvider === 'openai' && (
+                  <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: radii.md, background: warningBadgeBg, border: '1px solid ' + warningBadgeBorder, color: warningBadgeText, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium }}>
+                    {'\u26A0\uFE0F'} {language === 'si' ? 'Spletno iskanje ne deluje z direktnim OpenAI ponudnikom. Uporabite Gemini ali OpenRouter.' : 'Web search is not supported with direct OpenAI provider. Use Gemini or OpenRouter instead.'}
+                  </div>
+                )}
               </div>
 
               {message && (<div style={{ padding: '10px 14px', borderRadius: radii.lg, marginBottom: '12px', background: isError ? errorBg : successBg, border: `1px solid ${isError ? errorBorder : successBorder}`, color: isError ? errorText : successText, fontSize: typography.fontSize.sm }}>{isError ? '\u274C' : '\u2705'} {message}</div>)}

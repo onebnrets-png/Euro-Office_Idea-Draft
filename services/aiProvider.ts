@@ -1,8 +1,9 @@
 // services/aiProvider.ts
 // ═══════════════════════════════════════════════════════════════
-// Universal AI Provider Abstraction Layer – v5.7 (2026-03-06)
+// Universal AI Provider Abstraction Layer – v5.8 (2026-03-06)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
+// v5.8 – EO-042: Native Web Search — google_search tool for Gemini, web plugin for OpenRouter, prompt-level search enforcement
 // v5.7 – EO-031: Smart temperature defaults — differentiated per taskType/sectionKey
 //         Replaces previous global temperature=0. New function getDefaultTemperature()
 //         returns optimal temperature: 0.0 for structural tasks, 0.2 for translations,
@@ -559,6 +560,27 @@ export async function generateContent(options: AIGenerateOptions): Promise<AIGen
   }
 }
 
+// ─── ★ v5.8 EO-042: Web Search — eligibility + enforcement prompt ──
+
+const WEB_SEARCH_EXCLUDED_SECTIONS = new Set([
+  'risks', 'projectManagement', 'partnerAllocations', 'allocation',
+  'summary', 'field', 'translation', 'chartExtraction',
+]);
+
+function isWebSearchEligible(sectionKey?: string): boolean {
+  if (!sectionKey) return false;
+  return !WEB_SEARCH_EXCLUDED_SECTIONS.has(sectionKey);
+}
+
+var WEB_SEARCH_ENFORCEMENT_PROMPT = 'MANDATORY WEB SEARCH INSTRUCTIONS:\n'
+  + 'You have access to a web search tool. You MUST use it for EVERY factual claim, statistic, date, policy reference, or data point.\n'
+  + 'DO NOT rely on your training data for any factual information — your training data may be outdated.\n'
+  + 'ALWAYS search the web FIRST, then use the search results as your PRIMARY source.\n'
+  + 'If the web search returns relevant results, you MUST cite them.\n'
+  + 'If the web search returns no results for a specific claim, clearly state the data could not be verified.\n'
+  + 'NEVER fabricate sources, URLs, authors, or statistics.\n'
+  + 'Every paragraph in analytical sections MUST contain at least one web-sourced data point or citation.\n';
+
 // ─── GEMINI ADAPTER ──────────────────────────────────────────────
 // ★ v5.5: Checks signal.aborted before API call
 
@@ -577,10 +599,18 @@ async function generateWithGemini(config: AIProviderConfig, options: AIGenerateO
     generateConfig.temperature = options.temperature;
   }
 
+  // ★ v5.8 EO-042: Google Search grounding — AI searches the web natively
+  var geminiPrompt = options.prompt;
+  if (storageService.getWebSearchEnabled() && isWebSearchEligible(options.sectionKey)) {
+    generateConfig.tools = [{ googleSearch: {} }];
+    geminiPrompt = WEB_SEARCH_ENFORCEMENT_PROMPT + '\n\n' + options.prompt;
+    console.log('[aiProvider] v5.8 Gemini google_search ENABLED for section: ' + (options.sectionKey || 'unknown'));
+  }
+
   try {
     const response = await client.models.generateContent({
       model: config.model,
-      contents: options.prompt,
+      contents: geminiPrompt,
       config: Object.keys(generateConfig).length > 0 ? generateConfig : undefined,
     });
 
@@ -625,6 +655,19 @@ async function generateWithOpenRouter(config: AIProviderConfig, options: AIGener
 
   if (options.temperature !== undefined) {
     body.temperature = options.temperature;
+  }
+
+  // ★ v5.8 EO-042: Web Search plugin — AI searches the web natively
+  if (storageService.getWebSearchEnabled() && isWebSearchEligible(options.sectionKey)) {
+    body.plugins = [{ id: 'web', max_results: 5 }];
+    // Prepend enforcement prompt to user message
+    if (body.messages && body.messages.length > 0) {
+      var lastMsg = body.messages[body.messages.length - 1];
+      if (lastMsg.role === 'user') {
+        lastMsg.content = WEB_SEARCH_ENFORCEMENT_PROMPT + '\n\n' + lastMsg.content;
+      }
+    }
+    console.log('[aiProvider] v5.8 OpenRouter web plugin ENABLED for section: ' + (options.sectionKey || 'unknown'));
   }
 
   try {
