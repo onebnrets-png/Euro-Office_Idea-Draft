@@ -1,6 +1,11 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
+// v5.0 — 2026-03-06
+// ★ v5.0: EO-030 — Delete confirmation for projects and all remove operations
+//   - handleDeleteProjectWrapped: ConfirmationModal before project delete
+//   - handleRemoveItemWithConfirm: ConfirmationModal before removing WP, partner, objective, etc.
+//   - Context-aware labels (EN/SI) with item name display
 // v4.9 — 2026-02-21
 //   ★ v4.9: Responsive breakpoints — mobile/tablet/desktop layout adaptation
 //           DashboardPanel hidden on mobile/tablet, marginLeft responsive
@@ -228,12 +233,101 @@ const App = () => {
   const handleLogout = async () => { await auth.handleLogout(); pm.resetOnLogout(); setActiveView('dashboard'); };
   const handleSwitchProjectAndClose = async (projectId: string) => { await pm.handleSwitchProject(projectId); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); };
   const handleCreateProjectAndClose = async () => { try { await pm.handleCreateProject(); setIsProjectListOpen(false); setActiveView('project'); pm.setCurrentStepId(1); } catch (e: any) { generation.setError(e.message); } };
-  const handleDeleteProjectWrapped = async (projectId: string) => {
-    await pm.handleDeleteProject(projectId);
-    if (pm.currentProjectId === projectId || pm.userProjects.length <= 1) {
-      setActiveView('dashboard');
-      setIsProjectListOpen(false);
+  const handleDeleteProjectWrapped = function(projectId: string) {
+    var projectMeta = pm.userProjects.find(function(p) { return p.id === projectId; });
+    var projectName = (projectMeta && projectMeta.title) ? projectMeta.title : 'Untitled';
+    setModalConfig({
+      isOpen: true,
+      title: language === 'si' ? 'Izbriši projekt' : 'Delete Project',
+      message: (language === 'si'
+        ? 'Ali ste prepričani, da želite TRAJNO izbrisati projekt "' + projectName + '"? Tega ni mogoče razveljaviti.'
+        : 'Are you sure you want to PERMANENTLY delete project "' + projectName + '"? This cannot be undone.'),
+      confirmText: language === 'si' ? 'Izbriši' : 'Delete',
+      cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
+      secondaryText: '',
+      onSecondary: null,
+      onConfirm: async function() {
+        closeModal();
+        await pm.handleDeleteProject(projectId);
+        if (pm.currentProjectId === projectId || pm.userProjects.length <= 1) {
+          setActiveView('dashboard');
+          setIsProjectListOpen(false);
+        }
+      },
+      onCancel: function() { closeModal(); },
+    });
+  };
+    // ★ EO-030: Delete confirmation for all remove operations
+  var REMOVE_ITEM_LABELS = {
+    en: {
+      activities: 'Work Package',
+      generalObjectives: 'General Objective',
+      specificObjectives: 'Specific Objective',
+      partners: 'Partner',
+      outputs: 'Output',
+      outcomes: 'Outcome',
+      impacts: 'Impact',
+      risks: 'Risk',
+      kers: 'Key Exploitable Result',
+      expectedResults: 'Expected Result',
+      causes: 'Cause',
+      consequences: 'Consequence',
+    },
+    si: {
+      activities: 'Delovni sklop',
+      generalObjectives: 'Splošni cilj',
+      specificObjectives: 'Specifični cilj',
+      partners: 'Partner',
+      outputs: 'Rezultat',
+      outcomes: 'Učinek',
+      impacts: 'Vpliv',
+      risks: 'Tveganje',
+      kers: 'Ključni izkoriščalni rezultat',
+      expectedResults: 'Pričakovani rezultat',
+      causes: 'Vzrok',
+      consequences: 'Posledica',
+    },
+  };
+
+  var handleRemoveItemWithConfirm = function(path: (string | number)[], index: number) {
+    // Determine item type from path for a meaningful message
+    var sectionKey = '';
+    for (var i = 0; i < path.length; i++) {
+      if (typeof path[i] === 'string' && REMOVE_ITEM_LABELS.en[path[i] as string]) {
+        sectionKey = path[i] as string;
+        break;
+      }
     }
+    var labels = REMOVE_ITEM_LABELS[language] || REMOVE_ITEM_LABELS.en;
+    var itemLabel = labels[sectionKey] || (language === 'si' ? 'element' : 'item');
+
+    // Try to find a name/title for the item being deleted
+    var itemName = '';
+    try {
+      var list = path.reduce(function(acc: any, key: string | number) { return acc && acc[key] !== undefined ? acc[key] : undefined; }, pm.projectData);
+      if (Array.isArray(list) && list[index]) {
+        itemName = list[index].title || list[index].name || list[index].id || '';
+      }
+    } catch (e) { /* ignore */ }
+
+    var displayName = itemName ? ' "' + (itemName.length > 50 ? itemName.substring(0, 50) + '...' : itemName) + '"' : '';
+
+    setModalConfig({
+      isOpen: true,
+      title: language === 'si' ? 'Izbriši ' + itemLabel : 'Delete ' + itemLabel,
+      message: language === 'si'
+        ? 'Ali res želite izbrisati ' + itemLabel.toLowerCase() + displayName + '?'
+        : 'Are you sure you want to delete ' + itemLabel.toLowerCase() + displayName + '?',
+      confirmText: language === 'si' ? 'Izbriši' : 'Delete',
+      cancelText: language === 'si' ? 'Prekliči' : 'Cancel',
+      secondaryText: '',
+      onSecondary: null,
+      onConfirm: function() {
+        closeModal();
+        pm.handleRemoveItem(path, index);
+      },
+      onCancel: function() { closeModal(); },
+    });
   };
 
   const handlePrint = () => window.print();
@@ -583,7 +677,7 @@ const App = () => {
                   onGenerateCompositeSection={generation.handleGenerateCompositeSection}
                   onGenerateField={generation.handleGenerateField}
                   onAddItem={pm.handleAddItem}
-                  onRemoveItem={pm.handleRemoveItem}
+                  onRemoveItem={handleRemoveItemWithConfirm}
                   isLoading={generation.isLoading}
                   error={generation.error}
                   missingApiKey={auth.showAiWarning}
