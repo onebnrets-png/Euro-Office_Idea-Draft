@@ -23,6 +23,7 @@ import Organigram from './Organigram.tsx';
 import { recalculateProjectSchedule } from '../utils.ts';
 import InlineChart from './InlineChart.tsx';
 import GuideTooltip from './GuideTooltip.tsx';
+import FieldAIAssistant from './FieldAIAssistant.tsx';
 import { stepColors } from '../design/theme.ts';
 import StepNavigationBar from './StepNavigationBar.tsx';
 import {
@@ -104,12 +105,13 @@ const GenerateButton = ({ onClick, isLoading, isField = false, title, text = '',
     </button>
 );
 
-const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeholder, rows = 5, generateTitle, missingApiKey, className = "mb-5 w-full group" }) => {
+const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeholder, rows = 5, generateTitle, missingApiKey, className = "mb-5 w-full group", onFieldAIGenerate, language: fieldLanguage }) => {
     const enGen = TEXT.en.generating;
     const siGen = TEXT.si.generating;
     const fieldIsLoading = isLoading === `${enGen} ${String(path[path.length - 1])}...` || isLoading === `${siGen} ${String(path[path.length - 1])}...`;
     
     const textAreaRef = useRef(null);
+    const [aiAssistantOpen, setAiAssistantOpen] = React.useState(false);
     
     const adjustHeight = useCallback(() => {
         const el = textAreaRef.current;
@@ -143,6 +145,19 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
         return () => window.removeEventListener('resize', handleResize);
     }, [adjustHeight]);
 
+    var handleAIAssistantGenerate = useCallback(async function(userInstructions: string) {
+        if (onFieldAIGenerate) {
+            return await onFieldAIGenerate(path, value || '', label, userInstructions);
+        }
+        // Fallback: use old generate if onFieldAIGenerate not provided
+        onGenerate(path);
+        return value || '';
+    }, [onFieldAIGenerate, path, value, label, onGenerate]);
+
+    var handleAIAccept = useCallback(function(newValue: string) {
+        onUpdate(path, newValue);
+    }, [onUpdate, path]);
+
     return (
         <div className={className}>
             <label className="block text-sm font-semibold text-slate-600 mb-1.5 tracking-wide">{label}</label>
@@ -158,8 +173,36 @@ const TextArea = ({ label, path, value, onUpdate, onGenerate, isLoading, placeho
                     placeholder={placeholder}
                 />
                 <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 focus-within:opacity-100">
-                     <GenerateButton onClick={() => onGenerate(path)} isLoading={fieldIsLoading} isField title={generateTitle} missingApiKey={missingApiKey} />
+                    {onFieldAIGenerate ? (
+                        <button
+                            onClick={function() { setAiAssistantOpen(!aiAssistantOpen); }}
+                            disabled={!!isLoading || missingApiKey}
+                            className={'flex items-center justify-center font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95 p-1.5 border ' + (aiAssistantOpen ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:shadow-md')}
+                            title={missingApiKey ? 'Setup API Key' : (generateTitle || 'AI Assistant')}
+                        >
+                            {missingApiKey ? (
+                                <ICONS.LOCK className="h-3.5 w-3.5" />
+                            ) : (
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                                </svg>
+                            )}
+                        </button>
+                    ) : (
+                        <GenerateButton onClick={() => onGenerate(path)} isLoading={fieldIsLoading} isField title={generateTitle} missingApiKey={missingApiKey} />
+                    )}
                 </div>
+                {onFieldAIGenerate && (
+                    <FieldAIAssistant
+                        isOpen={aiAssistantOpen}
+                        onClose={function() { setAiAssistantOpen(false); }}
+                        onAccept={handleAIAccept}
+                        onGenerate={handleAIAssistantGenerate}
+                        currentValue={value || ''}
+                        fieldLabel={label}
+                        language={fieldLanguage || 'en'}
+                    />
+                )}
             </div>
         </div>
     );
