@@ -1,10 +1,14 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
-// v7.9 — 2026-03-06 — EO-039: AI Asistent per-field (FieldAIAssistant popup)
+// v7.9 — 2026-03-06 — EO-039: AI Asistent per-field (FieldAIAssistant popup) — COMPLETE
 //   - TextArea: replaced GenerateButton with AI Assistant popup trigger
 //   - New props: onFieldAIGenerate, language passed through to TextArea
 //   - FieldAIAssistant imported and rendered inside TextArea
 //   - Backward compatible: if onFieldAIGenerate not provided, old behavior preserved
+//   - ALL render functions now pass onFieldAIGenerate + language to every TextArea:
+//     renderProblemAnalysis, renderProjectIdea, renderObjectives, renderGenericResults,
+//     renderProjectManagement, renderActivities, renderRisks, renderKERs
+//   - App.tsx v5.2: onFieldAIGenerate={generation.handleFieldAIGenerate} passed to ProjectDisplay
 // v7.8 — 2026-03-02 — GuideTooltip integration COMPLETE — all sections covered
 // v7.7 — 2026-03-02 — GuideTooltip integration on SectionHeader + FieldHeader
 // v7.6 — 2026-03-01 — FIX: Indirect cost calculation for decentralized model
@@ -358,8 +362,8 @@ const DependencySelector = ({ task, allTasks, onAddDependency, onRemoveDependenc
 };
 
 // --- Section Renderers ---
-const renderProblemAnalysis = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+   const renderProblemAnalysis = (props) => {
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const { coreProblem, causes, consequences } = projectData.problemAnalysis;
     const path = ['problemAnalysis'];
     const t = TEXT[language] || TEXT['en'];
@@ -372,8 +376,8 @@ const renderProblemAnalysis = (props) => {
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.coreProblemDesc}</p>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.title} path={[...path, 'coreProblem', 'title']} value={coreProblem.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.coreProblemTitlePlaceholder} generateTitle={`${t.generateField} ${t.coreProblem}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[...path, 'coreProblem', 'description']} value={coreProblem.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.coreProblemDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.title} path={[...path, 'coreProblem', 'title']} value={coreProblem.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.coreProblemTitlePlaceholder} generateTitle={`${t.generateField} ${t.coreProblem}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                    <TextArea label={t.description} path={[...path, 'coreProblem', 'description']} value={coreProblem.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.coreProblemDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={coreProblem.description || ''} fieldContext="coreProblem" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
@@ -385,8 +389,8 @@ const renderProblemAnalysis = (props) => {
                 {(causes || []).map((cause, index) => (
                     <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'causes'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.causeTitle} #${index + 1}`} path={[...path, 'causes', index, 'title']} value={cause.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.causePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.description} path={[...path, 'causes', index, 'description']} value={cause.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.causeDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                        <TextArea label={`${t.causeTitle} #${index + 1}`} path={[...path, 'causes', index, 'title']} value={cause.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.causePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                        <TextArea label={t.description} path={[...path, 'causes', index, 'description']} value={cause.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.causeDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                         <InlineChart text={cause.description || ''} fieldContext={'cause_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     </div>
                 ))}
@@ -399,8 +403,8 @@ const renderProblemAnalysis = (props) => {
                 {(consequences || []).map((consequence, index) => (
                     <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group transition-all hover:shadow-md card-hover animate-fadeIn">
                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'consequences'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.consequenceTitle} #${index + 1}`} path={[...path, 'consequences', index, 'title']} value={consequence.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.consequencePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.description} path={[...path, 'consequences', index, 'description']} value={consequence.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.consequenceDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                        <TextArea label={`${t.consequenceTitle} #${index + 1}`} path={[...path, 'consequences', index, 'title']} value={consequence.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.consequencePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                        <TextArea label={t.description} path={[...path, 'consequences', index, 'description']} value={consequence.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.consequenceDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                         <InlineChart text={consequence.description || ''} fieldContext={'consequence_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                     </div>
                 ))}
@@ -410,7 +414,7 @@ const renderProblemAnalysis = (props) => {
 };
 
 const renderProjectIdea = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const { mainAim, stateOfTheArt, proposedSolution, policies, readinessLevels, projectTitle, projectAcronym, startDate } = projectData.projectIdea;
     const path = ['projectIdea'];
     const t = TEXT[language] || TEXT['en'];
@@ -427,8 +431,8 @@ const renderProjectIdea = (props) => {
                     <GenerateButton onClick={() => onGenerateSection('projectTitleAcronym')} isLoading={isLoading === `${t.generating} projectTitleAcronym...`} title={t.generateSection} text={t.generateAI} missingApiKey={missingApiKey} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TextArea label={t.projectTitle} path={[...path, 'projectTitle']} value={projectTitle} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectTitlePlaceholder} generateTitle={`${t.generateField} ${t.projectTitle}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.acronym} path={[...path, 'projectAcronym']} value={projectAcronym} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectAcronymPlaceholder} generateTitle={`${t.generateField} ${t.acronym}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.projectTitle} path={[...path, 'projectTitle']} value={projectTitle} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectTitlePlaceholder} generateTitle={`${t.generateField} ${t.projectTitle}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                    <TextArea label={t.acronym} path={[...path, 'projectAcronym']} value={projectAcronym} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.projectAcronymPlaceholder} generateTitle={`${t.generateField} ${t.acronym}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
@@ -467,7 +471,7 @@ const renderProjectIdea = (props) => {
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.mainAimDesc}</p>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.mainAim} path={[...path, 'mainAim']} value={mainAim} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.mainAimPlaceholder} generateTitle={`${t.generateField} ${t.mainAim}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.mainAim} path={[...path, 'mainAim']} value={mainAim} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.mainAimPlaceholder} generateTitle={`${t.generateField} ${t.mainAim}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                 </div>
             </div>
 
@@ -477,7 +481,7 @@ const renderProjectIdea = (props) => {
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.stateOfTheArtDesc}</p>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.stateOfTheArt} path={[...path, 'stateOfTheArt']} value={stateOfTheArt} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.stateOfTheArtPlaceholder} generateTitle={`${t.generateField} ${t.stateOfTheArt}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.stateOfTheArt} path={[...path, 'stateOfTheArt']} value={stateOfTheArt} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.stateOfTheArtPlaceholder} generateTitle={`${t.generateField} ${t.stateOfTheArt}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={stateOfTheArt || ''} fieldContext="stateOfTheArt" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
@@ -488,7 +492,7 @@ const renderProjectIdea = (props) => {
                 </SectionHeader>
                 <p className="text-sm text-slate-500 mb-3 -mt-2">{t.proposedSolutionDesc}</p>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <TextArea label={t.proposedSolution} path={[...path, 'proposedSolution']} value={proposedSolution} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.proposedSolutionPlaceholder} generateTitle={`${t.generateField} ${t.proposedSolution}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.proposedSolution} path={[...path, 'proposedSolution']} value={proposedSolution} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.proposedSolutionPlaceholder} generateTitle={`${t.generateField} ${t.proposedSolution}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={proposedSolution || ''} fieldContext="proposedSolution" language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             </div>
@@ -502,8 +506,8 @@ const renderProjectIdea = (props) => {
                  {(policies || []).map((policy, index) => (
                     <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, 'policies'], index)} text={t.remove} /></div>
-                        <TextArea label={`${t.policyName} #${index + 1}`} path={[...path, 'policies', index, 'name']} value={policy.name} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.policyPlaceholder} generateTitle={`${t.generateField} ${t.policyName}`} missingApiKey={missingApiKey} />
-                        <TextArea label={t.policyDesc} path={[...path, 'policies', index, 'description']} value={policy.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.policyDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                        <TextArea label={`${t.policyName} #${index + 1}`} path={[...path, 'policies', index, 'name']} value={policy.name} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.policyPlaceholder} generateTitle={`${t.generateField} ${t.policyName}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                        <TextArea label={t.policyDesc} path={[...path, 'policies', index, 'description']} value={policy.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.policyDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     </div>
                 ))}
             </div>
@@ -512,7 +516,7 @@ const renderProjectIdea = (props) => {
 };
 
 const renderGenericResults = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const items = projectData[sectionKey];
     const t = TEXT[language] || TEXT['en'];
     const title = t[sectionKey];
@@ -527,10 +531,10 @@ const renderGenericResults = (props, sectionKey) => {
              {safeArray(items).map((item, index) => (
                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
-                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
-                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                 </div>
             ))}
         </div>
@@ -538,7 +542,7 @@ const renderGenericResults = (props, sectionKey) => {
 };
 
 const renderObjectives = (props, sectionKey) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const items = projectData[sectionKey];
     const t = TEXT[language] || TEXT['en'];
     const title = sectionKey === 'generalObjectives' ? t.generalObjectives : t.specificObjectives;
@@ -552,10 +556,10 @@ const renderObjectives = (props, sectionKey) => {
              {safeArray(items).map((item, index) => (
                 <div key={index} className="p-5 border border-slate-200 rounded-xl mb-4 bg-white shadow-sm relative group hover:shadow-md transition-all card-hover animate-fadeIn">
                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([sectionKey], index)} text={t.remove} /></div>
-                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                    <TextArea label={`${prefix}${index + 1}`} path={[sectionKey, index, 'title']} value={item.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.enterTitle} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                    <TextArea label={t.description} path={[sectionKey, index, 'description']} value={item.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.enterDesc} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={item.description || ''} fieldContext={sectionKey + '_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
-                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.indicator} path={[sectionKey, index, 'indicator']} value={item.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                 </div>
             ))}
         </div>
@@ -563,7 +567,7 @@ const renderObjectives = (props, sectionKey) => {
 };
 
 const renderProjectManagement = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, isLoading, language, missingApiKey } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, isLoading, language, missingApiKey, onFieldAIGenerate } = props;
     const { projectManagement } = projectData;
     const t = TEXT[language] || TEXT['en'];
     const pmPath = ['projectManagement'];
@@ -575,7 +579,7 @@ const renderProjectManagement = (props) => {
             </SectionHeader>
             <p className="text-sm text-slate-500 mb-6 -mt-2">{t.management.desc}</p>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
-                <TextArea label={t.description} path={[...pmPath, 'description']} value={projectManagement?.description || ''} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.management.placeholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                <TextArea label={t.description} path={[...pmPath, 'description']} value={projectManagement?.description || ''} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.management.placeholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
             </div>
             <div id="organigram">
                 <div className="mb-3 border-b border-slate-200 pb-2">
@@ -590,7 +594,7 @@ const renderProjectManagement = (props) => {
 };
 
 const renderRisks = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const { risks } = projectData;
     const path = ['risks'];
     const t = TEXT[language] || TEXT['en'];
@@ -623,10 +627,10 @@ const renderRisks = (props) => {
                             </select>
                         </div>
                         <div className="flex-1 min-w-[200px]">
-                             <TextArea label={t.risks.riskTitle} path={[...path, index, 'title']} value={risk.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.risks.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" />
+                             <TextArea label={t.risks.riskTitle} path={[...path, index, 'title']} value={risk.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.risks.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" onFieldAIGenerate={onFieldAIGenerate} language={language} />
                         </div>
                     </div>
-                    <TextArea label={t.risks.riskDescription} path={[...path, index, 'description']} value={risk.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.risks.riskDescription} path={[...path, index, 'description']} value={risk.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.risks.likelihood}</label>
@@ -651,7 +655,7 @@ const renderRisks = (props) => {
                             </div>
                         </div>
                     </div>
-                    <TextArea label={t.risks.mitigation} path={[...path, index, 'mitigation']} value={risk.mitigation} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.mitigationPlaceholder} generateTitle={`${t.generateField} ${t.risks.mitigation}`} missingApiKey={missingApiKey} />
+                    <TextArea label={t.risks.mitigation} path={[...path, index, 'mitigation']} value={risk.mitigation} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.risks.mitigationPlaceholder} generateTitle={`${t.generateField} ${t.risks.mitigation}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                     <InlineChart text={(risk.description || '') + ' ' + (risk.mitigation || '')} fieldContext={'risk_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             )})}
@@ -660,7 +664,7 @@ const renderRisks = (props) => {
 };
 
 const renderKERs = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onOpenSettings, vizTrigger, onFieldAIGenerate } = props;
     const { kers } = projectData;
     const path = ['kers'];
     const t = TEXT[language] || TEXT['en'];
@@ -679,11 +683,11 @@ const renderKERs = (props) => {
                             <input type="text" value={ker.id || ''} onChange={(e) => onUpdateData([...path, index, 'id'], e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-bold bg-slate-50 text-base" />
                         </div>
                         <div className="flex-1 min-w-[200px]">
-                             <TextArea label={t.kers.kerTitle} path={[...path, index, 'title']} value={ker.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.kers.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" />
+                             <TextArea label={t.kers.kerTitle} path={[...path, index, 'title']} value={ker.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.kers.titlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} className="w-full group" onFieldAIGenerate={onFieldAIGenerate} language={language} />
                         </div>
                      </div>
-                     <TextArea label={t.kers.kerDesc} path={[...path, index, 'description']} value={ker.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                     <TextArea label={t.kers.exploitationStrategy} path={[...path, index, 'exploitationStrategy']} value={ker.exploitationStrategy} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.strategyPlaceholder} generateTitle={`${t.generateField} ${t.kers.exploitationStrategy}`} missingApiKey={missingApiKey} />
+                     <TextArea label={t.kers.kerDesc} path={[...path, index, 'description']} value={ker.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.descPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                     <TextArea label={t.kers.exploitationStrategy} path={[...path, index, 'exploitationStrategy']} value={ker.exploitationStrategy} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.kers.strategyPlaceholder} generateTitle={`${t.generateField} ${t.kers.exploitationStrategy}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                      <InlineChart text={(ker.description || '') + ' ' + (ker.exploitationStrategy || '')} fieldContext={'ker_' + index} language={language} onRateLimitError={onOpenSettings} triggerExtraction={vizTrigger} />
                 </div>
             ))}
@@ -1223,7 +1227,7 @@ const renderFinance = (props) => {
 // ★ v7.0.1: renderActivities — BUGFIX
 // ═══════════════════════════════════════════════════════════════
 const renderActivities = (props) => {
-    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey } = props;
+    const { projectData, onUpdateData, onGenerateField, onGenerateSection, onAddItem, onRemoveItem, isLoading, language, missingApiKey, onFieldAIGenerate } = props;
     const path = ['activities'];
     const t = TEXT[language] || TEXT['en'];
 
@@ -1295,8 +1299,7 @@ const renderActivities = (props) => {
                             </h4>
                             <RemoveButton onClick={() => onRemoveItem(path, wpIndex)} text={t.remove} />
                         </div>
-                        <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                        
+                        <TextArea label={t.wpTitle} path={[...path, wpIndex, 'title']} value={wp.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.wpTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                         <div className="mt-6 pl-4 border-l-4 border-sky-100">
                             <SectionHeader title={t.tasks} onAdd={() => onAddItem([...path, wpIndex, 'tasks'], { id: `${taskPrefix}${wpIndex + 1}.${(wp.tasks || []).length + 1}`, title: '', description: '', startDate: '', endDate: '', dependencies: [], partnerAllocations: [] })} addText={t.add} />
                             {(wp.tasks || []).map((task, taskIndex) => (
@@ -1306,8 +1309,8 @@ const renderActivities = (props) => {
                                         <span className="bg-white border border-slate-200 px-2 py-0.5 rounded text-xs text-slate-500">{task.id}</span>
                                         {task.title || t.untitled}
                                     </h5>
-                                    <TextArea label={t.taskTitle} path={[...path, wpIndex, 'tasks', taskIndex, 'title']} value={task.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.taskTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.taskDesc} path={[...path, wpIndex, 'tasks', taskIndex, 'description']} value={task.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.taskDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
+                                    <TextArea label={t.taskTitle} path={[...path, wpIndex, 'tasks', taskIndex, 'title']} value={task.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.taskTitlePlaceholder} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
+                                    <TextArea label={t.taskDesc} path={[...path, wpIndex, 'tasks', taskIndex, 'description']} value={task.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.taskDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.startDate}</label>
@@ -1543,7 +1546,7 @@ const renderActivities = (props) => {
                                         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'milestones'], msIndex)} text={t.remove} /></div>
                                         <div className="flex flex-col md:flex-row gap-4">
                                             <div className="flex-1">
-                                                <TextArea label={`Milestone ${milestone.id}`} path={[...path, wpIndex, 'milestones', msIndex, 'description']} value={milestone.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.milestonePlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} className="w-full group" />
+                                                <TextArea label={`Milestone ${milestone.id}`} path={[...path, wpIndex, 'milestones', msIndex, 'description']} value={milestone.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.milestonePlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} className="w-full group" onFieldAIGenerate={onFieldAIGenerate} language={language} />
                                             </div>
                                             <div className="w-full md:w-48">
                                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">{t.dates}</label>
@@ -1564,9 +1567,9 @@ const renderActivities = (props) => {
                                 <div key={dIndex} className="relative mb-4 bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 group">
                                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"><RemoveButton onClick={() => onRemoveItem([...path, wpIndex, 'deliverables'], dIndex)} text={t.remove} /></div>
                                     <h5 className="font-semibold text-slate-700 mb-3">{deliverable.id}</h5>
-                                    <TextArea label={t.deliverableTitle || 'Deliverable Title'} path={[...path, wpIndex, 'deliverables', dIndex, 'title']} value={deliverable.title} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.deliverableTitlePlaceholder || 'Enter deliverable title...'} generateTitle={`${t.generateField} ${t.title}`} missingApiKey={missingApiKey} />
+                                   <TextArea label={t.description} path={[...path, wpIndex, 'deliverables', dIndex, 'description']} value={deliverable.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.deliverableDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                                     <TextArea label={t.description} path={[...path, wpIndex, 'deliverables', dIndex, 'description']} value={deliverable.description} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} placeholder={t.deliverableDescPlaceholder} generateTitle={`${t.generateField} ${t.description}`} missingApiKey={missingApiKey} />
-                                    <TextArea label={t.indicator} path={[...path, wpIndex, 'deliverables', dIndex, 'indicator']} value={deliverable.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} />
+                                    <TextArea label={t.indicator} path={[...path, wpIndex, 'deliverables', dIndex, 'indicator']} value={deliverable.indicator} onUpdate={onUpdateData} onGenerate={onGenerateField} isLoading={isLoading} rows={1} placeholder={t.indicatorPlaceholder} generateTitle={`${t.generateField} ${t.indicator}`} missingApiKey={missingApiKey} onFieldAIGenerate={onFieldAIGenerate} language={language} />
                                 </div>
                             ))}
                         </div>
