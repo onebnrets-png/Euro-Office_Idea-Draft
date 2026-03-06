@@ -1,6 +1,7 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
+// ★ v5.8: Removed web_search_key methods — web search uses existing AI provider keys (EO-042 fix)
 // ★ v5.7: Web Search getters/setters (EO-042)\n// ★ v5.6:
 // ★ v5.5: SAVE GUARD — blocks saving empty skeleton over existing real data
 // v5.4 — 2026-03-03
@@ -582,14 +583,6 @@ export const storageService = {
 
   async setSecondaryModel(model: string) {
     await this.updateSettings({ secondary_model: model.trim() || null });
-  },
-
-  getWebSearchKey(): string | null {
-    return cachedSettings?.web_search_key || null;
-  },
-
-  async setWebSearchKey(key: string) {
-    await this.updateSettings({ web_search_key: key.trim() || null });
   },
 
   getWebSearchEnabled(): boolean {
