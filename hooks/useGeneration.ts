@@ -1,8 +1,11 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
-// v7.10 — 2026-03-06 — EO-039: AI Asistent per-field (handleFieldAIGenerate)
-// v7.9 - Undo and Redo
+// v7.10 — 2026-03-06 — EO-039: handleFieldAIGenerate + getPrettyName scope fix
+//   ★ NEW: handleFieldAIGenerate() — AI Assistant per-field generation with user instructions
+//   ★ FIX: SECTION_PRETTY_NAMES + getPrettyName moved to module scope (was trapped inside _smartMergeArray)
+//   ★ EXPORTED: handleFieldAIGenerate in return object
+// v7.9  -  Pretty names za progress (EO-034)
 // v7.8 — 2026-03-01 — FIX: Composite partners/PM unwrap
 //
 // CHANGES v7.8:
@@ -97,6 +100,39 @@ function _arrayHasRealContent(arr: any[]): boolean {
   return arr.some(function(item: any) { return _arrayItemHasContent(item); });
 }
 
+var SECTION_PRETTY_NAMES: Record<string, Record<string, string>> = {
+  problemAnalysis: { en: 'Problem Analysis', si: 'Analiza problema' },
+  projectIdea: { en: 'Project Idea', si: 'Projektna ideja' },
+  generalObjectives: { en: 'General Objectives', si: 'Splošni cilji' },
+  specificObjectives: { en: 'Specific Objectives', si: 'Specifični cilji' },
+  activities: { en: 'Activities & Work Plan', si: 'Aktivnosti in delovni načrt' },
+  projectManagement: { en: 'Project Management', si: 'Upravljanje projekta' },
+  partners: { en: 'Consortium (Partners)', si: 'Konzorcij (Partnerji)' },
+  partnerAllocations: { en: 'Partner Allocations', si: 'Alokacije partnerjev' },
+  outputs: { en: 'Outputs', si: 'Rezultati (Outputs)' },
+  outcomes: { en: 'Outcomes', si: 'Učinki (Outcomes)' },
+  impacts: { en: 'Impacts', si: 'Vplivi (Impacts)' },
+  kers: { en: 'Key Exploitable Results', si: 'Ključni izkoriščljivi rezultati' },
+  risks: { en: 'Risk Management', si: 'Obvladovanje tveganj' },
+  expectedResults: { en: 'Expected Results', si: 'Pričakovani rezultati' },
+  coreProblem: { en: 'Core Problem', si: 'Jedro problema' },
+  causes: { en: 'Causes', si: 'Vzroki' },
+  consequences: { en: 'Consequences', si: 'Posledice' },
+  projectTitleAcronym: { en: 'Project Title & Acronym', si: 'Naslov in akronim projekta' },
+  mainAim: { en: 'Main Aim', si: 'Glavni cilj' },
+  stateOfTheArt: { en: 'State of the Art', si: 'Stanje na področju' },
+  proposedSolution: { en: 'Proposed Solution', si: 'Predlagana rešitev' },
+  readinessLevels: { en: 'Readiness Levels (TRL/SRL/ORL/LRL)', si: 'Stopnje pripravljenosti (TRL/SRL/ORL/LRL)' },
+  policies: { en: 'EU Policies', si: 'EU politike' },
+};
+
+function getPrettyName(sectionKey: string, lang: 'en' | 'si'): string {
+  var entry = SECTION_PRETTY_NAMES[sectionKey];
+  if (entry) return entry[lang] || entry.en || sectionKey;
+  return sectionKey.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); });
+}
+
+
 // ★ v7.7: Helper — smart merge array: don't overwrite existing content with empty AI items
 function _smartMergeArray(existingArr: any[], newArr: any[], sectionKey: string): any[] {
   var newHasContent = _arrayHasRealContent(newArr);
@@ -107,6 +143,30 @@ function _smartMergeArray(existingArr: any[], newArr: any[], sectionKey: string)
       // AI returned same or more items — use new data
       return newArr;
     }
+    // AI returned fewer items — merge: use new where it has content, keep existing otherwise
+    var merged: any[] = [];
+    for (var mi = 0; mi < Math.max(newArr.length, existingArr.length); mi++) {
+      if (mi < newArr.length && _arrayItemHasContent(newArr[mi])) {
+        merged.push(newArr[mi]);
+      } else if (mi < existingArr.length) {
+        merged.push(existingArr[mi]);
+      } else if (mi < newArr.length) {
+        merged.push(newArr[mi]);
+      }
+    }
+    console.log('[v7.7 SMART MERGE ARRAY] "' + sectionKey + '": merged ' + newArr.length + ' new + kept extras from ' + existingArr.length + ' existing');
+    return merged;
+  }
+
+  // New array has NO real content — keep existing
+  if (existingHasContent) {
+    console.log('[v7.7 SMART MERGE ARRAY] keeping existing "' + sectionKey + '" (' + existingArr.length + ' items) — AI returned empty array');
+    return existingArr;
+  }
+
+  // Both empty — use new
+  return newArr;
+}
     // AI returned fewer items — merge: use new where it has content, keep existing otherwise
     var merged: any[] = [];
     for (var mi = 0; mi < Math.max(newArr.length, existingArr.length); mi++) {
@@ -2864,7 +2924,7 @@ export const useGeneration = ({
     }
   }, [summaryText, runSummaryGeneration]);
 
-  const handleDownloadSummaryDocx = useCallback(async () => {
+    const handleDownloadSummaryDocx = useCallback(async () => {
     try {
       const blob = await generateSummaryDocx(
         summaryText,
@@ -2884,6 +2944,69 @@ export const useGeneration = ({
       );
     }
   }, [summaryText, projectData, language]);
+
+  // ─── EO-039: AI Assistant per-field generation ──────────────────
+
+  var handleFieldAIGenerate = useCallback(
+    async function(path: (string | number)[], currentValue: string, fieldLabel: string, userInstructions: string): Promise<string> {
+      if (!ensureApiKey()) {
+        setIsSettingsOpen(true);
+        return currentValue;
+      }
+
+      var fieldName = path[path.length - 1];
+      setIsLoading(t.generating + ' ' + getPrettyName(String(fieldName), language) + '...');
+      setError(null);
+
+      var fieldAbort = new AbortController();
+      abortControllerRef.current = fieldAbort;
+
+      try {
+        var contextPrompt = '';
+        if (userInstructions && userInstructions.trim().length > 0) {
+          contextPrompt = '\n\nUSER INSTRUCTIONS: ' + userInstructions.trim();
+        }
+        if (currentValue && currentValue.trim().length > 0) {
+          contextPrompt = contextPrompt + '\n\nCURRENT VALUE (improve/expand this): ' + currentValue.trim();
+        }
+
+        var fieldPathStr = path.map(String).join('.');
+        console.log('[handleFieldAIGenerate] fieldPath:', fieldPathStr, '| instructions:', userInstructions?.substring(0, 100));
+
+        var enhancedProjectData = JSON.parse(JSON.stringify(projectData));
+        if (contextPrompt) {
+          if (!enhancedProjectData._fieldAIContext) {
+            enhancedProjectData._fieldAIContext = {};
+          }
+          enhancedProjectData._fieldAIContext = {
+            fieldPath: fieldPathStr,
+            fieldLabel: fieldLabel,
+            userInstructions: userInstructions || '',
+            currentValue: currentValue || '',
+          };
+        }
+
+        var content = await generateFieldContent(fieldPathStr, enhancedProjectData, language, fieldAbort.signal);
+        console.log('[handleFieldAIGenerate] result:', String(content).substring(0, 200));
+
+        return typeof content === 'string' ? content : String(content || '');
+
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          handleAIError(e, 'fieldAIGenerate(' + String(fieldName) + ')');
+        }
+        return currentValue;
+
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [ensureApiKey, projectData, language, t, setIsSettingsOpen, handleAIError]
+  );
+
+  return {
+
   // ★ EO-039: AI Asistent per-field — contextual generation with user instructions
   var handleFieldAIGenerate = useCallback(async function(
     fieldPath: (string | number)[],
@@ -3001,7 +3124,7 @@ export const useGeneration = ({
 
     return result.text;
   }, [projectData, language, ensureApiKey]);
-  return {
+    return {
     isLoading,
     setIsLoading,
     error,
@@ -3013,10 +3136,10 @@ export const useGeneration = ({
     handleGenerateSection,
     handleGenerateCompositeSection,
     handleGenerateField,
+    handleFieldAIGenerate,
     handleExportSummary,
     runSummaryGeneration,
     handleDownloadSummaryDocx,
     cancelGeneration,
-    handleFieldAIGenerate,
   };
 };
