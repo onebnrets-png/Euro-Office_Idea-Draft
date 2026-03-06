@@ -1,7 +1,8 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
-// v7.9  -  Pretty names za progress (EO-034)
+// v7.10 — 2026-03-06 — EO-039: AI Asistent per-field (handleFieldAIGenerate)
+// v7.9 - Undo and Redo
 // v7.8 — 2026-03-01 — FIX: Composite partners/PM unwrap
 //
 // CHANGES v7.8:
@@ -2883,7 +2884,123 @@ export const useGeneration = ({
       );
     }
   }, [summaryText, projectData, language]);
+  // ★ EO-039: AI Asistent per-field — contextual generation with user instructions
+  var handleFieldAIGenerate = useCallback(async function(
+    fieldPath: (string | number)[],
+    currentValue: string,
+    fieldLabel: string,
+    userInstructions: string
+  ): Promise<string> {
+    if (!ensureApiKey()) {
+      throw new Error('MISSING_API_KEY');
+    }
 
+    var contextParts: string[] = [];
+
+    // 1. Project context
+    var projectContext = '';
+    if (projectData.problemAnalysis && projectData.problemAnalysis.coreProblem && projectData.problemAnalysis.coreProblem.title) {
+      projectContext = projectContext + 'Core Problem: ' + projectData.problemAnalysis.coreProblem.title + '\n';
+      if (projectData.problemAnalysis.coreProblem.description) {
+        projectContext = projectContext + projectData.problemAnalysis.coreProblem.description.substring(0, 300) + '\n';
+      }
+    }
+    if (projectData.projectIdea) {
+      if (projectData.projectIdea.projectTitle) projectContext = projectContext + 'Project Title: ' + projectData.projectIdea.projectTitle + '\n';
+      if (projectData.projectIdea.projectAcronym) projectContext = projectContext + 'Acronym: ' + projectData.projectIdea.projectAcronym + '\n';
+      if (projectData.projectIdea.mainAim) projectContext = projectContext + 'Main Aim: ' + projectData.projectIdea.mainAim.substring(0, 300) + '\n';
+      if (projectData.projectIdea.proposedSolution) projectContext = projectContext + 'Proposed Solution: ' + projectData.projectIdea.proposedSolution.substring(0, 300) + '\n';
+    }
+    if (Array.isArray(projectData.generalObjectives) && projectData.generalObjectives.length > 0) {
+      projectContext = projectContext + 'General Objectives: ' + projectData.generalObjectives.map(function(o: any) { return o.title || ''; }).filter(Boolean).join('; ') + '\n';
+    }
+    if (Array.isArray(projectData.specificObjectives) && projectData.specificObjectives.length > 0) {
+      projectContext = projectContext + 'Specific Objectives: ' + projectData.specificObjectives.map(function(o: any) { return o.title || ''; }).filter(Boolean).join('; ') + '\n';
+    }
+    if (projectContext) {
+      contextParts.push('=== PROJECT CONTEXT ===\n' + projectContext);
+    }
+
+    // 2. Global + Org instructions (rules)
+    try {
+      var globalInstructionsModule = await import('../services/globalInstructionsService.ts');
+      await globalInstructionsModule.ensureAllInstructionsLoaded();
+      var overrideKeys = ['outputLanguage', 'style', 'euFramework', 'sectionRules', 'customRules'];
+      var rulesText = '';
+      for (var ki = 0; ki < overrideKeys.length; ki++) {
+        var ov = globalInstructionsModule.getEffectiveOverrideSync(overrideKeys[ki]);
+        if (ov) rulesText = rulesText + overrideKeys[ki] + ': ' + ov + '\n';
+      }
+      if (rulesText) {
+        contextParts.push('=== APPLICATION RULES ===\n' + rulesText);
+      }
+    } catch (e) {
+      console.warn('[FieldAI] Could not load instructions:', e);
+    }
+
+    // 3. Knowledge base
+    try {
+      var orgModule = await import('../services/organizationService.ts');
+      var activeOrgId = orgModule.organizationService.getActiveOrgId();
+      if (activeOrgId) {
+        var kbModule = await import('../services/knowledgeBaseService.ts');
+        var kbTexts = await kbModule.knowledgeBaseService.getAllExtractedTexts(activeOrgId);
+        if (kbTexts.length > 0) {
+          var kbContext = kbTexts.map(function(doc) {
+            return '[' + doc.fileName + ']\n' + doc.text.substring(0, 2000);
+          }).join('\n\n');
+          if (kbContext.length > 8000) kbContext = kbContext.substring(0, 8000) + '\n[...truncated]';
+          contextParts.push('=== KNOWLEDGE BASE DOCUMENTS ===\n' + kbContext);
+        }
+      }
+    } catch (e) {
+      console.warn('[FieldAI] Could not load knowledge base:', e);
+    }
+
+    // 4. Build the prompt
+    var sectionKey = typeof fieldPath[0] === 'string' ? fieldPath[0] : 'unknown';
+    var langLabel = language === 'si' ? 'Slovenian' : 'English';
+
+    var prompt = 'You are an expert EU project consultant.\n';
+    prompt = prompt + 'Language: Write ONLY in ' + langLabel + '.\n\n';
+
+    if (contextParts.length > 0) {
+      prompt = prompt + contextParts.join('\n\n') + '\n\n';
+    }
+
+    prompt = prompt + '=== TASK ===\n';
+    prompt = prompt + 'Field: "' + fieldLabel + '" (section: ' + getPrettyName(sectionKey, language) + ', path: ' + fieldPath.join('.') + ')\n';
+
+    if (currentValue && currentValue.trim()) {
+      prompt = prompt + '\nCurrent content of this field:\n"""\n' + currentValue + '\n"""\n';
+      if (userInstructions && userInstructions.trim()) {
+        prompt = prompt + '\nUser instructions: ' + userInstructions + '\n';
+        prompt = prompt + '\nIMPROVE or SUPPLEMENT the current content according to the user instructions. Keep what is good, enhance what is requested. Return ONLY the improved text for this field, nothing else.\n';
+      } else {
+        prompt = prompt + '\nIMPROVE and ENHANCE the current content. Make it more professional, detailed, and aligned with EU project standards. Return ONLY the improved text for this field, nothing else.\n';
+      }
+    } else {
+      if (userInstructions && userInstructions.trim()) {
+        prompt = prompt + '\nUser instructions: ' + userInstructions + '\n';
+        prompt = prompt + '\nGENERATE content for this empty field according to the user instructions and project context. Return ONLY the generated text for this field, nothing else.\n';
+      } else {
+        prompt = prompt + '\nGENERATE professional content for this empty field based on the project context. Follow EU project best practices. Return ONLY the generated text for this field, nothing else.\n';
+      }
+    }
+
+    prompt = prompt + '\nIMPORTANT: Return ONLY the text content for the field. No JSON, no field names, no quotes, no markdown formatting. Just the plain text.\n';
+
+    // 5. Call AI
+    var aiProvider = await import('../services/aiProvider.ts');
+    var result = await aiProvider.generateContent({
+      prompt: prompt,
+      temperature: 0.4,
+      taskType: 'field',
+      sectionKey: sectionKey,
+    });
+
+    return result.text;
+  }, [projectData, language, ensureApiKey]);
   return {
     isLoading,
     setIsLoading,
@@ -2900,5 +3017,6 @@ export const useGeneration = ({
     runSummaryGeneration,
     handleDownloadSummaryDocx,
     cancelGeneration,
+    handleFieldAIGenerate,
   };
 };
