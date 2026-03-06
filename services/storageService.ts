@@ -1,6 +1,7 @@
 // services/storageService.ts
 // ═══════════════════════════════════════════════════════════════
 // Supabase-backed storage service — replaces localStorage completely
+// ★ v5.6: NULL ARRAY GUARD — loadProject() ensures all array fields are [] not null (EO-028)
 // ★ v5.5: SAVE GUARD — blocks saving empty skeleton over existing real data
 // v5.4 — 2026-03-03
 // ★ v5.4: loadProject() returns null for skeleton data (empty createEmptyProjectData objects)
@@ -759,7 +760,14 @@ export const storageService = {
       console.log('[storageService.loadProject] Empty data for lang=' + language + ', projectId=' + targetId);
       return null;
     }
-
+    // ★ v5.6: NULL array fields guard — ensure all array fields are [] not null (EO-028)
+    var arrayFields = ['generalObjectives', 'specificObjectives', 'activities', 'partners',
+      'outputs', 'outcomes', 'impacts', 'risks', 'kers', 'expectedResults'];
+    arrayFields.forEach(function(field) {
+      if (data.data[field] === null || data.data[field] === undefined) {
+        data.data[field] = [];
+      }
+    });
     // ★ v5.4: Check if data has any REAL content (not just empty skeleton from createEmptyProjectData)
     var hasRealContent = false;
     var pd = data.data;
