@@ -1,7 +1,7 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
-// v7.9
+// v7.9  -  Pretty names za progress (EO-034)
 // v7.8 — 2026-03-01 — FIX: Composite partners/PM unwrap
 //
 // CHANGES v7.8:
