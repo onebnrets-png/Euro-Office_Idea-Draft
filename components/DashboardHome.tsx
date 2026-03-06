@@ -1259,7 +1259,7 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
   const [historySearch, setHistorySearch] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeConvo = conversations.find(cv => cv.id === activeConvoId) || null;
   const messages = activeConvo?.messages || [];
 
@@ -1369,7 +1369,14 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || isGenerating) return;
-
+  const autoResizeTextarea = useCallback(function() {
+    var el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    var maxH = 150;
+    var newH = Math.min(el.scrollHeight, maxH);
+    el.style.height = newH + 'px';
+  }, []);
     const rlStatus = getRateLimitStatus();
     if (rlStatus.requestsInWindow >= rlStatus.maxRequests - 1) {
       const waitMsg = language === 'si'
@@ -1784,9 +1791,72 @@ const AIChatbot: React.FC<{ language: 'en' | 'si'; isDark: boolean; colors: any;
         )}
         <div ref={chatEndRef} />
       </div>
-      <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0 }}>
-        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={language === 'si' ? 'Vprašajte AI pomočnika...' : 'Ask the AI assistant...'} disabled={isGenerating} style={{ flex: 1, padding: spacing.xs + ' ' + spacing.sm, borderRadius: radii.md, border: '1px solid ' + c.border.light, background: isDark ? c.surface.sidebar : c.surface.main, color: c.text.body, fontSize: typography.fontSize.xs, outline: 'none' }} />
-        <button data-chatbot-send onClick={handleSend} disabled={isGenerating || !input.trim()} style={{ background: c.primary[500], color: '#fff', border: 'none', borderRadius: radii.md, padding: spacing.xs + ' ' + spacing.md, fontSize: typography.fontSize.xs, cursor: isGenerating ? 'not-allowed' : 'pointer', opacity: isGenerating || !input.trim() ? 0.5 : 1, fontWeight: typography.fontWeight.semibold }}>{isGenerating ? '...' : '➤'}</button>
+            <div style={{ display: 'flex', gap: spacing.xs, flexShrink: 0, alignItems: 'flex-end' }}>
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={function(e) {
+            setInput(e.target.value);
+            var el = e.target;
+            el.style.height = 'auto';
+            var maxH = 150;
+            var newH = Math.min(el.scrollHeight, maxH);
+            el.style.height = newH + 'px';
+          }}
+          onKeyDown={function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+              var el = e.target as HTMLTextAreaElement;
+              setTimeout(function() { el.style.height = 'auto'; }, 50);
+            }
+          }}
+          placeholder={language === 'si' ? 'Vprašajte AI pomočnika... (Shift+Enter za novo vrstico)' : 'Ask the AI assistant... (Shift+Enter for new line)'}
+          disabled={isGenerating}
+          rows={1}
+          style={{
+            flex: 1,
+            padding: spacing.xs + ' ' + spacing.sm,
+            borderRadius: radii.md,
+            border: '1px solid ' + c.border.light,
+            background: isDark ? c.surface.sidebar : c.surface.main,
+            color: c.text.body,
+            fontSize: typography.fontSize.xs,
+            outline: 'none',
+            resize: 'none',
+            overflow: 'auto',
+            minHeight: '36px',
+            maxHeight: '150px',
+            lineHeight: '1.5',
+            fontFamily: 'inherit',
+            boxSizing: 'border-box',
+          }}
+        />
+        <button
+          data-chatbot-send
+          onClick={function() {
+            handleSend();
+            setTimeout(function() {
+              if (inputRef.current) inputRef.current.style.height = 'auto';
+            }, 50);
+          }}
+          disabled={isGenerating || !input.trim()}
+          style={{
+            background: c.primary[500],
+            color: '#fff',
+            border: 'none',
+            borderRadius: radii.md,
+            padding: spacing.xs + ' ' + spacing.md,
+            fontSize: typography.fontSize.xs,
+            cursor: isGenerating ? 'not-allowed' : 'pointer',
+            opacity: isGenerating || !input.trim() ? 0.5 : 1,
+            fontWeight: typography.fontWeight.semibold,
+            alignSelf: 'flex-end',
+            minHeight: '36px',
+          }}
+        >
+          {isGenerating ? '...' : '➤'}
+        </button>
       </div>
     </div>
   );
