@@ -1,6 +1,7 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
+// v5.1 - Undo/Redo gumbi + Ctrl+Z/Y + Clone handler (EO-037, EO-038)
 // v5.0 — 2026-03-06
 // ★ v5.0: EO-030 — Delete confirmation for projects and all remove operations
 //   - handleDeleteProjectWrapped: ConfirmationModal before project delete
@@ -197,6 +198,21 @@ const App = () => {
   useEffect(() => { if (auth.currentUser) { ensureGlobalInstructionsLoaded(); adminHook.checkAdminStatus(); orgHook.loadOrgs(); } }, [auth.currentUser]);
   useEffect(() => { initTheme(); const unsub = onThemeChange((m) => setIsDark(m === 'dark')); return unsub; }, []);
   useEffect(() => { if (pm.showProjectListOnLogin) { setIsProjectListOpen(true); pm.setShowProjectListOnLogin(false); } }, [pm.showProjectListOnLogin]);
+  // ★ v5.1: Keyboard shortcuts for Undo/Redo
+  useEffect(function() {
+    var handler = function(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (pm.canUndo && activeView === 'project') pm.handleUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        if (pm.canRedo && activeView === 'project') pm.handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return function() { window.removeEventListener('keydown', handler); };
+  }, [pm.canUndo, pm.canRedo, pm.handleUndo, pm.handleRedo, activeView]);
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -618,8 +634,18 @@ const App = () => {
                       title={language === 'si' ? 'Pregled projekta' : 'Project Dashboard'} variant="primary"
                       icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>}
                     />
-                    <ToolbarSeparator colors={colors} />
-                    <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success"
+                    <ToolbarButton colors={colors} onClick={pm.handleUndo}
+                      title={language === 'si' ? 'Razveljavi (Ctrl+Z)' : 'Undo (Ctrl+Z)'}
+                      disabled={!pm.canUndo} variant="default"
+                      icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>}
+                    />
+                     <ToolbarButton colors={colors} onClick={pm.handleRedo}
+                      title={language === 'si' ? 'Ponovi (Ctrl+Y)' : 'Redo (Ctrl+Y)'}
+                      disabled={!pm.canRedo} variant="default"
+                      icon={<svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" /></svg>}
+                    />
+                   <ToolbarSeparator colors={colors} />
+                     <ToolbarButton colors={colors} onClick={pm.handleSaveToStorage} title={t.saveProject} variant="success"
                       icon={<ICONS.SAVE style={{ width: 20, height: 20 }} />}
                     />
                     <label style={{
