@@ -1,6 +1,12 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
+// Version 7.4 – 2026-03-06
+// CHANGES v7.4 (2026-03-06):
+//   - FIX: Removed last 3 "[Insert verified data/project: ...]" placeholders from
+//     SECTION_TASK_INSTRUCTIONS (problemAnalysis, projectIdea) and QUALITY_GATES (problemAnalysis)
+//   - All placeholder instructions now replaced with best-estimate-with-attribution policy
+// CHANGES v7.3 (2026-03-06):
 // Version 7.3 – 2026-03-06
 // CHANGES v7.3 (2026-03-06):
 //   - FIX: REMOVED all "[Insert verified data: ...]" placeholder instructions — placeholders are now FORBIDDEN
@@ -404,7 +410,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'At least 4 distinct consequences are listed, at least one referencing EU-level policy',
       'Causes are logically ordered: root causes first, then proximate causes',
       'All cited sources are real, verifiable — do NOT fabricate statistics',
-      'If unsure about a number, use "[Insert verified data: ...]" placeholder',
+      'If unsure about a number, use your best available estimate with source attribution — NEVER use placeholder brackets',
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, game-changer, paradigm shift, empower, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
       'CROSS-CHECK: Every cause listed here MUST be addressable by at least one Activity/WP in Chapter 5',
@@ -614,7 +620,7 @@ MANDATORY:
 - Causes must be logically ordered: structural/root causes first, proximate causes second.
 - Consequences must show the chain: local → regional → national → EU impact.
 - NEVER write generic descriptions without evidence.
-- If unknown: "[Insert verified data: <description>]".
+- If exact data is unknown, use the BEST AVAILABLE ESTIMATE from your training data with source attribution (e.g., "approximately 12,000 tonnes annually, Gjorgjiev et al., 2020"). NEVER use placeholder brackets.
 - NO markdown (**, ##, \`).
 - Write like an experienced human consultant — vary sentence structures.
 - Clearly distinguish Target Groups (engaged during project) from End Users (adopting results post-project) where relevant.`
@@ -661,7 +667,7 @@ READINESS LEVELS:
 
 GENERAL:
 - EU policies must be real and verifiable.
-- If unknown project: "[Insert verified project: <topic>]".
+- If a specific project name is unknown, describe the initiative by type, scope, and timeframe (e.g., "a Horizon 2020-funded pilot project on circular plastics in the Danube region, 2019-2022"). NEVER use placeholder brackets.
 - NO markdown (**, ##, \`).
 - Write like an experienced human consultant — vary sentences, avoid AI phrases.`
   },
