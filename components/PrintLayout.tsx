@@ -1,5 +1,7 @@
 // components/PrintLayout.tsx
 // ═══════════════════════════════════════════════════════════════
+// v6.3 — 2026-03-06 — EO-032: Removed Euro-Office logo from print layout
+//   ★ v6.3: Print output no longer shows app logo — clean project-only output
 // v6.2 — 2026-02-24 — DEFENSIVE ARRAY HANDLING (safeArray)
 //   ★ v6.2: NEW safeArray() utility — handles AI returning objects
 //           instead of arrays (e.g. { objectives: [...] } vs [...])
