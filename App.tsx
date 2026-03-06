@@ -273,6 +273,22 @@ const App = () => {
       onCancel: function() { closeModal(); },
     });
   };
+   // ★ EO-038: Clone project handler
+    var handleCloneProjectWrapped = async function(projectId: string) {
+      try {
+        generation.setIsLoading(language === 'si' ? 'Kloniram projekt...' : 'Cloning project...');
+        var newProj = await pm.handleCloneProject(projectId);
+        generation.setIsLoading(false);
+        if (newProj) {
+          await pm.handleSwitchProject(newProj.id);
+          setActiveView('project');
+          pm.setCurrentStepId(1);
+        }
+      } catch (e: any) {
+        generation.setIsLoading(false);
+        generation.setError(e.message);
+      }
+    };
     // ★ EO-030: Delete confirmation for all remove operations
   var REMOVE_ITEM_LABELS = {
     en: {
@@ -406,7 +422,8 @@ const App = () => {
         isOpen={isProjectListOpen} onClose={() => setIsProjectListOpen(false)}
         projects={pm.userProjects} currentProjectId={pm.currentProjectId}
         onSelectProject={handleSwitchProjectAndClose} onCreateProject={handleCreateProjectAndClose}
-        onDeleteProject={handleDeleteProjectWrapped} language={language}
+        onDeleteProject={handleDeleteProjectWrapped} onCloneProject={handleCloneProjectWrapped}
+        language={language}
       />
       <SummaryModal
         isOpen={generation.summaryModalOpen} onClose={() => generation.setSummaryModalOpen(false)}
