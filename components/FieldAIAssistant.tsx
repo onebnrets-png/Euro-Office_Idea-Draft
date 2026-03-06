@@ -1,6 +1,7 @@
 // components/FieldAIAssistant.tsx
 // ═══════════════════════════════════════════════════════════════
-// v1.1 — 2026-03-06 — EO-043: z-index stacking context fix — popup always on top
+// v1.2 — 2026-03-06 — EO-043: Portal-based rendering — popup always on top, positioned via anchorRect
+// v1.1 — 2026-03-06 — EO-043: z-index stacking context fix (REPLACED by v1.2 — did not work)
 // v1.0 — 2026-03-06 — EO-039: AI Assistant per-field popup
 // Popup component for contextual AI generation/improvement of any field.
 // User enters instructions → AI generates/improves content using:
@@ -13,6 +14,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface FieldAIAssistantProps {
   isOpen: boolean;
@@ -22,6 +24,7 @@ interface FieldAIAssistantProps {
   currentValue: string;
   fieldLabel: string;
   language: 'en' | 'si';
+  anchorRect?: { top: number; right: number; bottom: number; left: number; width: number; height: number } | null;
 }
 
 var FieldAIAssistant = function(props: FieldAIAssistantProps) {
@@ -32,6 +35,7 @@ var FieldAIAssistant = function(props: FieldAIAssistantProps) {
   var currentValue = props.currentValue;
   var fieldLabel = props.fieldLabel;
   var language = props.language;
+  var anchorRect = props.anchorRect || null;
 
   var textareaRef = useRef<HTMLTextAreaElement>(null);
   var popupRef = useRef<HTMLDivElement>(null);
@@ -146,24 +150,44 @@ var FieldAIAssistant = function(props: FieldAIAssistantProps) {
     fieldLabel: language === 'si' ? 'Polje:' : 'Field:',
   };
 
-  return (
+  // Compute fixed position from anchorRect (below or above the anchor, with bounds checks)
+  var popupWidth = 420;
+  var popupStyle: React.CSSProperties = {
+    position: 'fixed',
+    zIndex: 99999,
+    width: popupWidth + 'px',
+    maxWidth: 'calc(100vw - 32px)',
+    background: '#ffffff',
+    borderRadius: '16px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
+    fontFamily: 'inherit',
+    overflow: 'hidden',
+  };
+
+  if (anchorRect) {
+    var spaceBelow = window.innerHeight - anchorRect.bottom;
+    var spaceAbove = anchorRect.top;
+    var popupEstimatedHeight = 420;
+    if (spaceBelow >= popupEstimatedHeight || spaceBelow >= spaceAbove) {
+      popupStyle.top = anchorRect.bottom + 4 + 'px';
+    } else {
+      popupStyle.bottom = (window.innerHeight - anchorRect.top + 4) + 'px';
+    }
+    var leftPos = anchorRect.right - popupWidth;
+    if (leftPos < 16) leftPos = 16;
+    if (leftPos + popupWidth > window.innerWidth - 16) leftPos = window.innerWidth - 16 - popupWidth;
+    popupStyle.left = leftPos + 'px';
+  } else {
+    popupStyle.top = '50%';
+    popupStyle.left = '50%';
+    popupStyle.transform = 'translate(-50%, -50%)';
+  }
+
+  return createPortal(
     <div
       ref={popupRef}
-      style={{
-        position: 'fixed',
-        top: 'auto',
-        right: 'auto',
-        zIndex: 99999,
-        width: '420px',
-        maxWidth: 'calc(100vw - 32px)',
-        marginTop: '4px',
-        background: '#ffffff',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
-        fontFamily: 'inherit',
-        overflow: 'hidden',
-      }}
+      style={popupStyle}
     >
       {/* Header */}
       <div style={{
@@ -382,7 +406,8 @@ var FieldAIAssistant = function(props: FieldAIAssistantProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
