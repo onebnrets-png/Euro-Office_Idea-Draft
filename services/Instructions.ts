@@ -197,47 +197,48 @@ export const ACADEMIC_RIGOR_RULES: Record<string, string> = {
   en: `═══ MANDATORY ACADEMIC RIGOR & CITATION RULES ═══
 These rules apply to ALL generated content WITHOUT EXCEPTION.
 
-1. EVIDENCE-BASED CONTENT ONLY
-   - Every claim, statistic, or trend MUST be supported by a verifiable source.
+1. EVIDENCE-BASED CONTENT WITH MANDATORY EMPIRICAL DATA
+   - Every claim, statistic, or trend MUST be supported by SPECIFIC EMPIRICAL DATA: concrete numbers, percentages, monetary values, population figures, or measurable quantities. A citation without a data point is INSUFFICIENT.
+   - WRONG: "Pollution is a growing concern in the region (European Commission, 2022)."
+   - RIGHT: "The region generates approximately 450,000 tonnes of plastic waste annually, of which only 12% is recycled (European Commission, 2022; Eurostat, 2023)."
    - Do NOT generate plausible-sounding but unverifiable statements.
-   - Preferred sources: Eurostat, OECD, World Bank, European Commission reports,
-     UN agencies, peer-reviewed journals, national statistical offices, ACER, IEA,
-     JRC, EEA, CEDEFOP, Eurofound, WHO.
+   - Source hierarchy (in order of preference):
+     a) Peer-reviewed journal articles with named authors (HIGHEST academic value)
+     b) Official statistical databases: Eurostat, OECD.Stat, World Bank Open Data, UN Data
+     c) Institutional reports: European Commission, JRC, EEA, CEDEFOP, Eurofound, WHO, IEA, ACER
+     d) National statistical offices and government ministry reports
+     e) EU-funded project results cited by project acronym
+   - For LOCAL/REGIONAL topics: you MUST include country-specific or region-specific data. If exact local data is unavailable, use the closest proxy (national data, comparable regions) and state: "Based on national-level data for [Country] ([Source], [Year])..."
+   - MINIMUM data density: 2 specific data points per cause description, 2 per consequence description, 3 per core problem description.
+   - For GLOBAL topics: use international databases (Eurostat, OECD, World Bank, UN agencies, peer-reviewed meta-analyses). Prefer recent data (2019-2024).
 
-2. CITATION FORMAT
-   - Use inline citations: (Author/Organization, Year).
-   - MINIMUM 2–3 citations per major paragraph or claim cluster.
+2. SCIENTIFIC CITATION FORMAT (APA-STYLE)
+   - Use APA-style inline citations with author surnames:
+     Single author: (Surname, Year) — e.g., (Jambeck, 2015)
+     Two authors: (Surname1 & Surname2, Year) — e.g., (Gjorgjiev & Tasevska, 2020)
+     Three+ authors: (Surname1 et al., Year) — e.g., (Schmidt et al., 2021)
+   - For institutional reports: (Organisation Name, Year) — e.g., (European Commission, 2023)
+   - For policy documents: (Issuing Body, Year) — e.g., (European Parliament, 2019), (Ministry of Environment, 2021)
+   - For EU-funded projects: (Project Acronym Consortium, Year) — e.g., (AQUA-LIT Consortium, 2020)
+   - MINIMUM 3-4 citations per major paragraph or claim cluster.
+   - At least 30% of all citations MUST include author surnames — not just institutional names. This demonstrates genuine academic depth expected by EU evaluators.
+   - Prefer naming SPECIFIC studies: "as documented in the Global Marine Litter Assessment (Jambeck et al., 2015)" rather than generic "(UNEP, 2015)".
+   - When multiple sources support one claim, cite together: (Schmidt et al., 2021; European Commission, 2023).
 
 3. ZERO-HALLUCINATION POLICY
-   - NEVER invent organisation names, project names, or study titles.
+   - NEVER invent author names, organisation names, project names, or study titles.
    - NEVER fabricate statistics or percentages.
    - NEVER write placeholder text like "[Insert verified data: ...]" or "[Insert ...]" or any bracket-enclosed instructions. This is STRICTLY FORBIDDEN — placeholders are treated as a FATAL ERROR that causes the entire output to be REJECTED.
-   - If you do not know an exact number, use the BEST AVAILABLE ESTIMATE from your training data and clearly mark the source, author(s), and year. Example: "approximately 8,500 tonnes annually (Gjorgjiev et al., 2020; World Bank, 2021)" — this is ALWAYS better than a placeholder.
+   - If you do not know an exact number, use the BEST AVAILABLE ESTIMATE from your training data and clearly mark the source, author(s), and year. Example: "approximately 8,500 tonnes annually (Gjorgjiev et al., 2020; World Bank, 2021)". An honest estimate with attribution is ALWAYS better than a placeholder.
    - If you genuinely cannot estimate a figure, REPHRASE the sentence to avoid needing that specific number. Do NOT leave a gap — restructure the argument using qualitative evidence with citations.
 
-4. MANDATORY EMPIRICAL DATA STANDARD
-   - Every problem description, cause, and consequence MUST include specific empirical data: numbers, percentages, monetary values, population figures, or measurable quantities.
-   - Use the best data available from your training knowledge. Prefer recent data (2019-2024) from authoritative sources.
-   - MINIMUM: 2 specific data points per cause description, 2 per consequence description, 3 per core problem description.
-   - For LOCAL/REGIONAL topics: search your knowledge for country-specific and region-specific statistics. If exact local data is unavailable, use the closest available proxy (national data, regional estimates, comparable regions) and explicitly state this: "Based on national-level data for North Macedonia (State Statistical Office, 2022), approximately..."
-   - For GLOBAL topics: use international databases (Eurostat, OECD, World Bank, UN agencies, peer-reviewed meta-analyses).
-
-5. SCIENTIFIC CITATION FORMAT (MANDATORY)
-   - Use APA-style inline citations with author surnames: (Author, Year) or (Author1 & Author2, Year) or (Author1 et al., Year) for 3+ authors.
-   - For institutional reports: (Organisation Name, Year) — e.g., (European Commission, 2023), (Eurostat, 2022).
-   - For peer-reviewed studies: (Surname1 & Surname2, Year) — e.g., (Gjorgjiev & Tasevska, 2020), (Schmidt et al., 2021).
-   - For policy documents: (Issuing Body, Year) — e.g., (European Parliament, 2019), (Ministry of Environment, 2021).
-   - MINIMUM 2-3 citations per major paragraph or claim cluster.
-   - At least 30% of citations MUST be author-named (not just institutional) — this demonstrates genuine academic depth.
-   - Prefer SPECIFIC study names where known: "as documented in the UNEP Marine Litter Assessment (Jambeck et al., 2015)" rather than just "(UNEP, 2015)".
-   - When referencing EU-funded project results, cite as: (Project Acronym Consortium, Year) — e.g., (AQUA-LIT Consortium, 2020).
-
-6. DOUBLE-VERIFICATION STANDARD
+4. DOUBLE-VERIFICATION STANDARD
    - Before including any factual claim, verify from your training data:
      a) Does this author/organisation/report actually exist?
      b) Is this statistic plausible and from a credible source?
-     c) Is the year/date accurate?
-   - If doubt exists about exact numbers, use approximate language with attribution: "estimated at approximately 12,000 tonnes (Gjorgjiev et al., 2020)" — but ALWAYS provide a number. NEVER use placeholders.
+     c) Is the year/date accurate and recent enough?
+   - If doubt exists about exact numbers, use approximate language with attribution: "estimated at approximately 12,000 tonnes (Gjorgjiev et al., 2020)" — but ALWAYS provide a number with a source. NEVER use placeholders.
+   - Cross-check: if you cite an author, make sure the topic matches their known field of research.
 ═══════════════════════════════════════════════════════════════════`
 };
 
