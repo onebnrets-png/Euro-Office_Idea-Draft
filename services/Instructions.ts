@@ -232,7 +232,16 @@ These rules apply to ALL generated content WITHOUT EXCEPTION.
    - If you do not know an exact number, use the BEST AVAILABLE ESTIMATE from your training data and clearly mark the source, author(s), and year. Example: "approximately 8,500 tonnes annually (Gjorgjiev et al., 2020; World Bank, 2021)". An honest estimate with attribution is ALWAYS better than a placeholder.
    - If you genuinely cannot estimate a figure, REPHRASE the sentence to avoid needing that specific number. Do NOT leave a gap — restructure the argument using qualitative evidence with citations.
 
-4. DOUBLE-VERIFICATION STANDARD
+4. WEB SEARCH AND REAL-TIME DATA REQUIREMENT
+   - When web search capability is available, you MUST actively search for current, verified empirical data BEFORE generating content. Search for: official statistics, recent studies, policy documents, and project reports relevant to the specific topic and region.
+   - Search queries should be specific: "[topic] [country/region] statistics [year]", "[problem] empirical data [source type]", "[sector] EU policy framework recent".
+   - Web search results MUST be prioritised over training data when they provide more recent or more specific information.
+   - If web search is NOT available or returns no relevant results, you MUST:
+     a) Use the best data from your training knowledge (as per rules 1-3 above).
+     b) Add a clearly visible notice at the END of the generated text: "NOTE: This content was generated without real-time web access. The author should verify all cited statistics and sources against current databases before submission."
+   - This notice is the ONLY acceptable form of flagging uncertainty — bracket placeholders like "[Insert...]" remain STRICTLY FORBIDDEN.
+
+5. DOUBLE-VERIFICATION STANDARD
    - Before including any factual claim, verify from your training data:
      a) Does this author/organisation/report actually exist?
      b) Is this statistic plausible and from a credible source?
