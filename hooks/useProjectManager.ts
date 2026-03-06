@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
-// v1.4 - 
+// v1.4 - Undo/Redo + Clone (EO-037, EO-038)
 // v1.3 — 2026-02-23 — FIX: Project duplication/loss race condition
 //   - NEW: isLoadingProjectRef guard — prevents auto-save and sync effect
 //     from interfering during loadActiveProject
