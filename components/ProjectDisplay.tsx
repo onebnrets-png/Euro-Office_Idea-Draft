@@ -1,5 +1,10 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.9 — 2026-03-06 — EO-039: AI Asistent per-field (FieldAIAssistant popup)
+//   - TextArea: replaced GenerateButton with AI Assistant popup trigger
+//   - New props: onFieldAIGenerate, language passed through to TextArea
+//   - FieldAIAssistant imported and rendered inside TextArea
+//   - Backward compatible: if onFieldAIGenerate not provided, old behavior preserved
 // v7.8 — 2026-03-02 — GuideTooltip integration COMPLETE — all sections covered
 // v7.7 — 2026-03-02 — GuideTooltip integration on SectionHeader + FieldHeader
 // v7.6 — 2026-03-01 — FIX: Indirect cost calculation for decentralized model
