@@ -1,7 +1,7 @@
 // App.tsx
 // ═══════════════════════════════════════════════════════════════
 // Main application shell — orchestration only.
-// v5.2 — 2026-03-06 — EO-039: Pass onFieldAIGenerate to ProjectDisplay
+// v5.2 — 2026-03-06 — EO-039: Pass onFieldAIGenerate to ProjectDisplay 
 // v5.1 - Undo/Redo gumbi + Ctrl+Z/Y + Clone handler (EO-037, EO-038)
 // v5.0 — 2026-03-06
 // ★ v5.0: EO-030 — Delete confirmation for projects and all remove operations
