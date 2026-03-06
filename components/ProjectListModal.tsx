@@ -1,4 +1,5 @@
 // components/ProjectListModal.tsx
+// v3.1 — 2026-03-06 — Clone button (EO-038)
 // v3.0 - 2026-02-17  Dark-mode: isDark + colors pattern
 import React, { useState, useEffect, useCallback } from 'react';
 import { lightColors, darkColors, shadows, radii, spacing, animation, typography } from '../design/theme.ts';
@@ -13,12 +14,12 @@ interface ProjectListModalProps {
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
+  onCloneProject?: (id: string) => void;
   language: 'en' | 'si';
 }
-
 const ProjectListModal: React.FC<ProjectListModalProps> = ({
   isOpen, onClose, projects, currentProjectId,
-  onSelectProject, onCreateProject, onDeleteProject, language
+  onSelectProject, onCreateProject, onDeleteProject, onCloneProject, language
 }) => {
   const [isDark, setIsDark] = useState(getThemeMode() === 'dark');
   useEffect(() => {
@@ -218,7 +219,35 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({
                         {t.lastModified}: {formatDate(proj.updatedAt)}
                       </p>
                     </div>
-
+                    {onCloneProject && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onCloneProject(proj.id); }}
+                        style={{
+                          padding: spacing.sm,
+                          borderRadius: radii.lg,
+                          border: 'none',
+                          background: 'transparent',
+                          color: colors.primary[300],
+                          cursor: 'pointer',
+                          display: 'flex',
+                          transition: 'all ' + animation.duration.fast,
+                          flexShrink: 0,
+                        }}
+                        onMouseEnter={function(e) {
+                          e.currentTarget.style.background = isDark ? 'rgba(99,102,241,0.15)' : colors.primary[50];
+                          e.currentTarget.style.color = colors.primary[500];
+                        }}
+                        onMouseLeave={function(e) {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = colors.primary[300];
+                        }}
+                        title={language === 'si' ? 'Kloniraj projekt' : 'Clone project'}
+                      >
+                        <svg style={{ width: 20, height: 20 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); onDeleteProject(proj.id); }}
                       style={{
