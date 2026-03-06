@@ -149,8 +149,8 @@ export const useProjectManager = ({
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const isLoadingProjectRef = useRef(false);
   
-  // ★ v1.4: Undo/Redo history stack (5 steps max)
-  const MAX_HISTORY = 5;
+  // ★ v1.4: Undo/Redo history stack (50 steps max)
+  const MAX_HISTORY = 50;
   const undoStackRef = useRef<any[]>([]);
   const redoStackRef = useRef<any[]>([]);
   const [canUndo, setCanUndo] = useState(false);
