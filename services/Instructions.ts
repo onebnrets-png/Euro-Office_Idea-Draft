@@ -549,7 +549,7 @@ export const QUALITY_GATES: Record<string, Record<string, string[]>> = {
       'No vague filler phrases — be specific and analytical',
       'Content is directly linked to the project context and problem analysis',
       'Any cited source must be real and verifiable',
-      'No markdown formatting (no **, no ##, no backtick) in output text',
+      'No markdown formatting (no **, no ##, no `) in output text',
       'No banned AI phrases (leverage, synergy, holistic, foster, cutting-edge, game-changer, paradigm shift, empower, etc.)',
       'Sentence lengths vary — no 3+ consecutive sentences of similar length',
       'Target Groups and End Users are clearly distinguished where relevant',
