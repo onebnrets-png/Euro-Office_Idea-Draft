@@ -1504,25 +1504,67 @@ export const generateFieldContent = async (
   fieldPath: string,
   projectData: any,
   language: 'en' | 'si' = 'en',
-  signal?: AbortSignal  // ★ v7.5
+  signal?: AbortSignal,
+  options?: { userInstructions?: string; currentValue?: string; fieldLabel?: string }
 ): Promise<string> => {
   if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
 
-  const fieldRule = getFieldRules(fieldPath, language);
-  const context = getRelevantContext('projectIdea', projectData); // ★ v7.5: minimal context for field gen
-  const langDirective = getLanguageDirective(language);
+  var fieldRule = getFieldRules(fieldPath, language);
+  var sectionKey = fieldPath.split('.')[0] || 'projectIdea';
+  var context = getRelevantContext(sectionKey, projectData);
+  var langDirective = getLanguageDirective(language);
+  var globalRules = getGlobalRules();
+  var sectionRules = getRulesForSection(sectionKey, language);
+  var academicRules = ACADEMIC_RIGOR_SECTIONS.has(sectionKey) ? getAcademicRigorRules(language) : '';
+  var humanRules = getHumanizationRules(language);
 
-  const prompt = [
+  var userInstr = (options && options.userInstructions && options.userInstructions.trim()) ? options.userInstructions.trim() : '';
+  var currentVal = (options && options.currentValue && options.currentValue.trim()) ? options.currentValue.trim() : '';
+  var label = (options && options.fieldLabel) ? options.fieldLabel : fieldPath;
+
+  var taskBlock = '';
+  if (currentVal && userInstr) {
+    taskBlock = '\nTASK: Improve the field "' + label + '" according to the user instructions.\n'
+      + 'Current content:\n"""\n' + currentVal + '\n"""\n'
+      + 'User instructions: ' + userInstr + '\n'
+      + 'Keep what is good, enhance what is requested. Return ONLY the improved text.\n';
+  } else if (currentVal && !userInstr) {
+    taskBlock = '\nTASK: Improve and enhance the field "' + label + '". Make it more professional, detailed, and aligned with EU project standards.\n'
+      + 'Current content:\n"""\n' + currentVal + '\n"""\n'
+      + 'Return ONLY the improved text.\n';
+  } else if (!currentVal && userInstr) {
+    taskBlock = '\nTASK: Generate content for the empty field "' + label + '" according to the user instructions and project context.\n'
+      + 'User instructions: ' + userInstr + '\n'
+      + 'Return ONLY the generated text.\n';
+  } else {
+    taskBlock = '\nTASK: Generate content for the field "' + label + '" based on the project context and field rule.\n';
+  }
+
+  var kbContext = '';
+  if (KB_RELEVANT_SECTIONS.has(sectionKey)) {
+    kbContext = await getKnowledgeBaseContext();
+  }
+
+  if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+  var promptParts = [
+    kbContext || '',
     langDirective,
-    `\n${context}`,
-    `\nFIELD RULE: ${fieldRule}`,
-    `\nTASK: Generate content for the field "${fieldPath}" based on the project context and field rule.`
+    '\nGLOBAL RULES:\n' + globalRules,
+    sectionRules ? '\nDETAILED CHAPTER RULES:\n' + sectionRules : '',
+    academicRules ? '\n' + academicRules : '',
+    humanRules ? '\n' + humanRules : '',
+    '\n' + context,
+    '\nFIELD RULE: ' + fieldRule,
+    taskBlock,
+    '\nIMPORTANT: Return ONLY plain text content. No JSON, no field names, no quotes, no markdown headers, no bold/italic formatting.\n',
   ].filter(Boolean).join('\n');
 
-  const result = await generateContent({
-    prompt,
+  var result = await generateContent({
+    prompt: promptParts,
     sectionKey: 'field',
-    signal,  // ★ v7.5
+    signal: signal,
+    taskType: 'field',
   });
 
   return stripMarkdown(result.text.trim());
