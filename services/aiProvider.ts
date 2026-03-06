@@ -1,10 +1,12 @@
 // services/aiProvider.ts
 // ═══════════════════════════════════════════════════════════════
-// Universal AI Provider Abstraction Layer – v5.6 (2026-03-01)
+// Universal AI Provider Abstraction Layer – v5.7 (2026-03-06)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
-// v5.6 – FIX: Added INVALID_JSON to RETRYABLE_ERRORS — AI sometimes returns malformed JSON
-//         which is a transient issue (retry usually succeeds). Affects ALL AI calls globally.
+// v5.7 – EO-031: Default temperature = 0 for all AI calls to reduce hallucinations
+//         Only generateContent() is changed — if caller doesn't set temperature,
+//         it defaults to 0 (deterministic output). Chatbot can still override with higher temp.
+// v5.6 – FIX: Added INVALID_JSON to RETRYABLE_ERRORS
 // v5.5 – NEW: AbortSignal support for generation cancellation
 //         - AIGenerateOptions: added signal?: AbortSignal
 //         - withRetry: checks signal.aborted before each attempt
@@ -447,6 +449,11 @@ export function hasValidProviderKey(): boolean {
 export async function generateContent(options: AIGenerateOptions): Promise<AIGenerateResult> {
   // ★ v5.5: Check abort before anything
   if (options.signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+  // ★ v5.7 EO-031: Default temperature = 0 (deterministic) to reduce hallucinations
+  if (options.temperature === undefined) {
+    options.temperature = 0;
+  }
 
   const config = options.taskType
     ? getProviderConfigForTask(options.taskType)
