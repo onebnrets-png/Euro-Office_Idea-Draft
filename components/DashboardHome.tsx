@@ -1,6 +1,13 @@
 // components/DashboardHome.tsx
 // ═══════════════════════════════════════════════════════════════════
 // EURO-OFFICE Dashboard Home — Main view after login
+// v7.2 — 2026-03-06
+//
+// CHANGES v7.2:
+//   ★ AI Chatbot: replaced <input> with auto-resize <textarea>
+//   ★ AI Chatbot: textarea grows with content up to 150px max
+//   ★ AI Chatbot: Shift+Enter for new line, Enter to send
+//   ★ AI Chatbot: height resets after sending message
 // v7.1 — 2026-03-03
 //
 // CHANGES v7.1:
