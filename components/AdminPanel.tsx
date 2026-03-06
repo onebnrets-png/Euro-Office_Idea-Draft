@@ -1,6 +1,13 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// v4.9 — 2026-03-06
+// ★ v4.9: Instructions org isolation — Admin saves to organization_instructions, not global_settings
+//   - handleSaveGlobalInstructions: SuperAdmin → global_settings, Admin → organization_instructions
+//   - handleResetGlobalInstructions: SuperAdmin → resetAppInstructions, Admin → resetOrgInstructions
+//   - useEffect load: Admin sees merged view (defaults + global + org overrides)
+//   - UI notice for Admin: "You are editing instructions for YOUR organization only"
+//   - Audit log for org instruction changes (org_instructions_update action)
 // v4.8 — 2026-03-05
 // ★ v4.8: Export TXT/JSON + Import JSON across all admin tabs (SuperAdmin only)
 //   - Instructions: Export TXT + JSON + Import JSON
@@ -43,6 +50,7 @@ import {
 } from '../services/Instructions.ts';
 import { errorLogService, type ErrorLogEntry, type AuditLogExportEntry } from '../services/errorLogService.ts';
 import { organizationService } from '../services/organizationService.ts';
+import { invalidateOrgInstructionsCache } from '../services/globalInstructionsService.ts';
 import { supabase } from '../services/supabaseClient.ts';
 import { knowledgeBaseService, type KBDocument } from '../services/knowledgeBaseService.ts';
 import { getAllGuideKeys, getFieldGuide, fetchGuideOverrides, saveGuideOverrides, invalidateGuideOverridesCache, buildGuideOverrideKey } from '../services/guideContent.ts';
@@ -721,14 +729,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     }
   }, [activeTab, isOpen, isUserAdmin]);
 
-  useEffect(() => {
-    const defaults = buildDefaultInstructionsDisplay();
-    const overrides = admin.globalInstructions?.custom_instructions || {};
-    const merged: Record<string, string> = {};
-    for (const key of Object.keys(defaults)) { merged[key] = (overrides[key] !== undefined && overrides[key] !== null) ? overrides[key] : defaults[key]; }
-    for (const key of Object.keys(overrides)) { if (!(key in merged)) { merged[key] = overrides[key]; } }
-    setEditedInstructions(merged);
-  }, [admin.globalInstructions, language]);
+    useEffect(function() {
+    var defaults = buildDefaultInstructionsDisplay();
+
+    if (isUserSuperAdmin) {
+      // SuperAdmin: show global overrides merged with defaults
+      var globalOverrides = admin.globalInstructions?.custom_instructions || {};
+      var merged = {};
+      Object.keys(defaults).forEach(function(key) {
+        merged[key] = (globalOverrides[key] !== undefined && globalOverrides[key] !== null) ? globalOverrides[key] : defaults[key];
+      });
+      Object.keys(globalOverrides).forEach(function(key) {
+        if (!(key in merged)) { merged[key] = globalOverrides[key]; }
+      });
+      setEditedInstructions(merged);
+    } else {
+      // Admin: show org overrides merged with (global + defaults)
+      // First merge global overrides into defaults
+      var globalOverrides2 = admin.globalInstructions?.custom_instructions || {};
+      var baseLayer = {};
+      Object.keys(defaults).forEach(function(key) {
+        baseLayer[key] = (globalOverrides2[key] !== undefined && globalOverrides2[key] !== null) ? globalOverrides2[key] : defaults[key];
+      });
+      // Then merge org overrides on top
+      var orgInstructions = organizationService.getActiveOrgInstructionsSync() || {};
+      var merged2 = {};
+      Object.keys(baseLayer).forEach(function(key) {
+        merged2[key] = (orgInstructions[key] !== undefined && orgInstructions[key] !== null && orgInstructions[key].trim() !== '') ? orgInstructions[key] : baseLayer[key];
+      });
+      setEditedInstructions(merged2);
+    }
+  }, [admin.globalInstructions, language, isUserSuperAdmin]);
+
 
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 4000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(timer); } }, [message]);
@@ -1005,17 +1037,77 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
     else { setToast({ message: `${t.selfDelete.failed} ${result.message}`, type: 'error' }); }
   }, [admin, selfDeleteInput, t]);
 
-  const handleSaveGlobalInstructions = useCallback(async () => {
-    const result = await admin.saveGlobalInstructions(editedInstructions);
-    if (result.success) { setToast({ message: t.instructions.saved, type: 'success' }); }
-    else { setToast({ message: `${t.instructions.saveFailed} ${result.message}`, type: 'error' }); }
-  }, [admin, editedInstructions, t]);
+    const handleSaveGlobalInstructions = useCallback(async () => {
+    if (isUserSuperAdmin) {
+      // SuperAdmin: save to global_settings (applies to ALL orgs)
+      var result = await admin.saveGlobalInstructions(editedInstructions);
+      if (result.success) { setToast({ message: t.instructions.saved, type: 'success' }); }
+      else { setToast({ message: t.instructions.saveFailed + ' ' + result.message, type: 'error' }); }
+    } else {
+      // Admin: save to organization_instructions (applies ONLY to their org)
+      var activeOrgId = storageService.getActiveOrgId();
+      if (!activeOrgId) {
+        setToast({ message: language === 'si' ? 'Ni aktivne organizacije.' : 'No active organization.', type: 'error' });
+        return;
+      }
+      // Build org overrides: only sections that differ from defaults
+      var defaults = buildDefaultInstructionsDisplay();
+      var orgOverrides = {};
+      Object.keys(editedInstructions).forEach(function(key) {
+        if (editedInstructions[key] !== defaults[key]) {
+          orgOverrides[key] = editedInstructions[key];
+        }
+      });
+      var result2 = await organizationService.saveOrgInstructions(activeOrgId, orgOverrides);
+      if (result2.success) {
+        invalidateOrgInstructionsCache();
+        setToast({ message: t.instructions.saved, type: 'success' });
+        // Audit log
+        try {
+          var userId = await storageService.getCurrentUserId();
+          await supabase.from('admin_log').insert({
+            admin_id: userId,
+            action: 'org_instructions_update',
+            target_user_id: null,
+            details: { orgId: activeOrgId, orgName: storageService.getActiveOrgName(), sectionsChanged: Object.keys(orgOverrides).length },
+          });
+        } catch (logErr) { /* ignore */ }
+      } else {
+        setToast({ message: t.instructions.saveFailed + ' ' + (result2.message || ''), type: 'error' });
+      }
+    }
+  }, [admin, editedInstructions, t, isUserSuperAdmin, language]);
 
-  const handleResetGlobalInstructions = useCallback(() => {
+    const handleResetGlobalInstructions = useCallback(function() {
     setConfirmModal({ isOpen: true, title: t.instructions.reset, message: t.instructions.resetConfirm,
-      onConfirm: async () => { setConfirmModal(null); const result = await admin.resetInstructionsToDefault(); if (result.success) { setEditedInstructions({}); setToast({ message: t.instructions.resetDone, type: 'success' }); } else { setToast({ message: `${t.instructions.resetFailed} ${result.message}`, type: 'error' }); } }
+      onConfirm: async function() {
+        setConfirmModal(null);
+        if (isUserSuperAdmin) {
+          var result = await admin.resetInstructionsToDefault();
+          if (result.success) {
+            setEditedInstructions(buildDefaultInstructionsDisplay());
+            setToast({ message: t.instructions.resetDone, type: 'success' });
+          } else {
+            setToast({ message: t.instructions.resetFailed + ' ' + result.message, type: 'error' });
+          }
+        } else {
+          var activeOrgId = storageService.getActiveOrgId();
+          if (!activeOrgId) {
+            setToast({ message: language === 'si' ? 'Ni aktivne organizacije.' : 'No active organization.', type: 'error' });
+            return;
+          }
+          var result2 = await organizationService.resetOrgInstructions(activeOrgId);
+          if (result2.success) {
+            invalidateOrgInstructionsCache();
+            setEditedInstructions(buildDefaultInstructionsDisplay());
+            setToast({ message: t.instructions.resetDone, type: 'success' });
+          } else {
+            setToast({ message: t.instructions.resetFailed + ' ' + (result2.message || ''), type: 'error' });
+          }
+        }
+      }
     });
-  }, [admin, t]);
+  }, [admin, t, isUserSuperAdmin, language]);
 
   const handleInstructionChange = useCallback((section: string, value: string) => { setEditedInstructions(prev => ({ ...prev, [section]: value })); }, []);
 
@@ -2059,6 +2151,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
                         reader.readAsText(file);
                       }} />
                     </label>
+                  </div>
+                </div>
+              )}
+              {/* ★ v4.9: Org-scoped instructions notice for Admin */}
+              {!isUserSuperAdmin && isUserAdmin && (
+                <div style={{ padding: '12px 16px', borderRadius: radii.lg, background: secondaryInfoBg, border: '1px solid ' + secondaryInfoBorder, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>{'\uD83C\uDFE2'}</span>
+                  <div>
+                    <div style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: secondaryInfoText }}>
+                      {language === 'si' ? 'Urejate pravila za va\u0161o organizacijo: ' : 'You are editing instructions for your organization: '}
+                      <strong>{storageService.getActiveOrgName()}</strong>
+                    </div>
+                    <div style={{ fontSize: typography.fontSize.xs, color: secondaryInfoText, opacity: 0.85, marginTop: '2px' }}>
+                      {language === 'si' ? 'Te spremembe veljajo SAMO za va\u0161o organizacijo. Globalna privzeta pravila dolo\u010Da SuperAdmin.' : 'These changes apply ONLY to your organization. Global defaults are set by SuperAdmin.'}
+                    </div>
                   </div>
                 </div>
               )}
