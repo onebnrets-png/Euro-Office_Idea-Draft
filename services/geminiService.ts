@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // services/geminiService.ts
+// v7.8 — 2026-03-06 — EO-040: generateFieldContent supports userInstructions + currentValue + full rules
 // v7.7 — 2026-03-01 — FIX: Partner allocations use correct categoryKeys per funding model
 // v7.6 — 2026-03-01 — POST-PROCESSING BUDGET ENFORCEMENT (from previous session)
 // v7.5 — 2026-02-24 — TOKEN OPTIMIZATION + ABORT SIGNAL
