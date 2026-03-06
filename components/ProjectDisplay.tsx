@@ -1,5 +1,6 @@
 // components/ProjectDisplay.tsx
 // ═══════════════════════════════════════════════════════════════
+// v7.10 — EO-043: z-index stacking context fix for AI Assistant popup
 // v7.9 — 2026-03-06 — EO-039: AI Asistent per-field (FieldAIAssistant popup) — COMPLETE
 //   - TextArea: replaced GenerateButton with AI Assistant popup trigger
 //   - New props: onFieldAIGenerate, language passed through to TextArea
