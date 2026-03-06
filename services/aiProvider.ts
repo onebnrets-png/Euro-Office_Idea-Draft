@@ -3,9 +3,11 @@
 // Universal AI Provider Abstraction Layer – v5.7 (2026-03-06)
 // ═══════════════════════════════════════════════════════════════
 // CHANGELOG:
-// v5.7 – EO-031: Default temperature = 0 for all AI calls to reduce hallucinations
-//         Only generateContent() is changed — if caller doesn't set temperature,
-//         it defaults to 0 (deterministic output). Chatbot can still override with higher temp.
+// v5.7 – EO-031: Smart temperature defaults — differentiated per taskType/sectionKey
+//         Replaces previous global temperature=0. New function getDefaultTemperature()
+//         returns optimal temperature: 0.0 for structural tasks, 0.2 for translations,
+//         0.3 for chatbot/summary, 0.4 for fields, 0.5 for section generation,
+//         0.7 for creative tasks (title/acronym). Documented in Instructions.ts.
 // v5.6 – FIX: Added INVALID_JSON to RETRYABLE_ERRORS
 // v5.5 – NEW: AbortSignal support for generation cancellation
 //         - AIGenerateOptions: added signal?: AbortSignal
@@ -282,6 +284,41 @@ function getMaxTokensForSection(sectionKey?: string): number {
   if (!sectionKey) return DEFAULT_MAX_TOKENS;
   return SECTION_MAX_TOKENS[sectionKey] || DEFAULT_MAX_TOKENS;
 }
+// ─── ★ v5.7 EO-031: SMART TEMPERATURE DEFAULTS ─────────────────
+// Differentiated temperature per task type and section key.
+// Lower = more deterministic (facts, structure, translations)
+// Higher = more creative (titles, descriptions, proposals)
+
+function getDefaultTemperature(taskType?: AITaskType, sectionKey?: string): number {
+  // Structural / deterministic tasks — temperature 0.0
+  if (sectionKey === 'chartExtraction') return 0.0;
+  if (taskType === 'allocation') return 0.1;
+
+  // Translation — low creativity, high accuracy
+  if (taskType === 'translation') return 0.2;
+
+  // Chatbot — slightly warmer for natural conversation
+  if (taskType === 'chatbot') return 0.3;
+
+  // Summary — condensation needs precision
+  if (taskType === 'summary') return 0.3;
+
+  // Field-level generation — moderate creativity
+  if (taskType === 'field') {
+    // Likelihood/impact selectors — deterministic
+    if (sectionKey && (sectionKey.indexOf('likelihood') >= 0 || sectionKey.indexOf('impact') >= 0)) return 0.0;
+    return 0.4;
+  }
+
+  // Creative sections — higher temperature
+  if (sectionKey === 'projectTitleAcronym') return 0.7;
+
+  // Section generation (default taskType = 'generation') — balanced
+  if (taskType === 'generation') return 0.5;
+
+  // Fallback — moderate
+  return 0.4;
+}
 
 // ─── GEMINI MODELS ───────────────────────────────────────────────
 
@@ -449,12 +486,11 @@ export function hasValidProviderKey(): boolean {
 export async function generateContent(options: AIGenerateOptions): Promise<AIGenerateResult> {
   // ★ v5.5: Check abort before anything
   if (options.signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
-
-  // ★ v5.7 EO-031: Default temperature = 0 (deterministic) to reduce hallucinations
+  // ★ v5.7 EO-031: Smart temperature defaults per task type and section
+  // Rules documented in Instructions.ts TEMPERATURE_DEFAULTS section
   if (options.temperature === undefined) {
-    options.temperature = 0;
+    options.temperature = getDefaultTemperature(options.taskType, options.sectionKey);
   }
-
   const config = options.taskType
     ? getProviderConfigForTask(options.taskType)
     : getProviderConfig();
