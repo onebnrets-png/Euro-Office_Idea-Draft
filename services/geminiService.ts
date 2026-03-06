@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // services/geminiService.ts
+// v7.9 — 2026-03-06 — EO-042: Web Search integration — searchForEvidence injected into prompts
 // v7.8 — 2026-03-06 — EO-040: generateFieldContent supports userInstructions + currentValue + full rules
 // v7.7 — 2026-03-01 — FIX: Partner allocations use correct categoryKeys per funding model
 // v7.6 — 2026-03-01 — POST-PROCESSING BUDGET ENFORCEMENT (from previous session)
@@ -52,7 +53,7 @@ import {
   isValidPartnerType,
   SECTION_TO_CHAPTER_MAP,
 } from './Instructions.ts';
-
+import { isWebSearchAvailable, searchForEvidence, formatSearchResultsForPrompt, extractSearchTopic } from './webSearchService.ts';
 import { detectProjectLanguage as detectLanguage, detectTextLanguage } from '../utils.ts';
 import {
   generateContent,
@@ -1103,7 +1104,25 @@ export const generateSectionContent = async (
   let fullPrompt = prompt;
   if (KB_RELEVANT_SECTIONS.has(sectionKey)) {
     const kbContext = await getKnowledgeBaseContext();
-    if (kbContext) fullPrompt = `${kbContext}\n\n${prompt}`;
+    if (kbContext) fullPrompt = kbContext + '\n\n' + fullPrompt;
+  }
+
+  // ★ v7.9 EO-042: Web Search injection — only for relevant sections
+  if (KB_RELEVANT_SECTIONS.has(sectionKey) && isWebSearchAvailable()) {
+    try {
+      var searchInfo = extractSearchTopic(sectionKey, projectData);
+      if (searchInfo.topic && searchInfo.topic.length >= 10) {
+        console.log('[geminiService] v7.9 WebSearch: searching for "' + searchInfo.topic.substring(0, 60) + '" region="' + searchInfo.region + '"');
+        var searchResults = await searchForEvidence(searchInfo.topic, searchInfo.region, language);
+        var searchBlock = formatSearchResultsForPrompt(searchResults);
+        if (searchBlock) {
+          fullPrompt = searchBlock + '\n\n' + fullPrompt;
+          console.log('[geminiService] v7.9 WebSearch: injected ' + searchResults.length + ' results (' + searchBlock.length + ' chars) into prompt for ' + sectionKey);
+        }
+      }
+    } catch (webSearchErr) {
+      console.warn('[geminiService] v7.9 WebSearch failed (non-fatal):', webSearchErr);
+    }
   }
 
   // ★ v7.5: Check abort after KB load
@@ -1546,9 +1565,27 @@ export const generateFieldContent = async (
     kbContext = await getKnowledgeBaseContext();
   }
 
+  // ★ v7.9 EO-042: Web Search injection for field-level generation
+  var webSearchBlock = '';
+  if (KB_RELEVANT_SECTIONS.has(sectionKey) && isWebSearchAvailable()) {
+    try {
+      var fieldSearchInfo = extractSearchTopic(sectionKey, projectData);
+      if (fieldSearchInfo.topic && fieldSearchInfo.topic.length >= 10) {
+        var fieldSearchResults = await searchForEvidence(fieldSearchInfo.topic, fieldSearchInfo.region, language);
+        webSearchBlock = formatSearchResultsForPrompt(fieldSearchResults);
+        if (webSearchBlock) {
+          console.log('[geminiService] v7.9 WebSearch (field): injected ' + fieldSearchResults.length + ' results for ' + fieldPath);
+        }
+      }
+    } catch (fieldWebSearchErr) {
+      console.warn('[geminiService] v7.9 WebSearch (field) failed (non-fatal):', fieldWebSearchErr);
+    }
+  }
+
   if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
 
   var promptParts = [
+    webSearchBlock || '',
     kbContext || '',
     langDirective,
     '\nGLOBAL RULES:\n' + globalRules,
