@@ -3089,16 +3089,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, language, init
 
         {/* ═══ CHANGELOG TAB ═══ ★ v4.6 */}
           {activeTab === 'changelog' && (() => {
-            var filteredGroups = changelogGroups.map(function(group) {
-              var filtered = group.entries.filter(function(entry) {
-                var matchType = !changelogTypeFilter || entry.type === changelogTypeFilter;
-                var matchSearch = !changelogSearch || entry.title.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.description.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.code.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0;
-                return matchType && matchSearch;
-              });
-              return { version: group.version, entries: filtered, latestDate: group.latestDate };
-            }).filter(function(g) { return g.entries.length > 0; });
+            var adminVisibleTypes = isUserSuperAdmin
+            ? null
+            : ['FEAT'];
+          var filteredGroups = changelogGroups.map(function(group) {
+            var filtered = group.entries.filter(function(entry) {
+              var matchRole = !adminVisibleTypes || adminVisibleTypes.indexOf(entry.type) >= 0;
+              var matchType = !changelogTypeFilter || entry.type === changelogTypeFilter;
+              var matchSearch = !changelogSearch || entry.title.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.description.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0 || entry.code.toLowerCase().indexOf(changelogSearch.toLowerCase()) >= 0;
+              return matchRole && matchType && matchSearch;
+            });
+            return { version: group.version, entries: filtered, latestDate: group.latestDate };
+          }).filter(function(g) { return g.entries.length > 0; });
 
-            var allTypes = ['FEAT', 'FIX', 'UI', 'PERF', 'REFACTOR', 'SECURITY', 'DB'];
+            var allTypes = isUserSuperAdmin
+            ? ['FEAT', 'FIX', 'UI', 'PERF', 'REFACTOR', 'SECURITY', 'DB']
+            : ['FEAT'];
 
             return (
               <div>
