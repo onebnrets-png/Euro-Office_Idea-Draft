@@ -382,10 +382,9 @@ RULES:
 11. Ensure valid JSON output.`
   },
   regenerate: {
-    en: `MODE: FULL REGENERATION.
-Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown (**, ##, backtick)`. Write like an experienced human consultant — vary sentence structures. If exact data unknown, use best available estimate with source and year — NEVER use placeholder brackets.'
-  }
-};
+      en: 'MODE: FULL REGENERATION. Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown. Write like an experienced human consultant — vary sentence structures. If exact data unknown, use best available estimate with source and year — NEVER use placeholder brackets.'
+    }
+  };
 
 // ───────────────────────────────────────────────────────────────
 // QUALITY GATES (per section) — EN only
