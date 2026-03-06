@@ -1,8 +1,14 @@
 // services/Instructions.ts
 // ═══════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH for ALL AI content rules.
-// Version 7.2 – 2026-03-06
-//
+// Version 7.3 – 2026-03-06
+// CHANGES v7.3 (2026-03-06):
+//   - FIX: REMOVED all "[Insert verified data: ...]" placeholder instructions — placeholders are now FORBIDDEN
+//   - NEW: MANDATORY EMPIRICAL DATA STANDARD — every claim must include specific numbers with sources
+//   - NEW: Best-estimate policy — AI must always provide approximations rather than gaps
+//   - NEW: Local/regional data requirement — use country-specific statistics or closest proxy
+//   - CHANGED: GLOBAL_RULES rule 9 — no more placeholder permission
+//   - CHANGED: MODE_INSTRUCTIONS enhance + regenerate — no more placeholder references
 // CHANGES v7.2 (2026-03-06):
 //   - NEW: TEMPERATURE_DEFAULTS documentation — differentiated AI temperature
 //     settings per task type and section (EO-031). Actual logic in aiProvider.ts.
@@ -205,15 +211,33 @@ These rules apply to ALL generated content WITHOUT EXCEPTION.
 3. ZERO-HALLUCINATION POLICY
    - NEVER invent organisation names, project names, or study titles.
    - NEVER fabricate statistics or percentages.
-   - If a specific data point is needed but unknown, write:
-     "[Insert verified data: <description of what is needed>]"
+   - NEVER write placeholder text like "[Insert verified data: ...]" or "[Insert ...]" or any bracket-enclosed instructions. This is STRICTLY FORBIDDEN — placeholders are treated as a FATAL ERROR that causes the entire output to be REJECTED.
+   - If you do not know an exact number, use the BEST AVAILABLE ESTIMATE from your training data and clearly mark the source, author(s), and year. Example: "approximately 8,500 tonnes annually (Gjorgjiev et al., 2020; World Bank, 2021)" — this is ALWAYS better than a placeholder.
+   - If you genuinely cannot estimate a figure, REPHRASE the sentence to avoid needing that specific number. Do NOT leave a gap — restructure the argument using qualitative evidence with citations.
 
-4. DOUBLE-VERIFICATION STANDARD
-   - Before including any factual claim, verify:
-     a) Does this organisation/report actually exist?
+4. MANDATORY EMPIRICAL DATA STANDARD
+   - Every problem description, cause, and consequence MUST include specific empirical data: numbers, percentages, monetary values, population figures, or measurable quantities.
+   - Use the best data available from your training knowledge. Prefer recent data (2019-2024) from authoritative sources.
+   - MINIMUM: 2 specific data points per cause description, 2 per consequence description, 3 per core problem description.
+   - For LOCAL/REGIONAL topics: search your knowledge for country-specific and region-specific statistics. If exact local data is unavailable, use the closest available proxy (national data, regional estimates, comparable regions) and explicitly state this: "Based on national-level data for North Macedonia (State Statistical Office, 2022), approximately..."
+   - For GLOBAL topics: use international databases (Eurostat, OECD, World Bank, UN agencies, peer-reviewed meta-analyses).
+
+5. SCIENTIFIC CITATION FORMAT (MANDATORY)
+   - Use APA-style inline citations with author surnames: (Author, Year) or (Author1 & Author2, Year) or (Author1 et al., Year) for 3+ authors.
+   - For institutional reports: (Organisation Name, Year) — e.g., (European Commission, 2023), (Eurostat, 2022).
+   - For peer-reviewed studies: (Surname1 & Surname2, Year) — e.g., (Gjorgjiev & Tasevska, 2020), (Schmidt et al., 2021).
+   - For policy documents: (Issuing Body, Year) — e.g., (European Parliament, 2019), (Ministry of Environment, 2021).
+   - MINIMUM 2-3 citations per major paragraph or claim cluster.
+   - At least 30% of citations MUST be author-named (not just institutional) — this demonstrates genuine academic depth.
+   - Prefer SPECIFIC study names where known: "as documented in the UNEP Marine Litter Assessment (Jambeck et al., 2015)" rather than just "(UNEP, 2015)".
+   - When referencing EU-funded project results, cite as: (Project Acronym Consortium, Year) — e.g., (AQUA-LIT Consortium, 2020).
+
+6. DOUBLE-VERIFICATION STANDARD
+   - Before including any factual claim, verify from your training data:
+     a) Does this author/organisation/report actually exist?
      b) Is this statistic plausible and from a credible source?
      c) Is the year/date accurate?
-   - If ANY doubt exists, use the placeholder format from rule 3.
+   - If doubt exists about exact numbers, use approximate language with attribution: "estimated at approximately 12,000 tonnes (Gjorgjiev et al., 2020)" — but ALWAYS provide a number. NEVER use placeholders.
 ═══════════════════════════════════════════════════════════════════`
 };
 
@@ -342,14 +366,14 @@ RULES:
 5. SUPPLEMENT: add new items if lists are short.
 6. CORRECT errors.
 7. NEVER REMOVE existing items.
-8. ZERO HALLUCINATION — if unsure: "[Insert verified data: ...]".
+8. ZERO HALLUCINATION — if unsure about exact data, use best available estimate with source attribution. NEVER use placeholder brackets like "[Insert...]".
 9. NO MARKDOWN: do not use ** ## \`.
 10. HUMANIZE: write like an experienced human consultant, vary sentence structure.
 11. Ensure valid JSON output.`
   },
   regenerate: {
     en: `MODE: FULL REGENERATION.
-Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown (**, ##, \`). Write like an experienced human consultant — vary sentence structures. If unknown: '[Insert verified data: ...]'.`
+Generate completely new, comprehensive, professional content. Every description MUST contain citations from REAL sources. NO markdown (**, ##, \`). Write like an experienced human consultant — vary sentence structures. If exact data unknown, use best available estimate with source and year — NEVER use placeholder brackets.
   }
 };
 
@@ -1158,7 +1182,7 @@ export const GLOBAL_RULES = `
 6. Write like an experienced human EU project consultant.
 7. Vary sentence structures and lengths — no AI-pattern repetition.
 8. No banned AI phrases (see HUMANIZATION RULES).
-9. If a data point is uncertain, use "[Insert verified data: ...]".
+9. NEVER use placeholder text like "[Insert verified data: ...]" or any bracket-enclosed instructions. Always provide your best estimate with source attribution. If you cannot estimate, rephrase the sentence to avoid the gap.
 10. Dates must be in YYYY-MM-DD format.
 11. All content must support the intervention logic chain: Problem → Objectives → Activities → Results.
 12. Quantify wherever possible — no vague statements.
