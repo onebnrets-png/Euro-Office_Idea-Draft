@@ -1,6 +1,7 @@
 // components/AdminPanel.tsx
 // ═══════════════════════════════════════════════════════════════
 // Unified Admin / Settings Panel
+// v5.0 - Changelog Admin filtering (EO-033)
 // v4.9 — 2026-03-06
 // ★ v4.9: Instructions org isolation — Admin saves to organization_instructions, not global_settings
 //   - handleSaveGlobalInstructions: SuperAdmin → global_settings, Admin → organization_instructions
