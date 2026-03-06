@@ -1,6 +1,7 @@
 // hooks/useGeneration.ts
 // ═══════════════════════════════════════════════════════════════
 // AI content generation — sections, fields, summaries.
+// v7.9
 // v7.8 — 2026-03-01 — FIX: Composite partners/PM unwrap
 //
 // CHANGES v7.8:
@@ -119,6 +120,37 @@ function _smartMergeArray(existingArr: any[], newArr: any[], sectionKey: string)
     console.log('[v7.7 SMART MERGE ARRAY] "' + sectionKey + '": merged ' + newArr.length + ' new + kept extras from ' + existingArr.length + ' existing');
     return merged;
   }
+    var SECTION_PRETTY_NAMES: Record<string, Record<string, string>> = {
+      problemAnalysis: { en: 'Problem Analysis', si: 'Analiza problema' },
+      projectIdea: { en: 'Project Idea', si: 'Projektna ideja' },
+      generalObjectives: { en: 'General Objectives', si: 'Splošni cilji' },
+      specificObjectives: { en: 'Specific Objectives', si: 'Specifični cilji' },
+      activities: { en: 'Activities & Work Plan', si: 'Aktivnosti in delovni načrt' },
+      projectManagement: { en: 'Project Management', si: 'Upravljanje projekta' },
+      partners: { en: 'Consortium (Partners)', si: 'Konzorcij (Partnerji)' },
+      partnerAllocations: { en: 'Partner Allocations', si: 'Alokacije partnerjev' },
+      outputs: { en: 'Outputs', si: 'Rezultati (Outputs)' },
+      outcomes: { en: 'Outcomes', si: 'Učinki (Outcomes)' },
+      impacts: { en: 'Impacts', si: 'Vplivi (Impacts)' },
+      kers: { en: 'Key Exploitable Results', si: 'Ključni izkoriščljivi rezultati' },
+      risks: { en: 'Risk Management', si: 'Obvladovanje tveganj' },
+      expectedResults: { en: 'Expected Results', si: 'Pričakovani rezultati' },
+      coreProblem: { en: 'Core Problem', si: 'Jedro problema' },
+      causes: { en: 'Causes', si: 'Vzroki' },
+      consequences: { en: 'Consequences', si: 'Posledice' },
+      projectTitleAcronym: { en: 'Project Title & Acronym', si: 'Naslov in akronim projekta' },
+      mainAim: { en: 'Main Aim', si: 'Glavni cilj' },
+      stateOfTheArt: { en: 'State of the Art', si: 'Stanje na področju' },
+      proposedSolution: { en: 'Proposed Solution', si: 'Predlagana rešitev' },
+      readinessLevels: { en: 'Readiness Levels (TRL/SRL/ORL/LRL)', si: 'Stopnje pripravljenosti (TRL/SRL/ORL/LRL)' },
+      policies: { en: 'EU Policies', si: 'EU politike' },
+    };
+
+function getPrettyName(sectionKey: string, lang: 'en' | 'si'): string {
+  var entry = SECTION_PRETTY_NAMES[sectionKey];
+  if (entry) return entry[lang] || entry.en || sectionKey;
+  return sectionKey.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); });
+}
 
   // New array has NO real content — keep existing
   if (existingHasContent) {
@@ -646,7 +678,7 @@ export const useGeneration = ({
       const signal = abortController.signal;
 
       closeModal();
-      setIsLoading(`${t.generating} ${sectionKey}...`);
+      setIsLoading(t.generating + ' ' + getPrettyName(sectionKey, language) + '...');
       setError(null);
 
       try {
@@ -1108,10 +1140,10 @@ export const useGeneration = ({
             var fieldNames = emptyFields.join(', ');
             console.log('[ObjectFill] ' + sectionKey + ': Empty fields detected: [' + fieldNames + ']');
             setIsLoading(
-              language === 'si'
-                ? 'Dopolnjujem ' + emptyFields.length + ' praznih polj: ' + fieldNames + '...'
-                : 'Filling ' + emptyFields.length + ' empty fields: ' + fieldNames + '...'
-            );
+            language === 'si'
+              ? 'Dopolnjujem ' + emptyFields.length + ' praznih polj v ' + getPrettyName(sectionKey, language) + ': ' + fieldNames + '...'
+              : 'Filling ' + emptyFields.length + ' empty fields in ' + getPrettyName(sectionKey, language) + ': ' + fieldNames + '...'
+          );
 
             generatedData = await generateObjectFill(
               sectionKey,
@@ -1129,10 +1161,10 @@ export const useGeneration = ({
           if (!sectionData || (Array.isArray(sectionData) && sectionData.length === 0) || !hasDeepContent(sectionData)) {
             console.log(`[SmartFill] ${sectionKey}: No data → full regeneration`);
             setIsLoading(
-              language === 'si'
-                ? `Generiram ${sectionKey} (ni obstoječih podatkov)...`
-                : `Generating ${sectionKey} (no existing data)...`
-            );
+            language === 'si'
+              ? 'Generiram ' + getPrettyName(sectionKey, language) + ' (ni obstoječih podatkov)...'
+              : 'Generating ' + getPrettyName(sectionKey, language) + ' (no existing data)...'
+          );
             generatedData = await generateSectionContent(
               sectionKey,
               projectData,
@@ -1190,10 +1222,11 @@ export const useGeneration = ({
             } else {
               console.log(`[SmartFill] ${sectionKey}: ${emptyIndices.length} of ${sectionData.length} items need filling at indices [${emptyIndices.join(', ')}]`);
               setIsLoading(
-                language === 'si'
-                  ? `Dopolnjujem ${emptyIndices.length} od ${sectionData.length} elementov v ${sectionKey}...`
-                  : `Filling ${emptyIndices.length} of ${sectionData.length} items in ${sectionKey}...`
-              );
+              language === 'si'
+                ? 'Dopolnjujem ' + emptyIndices.length + ' od ' + sectionData.length + ' elementov v ' + getPrettyName(sectionKey, language) + '...'
+                : 'Filling ' + emptyIndices.length + ' of ' + sectionData.length + ' items in ' + getPrettyName(sectionKey, language) + '...'
+            );
+
               generatedData = await generateTargetedFill(
                 sectionKey,
                 projectData,
@@ -1308,10 +1341,10 @@ export const useGeneration = ({
               const fieldNames = emptyFields.join(', ');
               console.log(`[SmartFill] ${sectionKey}: Empty fields detected: [${fieldNames}]`);
               setIsLoading(
-                language === 'si'
-                  ? `Dopolnjujem ${emptyFields.length} praznih polj (${fieldNames})...`
-                  : `Filling ${emptyFields.length} empty fields (${fieldNames})...`
-              );
+              language === 'si'
+                ? 'Dopolnjujem ' + emptyFields.length + ' praznih polj v ' + getPrettyName(sectionKey, language) + ' (' + fieldNames + ')...'
+                : 'Filling ' + emptyFields.length + ' empty fields in ' + getPrettyName(sectionKey, language) + ' (' + fieldNames + ')...'
+            );
               generatedData = await generateObjectFill(
                 sectionKey,
                 projectData,
@@ -2452,7 +2485,7 @@ export const useGeneration = ({
 
               const { key: s, action, emptyIndices } = sectionsToProcess[idx];
               const label = modeLabels[action]?.[language] || modeLabels['generate'][language];
-              const sectionLabel = s.charAt(0).toUpperCase() + s.slice(1);
+              var sectionLabel = getPrettyName(s, language);
 
               setIsLoading(`${label} ${sectionLabel} (${idx + 1}/${totalToProcess})...`);
 
@@ -2746,7 +2779,7 @@ export const useGeneration = ({
       }
 
       const fieldName = path[path.length - 1];
-      setIsLoading(`${t.generating} ${String(fieldName)}...`);
+      setIsLoading(t.generating + ' ' + getPrettyName(String(fieldName), language) + '...');
       setError(null);
 
       const fieldAbort = new AbortController();
