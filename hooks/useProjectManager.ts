@@ -2,7 +2,10 @@
 // ═══════════════════════════════════════════════════════════════
 // Project CRUD, import/export, save, auto-save, navigation.
 // On login: shows project list instead of auto-loading last project.
-// v1.4 - Undo/Redo + Clone (EO-037, EO-038)
+// v1.4 — 2026-03-06 — Undo/Redo + Clone (EO-037, EO-038)
+//   - FIX: handleUpdateData double setProjectData bug
+//   - handleCloneProject: copies both EN/SI with _V1.1 suffix
+//   - canUndo, canRedo, handleUndo, handleRedo exported in return
 // v1.3 — 2026-02-23 — FIX: Project duplication/loss race condition
 //   - NEW: isLoadingProjectRef guard — prevents auto-save and sync effect
 //     from interfering during loadActiveProject
@@ -446,14 +449,74 @@ var handleRedo = useCallback(function() {
     },
     [currentProjectId, refreshProjectList]
   );
+// ★ v1.4: Clone project with _V1.1 suffix (EO-038)
+  var handleCloneProject = useCallback(async function(projectId: string) {
+    var newProj = await storageService.createProject();
+    if (!newProj || !newProj.id) {
+      throw new Error('Failed to create cloned project.');
+    }
 
+    // Load source project data in both languages
+    var enData = await storageService.loadProject('en', projectId);
+    var siData = await storageService.loadProject('si', projectId);
+
+    // Add version suffix to title and acronym
+    var addVersionSuffix = function(data: any) {
+      if (!data) return data;
+      var cloned = JSON.parse(JSON.stringify(data));
+      if (cloned.projectIdea) {
+        var title = cloned.projectIdea.projectTitle || '';
+        var acronym = cloned.projectIdea.projectAcronym || '';
+        // Check if already has version suffix
+        var versionMatch = title.match(/_V(\d+)\.(\d+)$/);
+        if (versionMatch) {
+          var minor = parseInt(versionMatch[2], 10) + 1;
+          cloned.projectIdea.projectTitle = title.replace(/_V\d+\.\d+$/, '_V' + versionMatch[1] + '.' + minor);
+        } else {
+          cloned.projectIdea.projectTitle = title + '_V1.1';
+        }
+        var acrVersionMatch = acronym.match(/_V(\d+)\.(\d+)$/);
+        if (acrVersionMatch) {
+          var acrMinor = parseInt(acrVersionMatch[2], 10) + 1;
+          cloned.projectIdea.projectAcronym = acronym.replace(/_V\d+\.\d+$/, '_V' + acrVersionMatch[1] + '.' + acrMinor);
+        } else if (acronym) {
+          cloned.projectIdea.projectAcronym = acronym + '_V1.1';
+        }
+      }
+      return cloned;
+    };
+
+    if (enData) {
+      await storageService.saveProject(addVersionSuffix(enData), 'en', newProj.id);
+    }
+    if (siData) {
+      await storageService.saveProject(addVersionSuffix(siData), 'si', newProj.id);
+    }
+
+    // Update project title in projects table
+    var sourceTitle = '';
+    if (enData && enData.projectIdea && enData.projectIdea.projectTitle) {
+      sourceTitle = enData.projectIdea.projectTitle;
+    } else if (siData && siData.projectIdea && siData.projectIdea.projectTitle) {
+      sourceTitle = siData.projectIdea.projectTitle;
+    } else {
+      sourceTitle = 'Untitled';
+    }
+    var clonedTitle = sourceTitle + '_V1.1';
+    try {
+      var supabase = (await import('../services/supabaseClient.ts')).supabase;
+      await supabase.from('projects').update({ title: clonedTitle }).eq('id', newProj.id);
+    } catch (e) { console.warn('Failed to update cloned project title:', e); }
+
+    await refreshProjectList();
+    return newProj;
+  }, [refreshProjectList]);
   // ─── Data update ──────────────────────────────────────────────
 
   const handleUpdateData = useCallback(
-  (path: (string | number)[], value: any) => {
-    setProjectData((prevData: any) => {
-      pushToHistory(prevData);
+    (path: (string | number)[], value: any) => {
       setProjectData((prevData: any) => {
+        pushToHistory(prevData);
         let newData = set(prevData, path, value);
         if (path[0] === 'activities') {
           const scheduleResult = recalculateProjectSchedule(newData);
@@ -466,25 +529,25 @@ var handleRedo = useCallback(function() {
       });
       setHasUnsavedTranslationChanges(true);
     },
-    []
+    [pushToHistory]
   );
 
   const handleAddItem = useCallback(
-  (path: (string | number)[], newItem: any) => {
-    setProjectData((prev: any) => {
-      pushToHistory(prev);
+    (path: (string | number)[], newItem: any) => {
+      setProjectData((prev: any) => {
+        pushToHistory(prev);
         const list = getNestedValue(prev, path) || [];
         return set(prev, path, [...list, newItem]);
       });
       setHasUnsavedTranslationChanges(true);
     },
-    []
+    [pushToHistory]
   );
 
   const handleRemoveItem = useCallback(
-  (path: (string | number)[], index: number) => {
-    setProjectData((prev: any) => {
-      pushToHistory(prev);
+    (path: (string | number)[], index: number) => {
+      setProjectData((prev: any) => {
+        pushToHistory(prev);
         const list = getNestedValue(prev, path);
         if (!Array.isArray(list)) return prev;
         const newList = list.filter((_: any, i: number) => i !== index);
@@ -492,7 +555,7 @@ var handleRedo = useCallback(function() {
       });
       setHasUnsavedTranslationChanges(true);
     },
-    []
+    [pushToHistory]
   );
 
   // ─── Save + Export JSON ────────────────────────────────────────
@@ -736,6 +799,7 @@ var handleRedo = useCallback(function() {
     handleSwitchProject,
     handleCreateProject,
     handleDeleteProject,
+    handleCloneProject,
     handleUpdateData,
     handleAddItem,
     handleRemoveItem,
@@ -745,5 +809,9 @@ var handleRedo = useCallback(function() {
     handleStartEditing,
     handleBackToWelcome,
     handleSubStepClick,
+    canUndo,
+    canRedo,
+    handleUndo,
+    handleRedo,
   };
 };
